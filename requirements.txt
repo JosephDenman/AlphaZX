@@ -1,0 +1,4 @@
+torch~=1.13.1
+networkx~=2.6.3
+pyzx~=0.7.3
+matplotlib~=3.5.3

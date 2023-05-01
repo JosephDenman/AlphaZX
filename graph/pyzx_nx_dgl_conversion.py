@@ -1,11 +1,9 @@
 from fractions import Fraction
-from typing import Any, Union
+from typing import Union
 
-import dgl
 import torch
 import torch_geometric as pyg
 import networkx as nx
-from torch_geometric.typing import NodeType
 
 B_NTYPE_INDEX = 0
 B_NTYPE_NAME = 'boundary'
@@ -87,19 +85,6 @@ def zx_diagram_metagraph() -> nx.MultiDiGraph:
     metagraph = nx.MultiDiGraph()
     metagraph.add_edges_from(DGL_ETYPE_NAMES)
     return metagraph
-
-
-def nx_to_dgl_heterograph(nx_graph: nx.MultiGraph) -> dgl.DGLGraph:
-    directed_nx_graph = nx_graph.to_directed()
-    node_phases_to_ints(directed_nx_graph)
-    dgl_homograph = dgl.from_networkx(directed_nx_graph, node_attrs=['type', 'phase'], edge_attrs=['type'])
-    return dgl.to_heterogeneous(dgl_homograph,
-                                ntypes=NTYPE_NAMES,
-                                # TODO: Use zero-based indexing for PyZX edge type
-                                etypes=ETYPE_NAMES,
-                                ntype_field='type',
-                                etype_field='type',
-                                metagraph=zx_diagram_metagraph())
 
 
 PYG_ETYPE_NAMES_TO_INDICES = {

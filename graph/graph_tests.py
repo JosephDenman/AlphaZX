@@ -1,9 +1,6 @@
 import unittest
 
-import dgl
-import networkx as nx
-
-from zx_diagram import NodeType, ZXDiagram, node_is_zx, EdgeType
+from zx_diagram import NodeType, ZXDiagram, node_is_zx
 
 
 class MyTestCase(unittest.TestCase):

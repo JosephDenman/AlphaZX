@@ -1,13 +1,8 @@
-import timeit
 
-import dgl
 import pyzx
 import torch_geometric as pyg
 import networkx as nx
-from matplotlib import pyplot as plt
-
-from graph.nx_drawing import draw_nx_zx_diagram
-from graph.pyzx_nx_dgl_conversion import nx_to_dgl_heterograph, nx_to_pyg_heterograph, add_degree, node_phases_to_ints, \
+from graph.pyzx_nx_dgl_conversion import nx_to_pyg_heterograph, add_degree, node_phases_to_ints, \
     add_connected_to, remove_attributes
 
 
@@ -54,15 +49,6 @@ def nx_clifford_graph(num_qubits: int, depth: int, no_hadamard: bool = False,
     nx_graph = graph_to_nx_graph(pyzx.generate.cliffordT(num_qubits, depth, no_hadamard, t_gates))
     post_process(nx_graph)
     return nx_graph
-
-
-def dgl_cnot_had_phase_graph(num_qubits: int, depth: int, p_had: float = 0.2, p_t: float = 0.2,
-                             clifford=False) -> dgl.DGLGraph:
-    return nx_to_dgl_heterograph(nx_cnot_had_phase_graph(num_qubits, depth, p_had, p_t, clifford))
-
-
-def dgl_clifford_graph(num_qubits: int, depth: int, no_hadamard: bool = False, t_gates: bool = False) -> dgl.DGLGraph:
-    return nx_to_dgl_heterograph(nx_clifford_graph(num_qubits, depth, no_hadamard, t_gates))
 
 
 def pyg_clifford_graph(num_qubits: int, depth: int, no_hadamard: bool = True,
