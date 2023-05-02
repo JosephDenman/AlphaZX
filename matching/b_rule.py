@@ -2,9 +2,9 @@ from typing import Generator, Dict, Any
 
 import networkx as nx
 
-from graph.pyzx_nx_dgl_conversion import is_basis, Z_NTYPE_NAME, X_NTYPE_NAME, S_ETYPE_INDEX
-from matching.base import RuleMode, rule_mode_to_ntype_indices, all_node_attributes_equal, TYPE, filter_permutations, \
-    Matches
+from graph.pyzx_nx_conversion import is_basis, Z_NTYPE_NAME, X_NTYPE_NAME, S_ETYPE_INDEX, NTYPE, ETYPE
+from matching.base import RuleMode, rule_mode_to_ntype_indices, node_attributes_equal, filter_permutations, \
+    Matches, BLeftMatch, BRightMatch, dicts_to_tuples
 
 
 def b_right_pattern(rule_mode: RuleMode) -> nx.MultiGraph:
@@ -25,24 +25,24 @@ def b_right_pattern_x() -> nx.MultiGraph:
 
 
 def b_nodes_match(v: Dict[str, Any], w: Dict[str, Any]) -> bool:
-    return is_basis(v[TYPE]) and all_node_attributes_equal(v, w)
+    return is_basis(v[NTYPE]) and node_attributes_equal(v, w)
 
 
 def b_edges_match(e: Dict[int, Dict[str, Any]], f: Dict[int, Dict[str, Any]]) -> bool:
-    return len(e) == 1 and list(e.values())[0][TYPE] == f[0][TYPE] == S_ETYPE_INDEX
+    return len(e) == 1 and list(e.values())[0][ETYPE] == f[0][ETYPE] == S_ETYPE_INDEX
 
 
-def match_b_right(nx_graph: nx.MultiGraph, rule_mode: RuleMode) -> Matches:
-    return nx.isomorphism.MultiGraphMatcher(nx_graph, b_right_pattern(rule_mode),
-                                            node_match=b_nodes_match,
-                                            edge_match=b_edges_match).subgraph_isomorphisms_iter()
+def match_b_right(nx_graph: nx.MultiGraph, rule_mode: RuleMode) -> Matches[BRightMatch]:
+    return dicts_to_tuples(nx.isomorphism.MultiGraphMatcher(nx_graph, b_right_pattern(rule_mode),
+                                                            node_match=b_nodes_match,
+                                                            edge_match=b_edges_match).subgraph_isomorphisms_iter())
 
 
-def match_b_right_z(nx_graph: nx.MultiGraph) -> Matches:
+def match_b_right_z(nx_graph: nx.MultiGraph) -> Matches[BRightMatch]:
     return match_b_right(nx_graph, Z_NTYPE_NAME)
 
 
-def match_b_right_x(nx_graph: nx.MultiGraph) -> Matches:
+def match_b_right_x(nx_graph: nx.MultiGraph) -> Matches[BRightMatch]:
     return match_b_right(nx_graph, X_NTYPE_NAME)
 
 
@@ -68,15 +68,15 @@ def b_left_pattern_x() -> nx.MultiGraph:
     return b_left_pattern(X_NTYPE_NAME)
 
 
-def match_b_left(nx_graph: nx.MultiGraph, rule_mode: RuleMode) -> Matches:
-    return filter_permutations(nx.isomorphism.MultiGraphMatcher(nx_graph, b_left_pattern(rule_mode),
-                                                                node_match=b_nodes_match,
-                                                                edge_match=b_edges_match).isomorphisms_iter())
+def match_b_left(nx_graph: nx.MultiGraph, rule_mode: RuleMode) -> Matches[BLeftMatch]:
+    return dicts_to_tuples(filter_permutations(nx.isomorphism.MultiGraphMatcher(nx_graph, b_left_pattern(rule_mode),
+                                                                                node_match=b_nodes_match,
+                                                                                edge_match=b_edges_match).isomorphisms_iter()))
 
 
-def match_b_left_z(nx_graph: nx.MultiGraph) -> Matches:
+def match_b_left_z(nx_graph: nx.MultiGraph) -> Matches[BLeftMatch]:
     return match_b_left(nx_graph, Z_NTYPE_NAME)
 
 
-def match_b_left_x(nx_graph: nx.MultiGraph) -> Matches:
+def match_b_left_x(nx_graph: nx.MultiGraph) -> Matches[BLeftMatch]:
     return match_b_left(nx_graph, X_NTYPE_NAME)

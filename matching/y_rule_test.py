@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 
 from graph.nx_drawing import draw_nx_zx_diagram
 from graph.pyzx_graph_generator import nx_clifford_graph
-from graph.pyzx_nx_dgl_conversion import H_ETYPE_INDEX, Z_NTYPE_NAME, X_NTYPE_NAME
+from graph.pyzx_nx_conversion import H_ETYPE_INDEX, Z_NTYPE_NAME, X_NTYPE_NAME
 from matching.base import RuleMode
 from matching.y_rule import match_y_left_z, y_left_pattern_z, y_left_pattern_x, match_y_left_x, match_y_left, \
     y_left_pattern

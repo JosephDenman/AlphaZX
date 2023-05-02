@@ -6,10 +6,10 @@ from matplotlib import pyplot as plt
 
 from graph.nx_drawing import draw_nx_zx_diagram
 from graph.pyzx_graph_generator import nx_clifford_graph
-from graph.pyzx_nx_dgl_conversion import S_ETYPE_INDEX, Z_NTYPE_NAME, X_NTYPE_NAME, H_ETYPE_INDEX
+from graph.pyzx_nx_conversion import S_ETYPE_INDEX, Z_NTYPE_NAME, X_NTYPE_NAME, H_ETYPE_INDEX, COLUMN, ROW
 from matching.b_rule import match_b_right_z, match_b_right_x, b_right_pattern_z, \
     b_right_pattern_x, match_b_left_z, b_left_pattern_z, b_left_pattern_x, match_b_left_x
-from matching.base import RuleMode, rule_mode_to_ntype_indices, COLUMN, ROW
+from matching.base import RuleMode, rule_mode_to_ntype_indices
 
 
 class BRuleLeft(unittest.TestCase):
@@ -71,7 +71,6 @@ def spring_layout_data(nx_graph: nx.MultiGraph) -> Tuple[List[int], Dict[int, Tu
 
 def add_layer_data(nx_graph: nx.MultiGraph) -> None:
     for n, ndata in nx_graph.nodes(data=True):
-        print('col = ', ndata[COLUMN])
         ndata['layer'] = ndata[COLUMN] / 100
 
 
@@ -111,15 +110,15 @@ class BRuleRight(unittest.TestCase):
         self.assertTrue(True)
         my_num_qubits = 20
         my_depth = 20
-        nx_graph = nx_clifford_graph(my_num_qubits, my_depth, no_hadamard=True, t_gates=False)
-        #matches = match_b_right_z(nx_graph)
+        nx_graph = nx_clifford_graph(my_num_qubits, my_depth)
+        z_matches = match_b_right_z(nx_graph)
         #fixed_nodes, node_pos = spring_layout_data(nx_graph)
-        add_layer_data(nx_graph)
+        #add_layer_data(nx_graph)
         #pos = nx.spring_layout(nx_graph, pos=node_pos, fixed=fixed_nodes)
-        pos = nx.rescale_layout_dict(nx.multipartite_layout(nx_graph, subset_key='layer'))
-        draw_nx_zx_diagram(nx_graph, pos=pos)
-        plt.show()
-        #for i, match in enumerate(list(matches)):
-        #    plt.figure()
-        #    draw_nx_zx_diagram(nx_graph, match)
+        #pos = nx.rescale_layout_dict(nx.multipartite_layout(nx_graph, subset_key='layer'))
+        #draw_nx_zx_diagram(nx_graph, pos=pos)
         #plt.show()
+        for i, match in enumerate(list(z_matches)):
+            plt.figure()
+            draw_nx_zx_diagram(nx_graph, match)
+        plt.show()

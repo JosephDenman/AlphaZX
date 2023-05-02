@@ -11,6 +11,8 @@ Z_NTYPE_INDEX = 1
 Z_NTYPE_NAME = 'z'
 X_NTYPE_INDEX = 2
 X_NTYPE_NAME = 'x'
+H_NTYPE_INDEX = 3
+H_NTYPE_NAME = 'hadamard'
 D_ETYPE_INDEX = 0
 D_ETYPE_NAME = 'dummy'
 S_ETYPE_INDEX = 1
@@ -18,8 +20,16 @@ S_ETYPE_NAME = 'simple'
 H_ETYPE_INDEX = 2
 H_ETYPE_NAME = 'hadamard'
 
-NTYPE_NAMES = [B_NTYPE_NAME, Z_NTYPE_NAME, X_NTYPE_NAME]
+NTYPE_NAMES = [B_NTYPE_NAME, Z_NTYPE_NAME, X_NTYPE_NAME, H_NTYPE_NAME]
 ETYPE_NAMES = [D_ETYPE_NAME, S_ETYPE_NAME, H_ETYPE_NAME]
+
+PHASE = 'phase'
+DEGREE = 'degree'
+NTYPE = 'type'
+COLUMN = 'x'
+ROW = 'y'
+CONNECTED_TO = 'connected_to'
+ETYPE = 'type'
 
 
 def is_basis(ntype: Union[str, int]) -> bool:
@@ -55,36 +65,9 @@ def is_simple_edge(etype: Union[str, int]) -> bool:
 
 def node_phases_to_ints(nx_graph: nx.MultiGraph) -> None:
     for node in nx_graph.nodes:
-        phase_string = nx_graph.nodes[node]['phase']
+        phase_string = nx_graph.nodes[node][PHASE]
         phase_float = float(Fraction(phase_string))
-        nx_graph.nodes[node]['phase'] = phase_float
-
-
-DGL_ETYPE_NAMES = [
-    ('z', 'z', 'hadamard'),
-    ('z', 'z', 'simple'),
-    ('z', 'x', 'hadamard'),
-    ('z', 'x', 'simple'),
-    ('z', 'boundary', 'hadamard'),
-    ('z', 'boundary', 'simple'),
-    ('x', 'x', 'hadamard'),
-    ('x', 'x', 'simple'),
-    ('x', 'boundary', 'hadamard'),
-    ('x', 'boundary', 'simple'),
-    ('x', 'z', 'hadamard'),
-    ('x', 'z', 'simple'),
-    ('boundary', 'boundary', 'hadamard'),
-    ('boundary', 'boundary', 'simple'),
-    ('boundary', 'z', 'hadamard'),
-    ('boundary', 'z', 'simple'),
-    ('boundary', 'x', 'hadamard'),
-    ('boundary', 'x', 'simple')]
-
-
-def zx_diagram_metagraph() -> nx.MultiDiGraph:
-    metagraph = nx.MultiDiGraph()
-    metagraph.add_edges_from(DGL_ETYPE_NAMES)
-    return metagraph
+        nx_graph.nodes[node][PHASE] = phase_float
 
 
 PYG_ETYPE_NAMES_TO_INDICES = {
@@ -111,37 +94,37 @@ PYG_ETYPE_NAMES_TO_INDICES = {
 
 def edge_type_index(nx_graph: nx.MultiGraph, u: int, v: int, etype: int) -> int:
     return PYG_ETYPE_NAMES_TO_INDICES[
-        (NTYPE_NAMES[nx_graph.nodes[u]['type']], ETYPE_NAMES[etype],
-         NTYPE_NAMES[nx_graph.nodes[v]['type']])]
+        (NTYPE_NAMES[nx_graph.nodes[u][NTYPE]], ETYPE_NAMES[etype],
+         NTYPE_NAMES[nx_graph.nodes[v][NTYPE]])]
 
 
 def remove_attributes(nx_graph: nx.MultiGraph) -> None:
     for _, ndata in nx_graph.nodes(data=True):
-        del ndata['x']
-        del ndata['y']
+        del ndata[ROW]
+        del ndata[COLUMN]
     del nx_graph.graph['node_default']
     del nx_graph.graph['edge_default']
 
 
 def add_connected_to(nx_graph: nx.MultiGraph) -> None:
     for n, ndata in nx_graph.nodes(data=True):
-        if is_boundary(ndata['type']):
-            ndata['connected_to'] = nx_graph.nodes[list(nx_graph.neighbors(n))[0]]['type']
+        if is_boundary(ndata[NTYPE]):
+            ndata[CONNECTED_TO] = nx_graph.nodes[list(nx_graph.neighbors(n))[0]][NTYPE]
         else:
-            ndata['connected_to'] = 0
+            ndata[CONNECTED_TO] = 0
 
 
 def add_degree(nx_graph: nx.MultiGraph) -> None:
     for n, ndata in nx_graph.nodes(data=True):
-        ndata['degree'] = len(list(nx_graph.neighbors(n)))
+        ndata[DEGREE] = len(list(nx_graph.neighbors(n)))
 
 
 def node_types(nx_graph: nx.MultiGraph) -> torch.Tensor:
-    return torch.tensor([t for _, t in nx_graph.nodes(data='type')])
+    return torch.tensor([t for _, t in nx_graph.nodes(data=NTYPE)])
 
 
 def edge_types(nx_graph: nx.MultiGraph) -> torch.Tensor:
-    return torch.tensor([edge_type_index(nx_graph, u, v, t) for u, v, t in nx_graph.edges(data='type')])
+    return torch.tensor([edge_type_index(nx_graph, u, v, t) for u, v, t in nx_graph.edges(data=NTYPE)])
 
 
 def remove_basis_connected_to(hdata: pyg.data.HeteroData) -> None:
@@ -182,8 +165,8 @@ def nx_to_pyg_heterograph(nx_graph: nx.MultiGraph) -> pyg.data.HeteroData:
     assert not nx_graph.is_directed(), "Graph must be undirected"
     hdata = pyg.utils.from_networkx(
         nx_graph,
-        group_node_attrs=['type', 'phase', 'degree', 'connected_to'],
-        group_edge_attrs=['type']).to_heterogeneous(node_type=node_types(nx_graph),
+        group_node_attrs=[NTYPE, PHASE, DEGREE, CONNECTED_TO],
+        group_edge_attrs=[ETYPE]).to_heterogeneous(node_type=node_types(nx_graph),
                                                     edge_type=edge_types(nx_graph),
                                                     node_type_names=NTYPE_NAMES,
                                                     edge_type_names=list(
