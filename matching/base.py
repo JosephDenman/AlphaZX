@@ -43,7 +43,7 @@ def rule_mode_to_ntype_index(rule_mode: RuleMode) -> int:
 
 
 def node_attributes_equal(v: Dict[str, Any], w: Dict[str, Any], *args: str) -> bool:
-    return all([v[attribute] == w[attribute] for attribute in (args if len(args) == 0 else [NTYPE, DEGREE, PHASE])])
+    return all([v[attribute] == w[attribute] for attribute in ([NTYPE, DEGREE, PHASE] if len(args) == 0 else args)])
 
 
 def filter_permutations(matches: Matches[Dict[int, int]]) -> Matches[Dict[int, int]]:

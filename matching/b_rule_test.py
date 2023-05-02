@@ -15,10 +15,10 @@ from matching.base import RuleMode, rule_mode_to_ntype_indices
 class BRuleLeft(unittest.TestCase):
 
     def test_self_match_z(self):
-        self.assertListEqual(list(match_b_left_z(b_left_pattern_z())), [{0: 0, 1: 1, 2: 2, 3: 3}])
+        self.assertListEqual(list(match_b_left_z(b_left_pattern_z())), [(0, 1, 2, 3)])
 
     def test_self_match_x(self):
-        self.assertListEqual(list(match_b_left_x(b_left_pattern_x())), [{0: 0, 1: 1, 2: 2, 3: 3}])
+        self.assertListEqual(list(match_b_left_x(b_left_pattern_x())), [(0, 1, 2, 3)])
 
 
 def wrong_degree_no_match_test_graph(rule_mode: RuleMode) -> nx.MultiGraph:
@@ -77,10 +77,10 @@ def add_layer_data(nx_graph: nx.MultiGraph) -> None:
 class BRuleRight(unittest.TestCase):
 
     def test_self_match_z(self):
-        self.assertListEqual(list(match_b_right_z(b_right_pattern_z())), [{0: 0, 1: 1}])
+        self.assertListEqual(list(match_b_right_z(b_right_pattern_z())), [(0, 1)])
 
     def test_self_match_x(self):
-        self.assertListEqual(list(match_b_right_x(b_right_pattern_x())), [{0: 0, 1: 1}])
+        self.assertListEqual(list(match_b_right_x(b_right_pattern_x())), [(0, 1)])
 
     def test_line_graph_no_match_z(self):
         self.assertListEqual(list(match_b_right_z(wrong_degree_no_match_test_graph(Z_NTYPE_NAME))), [])
@@ -107,9 +107,10 @@ class BRuleRight(unittest.TestCase):
         self.assertListEqual(list(match_b_right_x(hadamard_edge_no_match_test_graph(X_NTYPE_NAME))), [])
 
     def test_draw(self):
+        #self.skipTest('Will delete')
         self.assertTrue(True)
-        my_num_qubits = 20
-        my_depth = 20
+        my_num_qubits = 10
+        my_depth = 10
         nx_graph = nx_clifford_graph(my_num_qubits, my_depth)
         z_matches = match_b_right_z(nx_graph)
         #fixed_nodes, node_pos = spring_layout_data(nx_graph)

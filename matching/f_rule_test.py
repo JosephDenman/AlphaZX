@@ -90,7 +90,7 @@ class FMatchLeft(unittest.TestCase):
     def test_draw(self):
         self.assertTrue(True)
         my_num_qubits = 10
-        my_depth = 10
+        my_depth = 20
         nx_graph = nx_clifford_graph(my_num_qubits, my_depth)
         x_matches = match_f_left_x(nx_graph)
         for i, match in enumerate(list(x_matches)):
