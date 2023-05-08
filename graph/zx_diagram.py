@@ -1,6 +1,7 @@
-import torch
 from enum import Enum
 from typing import Optional, Tuple
+
+import torch
 
 
 class NodeType(Enum):

@@ -1,9 +1,9 @@
 from fractions import Fraction
 from typing import Union
 
+import networkx as nx
 import torch
 import torch_geometric as pyg
-import networkx as nx
 
 B_NTYPE_INDEX = 0
 B_NTYPE_NAME = 'boundary'
@@ -167,9 +167,9 @@ def nx_to_pyg_heterograph(nx_graph: nx.MultiGraph) -> pyg.data.HeteroData:
         nx_graph,
         group_node_attrs=[NTYPE, PHASE, DEGREE, CONNECTED_TO],
         group_edge_attrs=[ETYPE]).to_heterogeneous(node_type=node_types(nx_graph),
-                                                    edge_type=edge_types(nx_graph),
-                                                    node_type_names=NTYPE_NAMES,
-                                                    edge_type_names=list(
-                                                        PYG_ETYPE_NAMES_TO_INDICES.keys()))
+                                                   edge_type=edge_types(nx_graph),
+                                                   node_type_names=NTYPE_NAMES,
+                                                   edge_type_names=list(
+                                                       PYG_ETYPE_NAMES_TO_INDICES.keys()))
     post_process(hdata)
     return hdata

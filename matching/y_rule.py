@@ -1,4 +1,4 @@
-from typing import Dict, Any, Generator
+from typing import Dict, Any
 
 import networkx as nx
 
@@ -14,9 +14,7 @@ def y_left_pattern(rule_mode: RuleMode) -> nx.MultiGraph:
     nx_graph.add_node(1, type=node_types[1], phase=0.0, degree=3)
     nx_graph.add_node(2, type=node_types[0], phase=0.5, degree=2)
     nx_graph.add_node(3, type=node_types[0], phase=0.5, degree=2)
-    nx_graph.add_edge(0, 1, type=S_ETYPE_INDEX)
-    nx_graph.add_edge(1, 2, type=S_ETYPE_INDEX)
-    nx_graph.add_edge(1, 3, type=S_ETYPE_INDEX)
+    nx_graph.add_edges_from([(0, 1), (1, 2), (1, 3)], type=S_ETYPE_INDEX)
     return nx_graph
 
 
@@ -37,10 +35,11 @@ def y_edges_match(e: Dict[int, Dict[str, Any]], f: Dict[int, Dict[str, Any]]) ->
 
 
 def match_y_left(nx_graph: nx.MultiGraph, rule_mode: RuleMode) -> Matches[YLeftMatch]:
-    return dicts_to_tuples(filter_permutations(nx.isomorphism.MultiGraphMatcher(nx_graph, y_left_pattern(rule_mode),
-                                                                                node_match=y_nodes_match,
-                                                                                edge_match=y_edges_match)
-                                               .subgraph_isomorphisms_iter()))
+    return (YLeftMatch(*match) for match in
+            dicts_to_tuples(filter_permutations(nx.isomorphism.MultiGraphMatcher(nx_graph, y_left_pattern(rule_mode),
+                                                                                 node_match=y_nodes_match,
+                                                                                 edge_match=y_edges_match)
+                                                .subgraph_isomorphisms_iter())))
 
 
 def match_y_left_z(nx_graph: nx.MultiGraph) -> Matches[YLeftMatch]:
@@ -58,9 +57,7 @@ def y_right_pattern(rule_mode: RuleMode) -> nx.MultiGraph:
     nx_graph.add_node(1, type=node_types[1], phase=-0.5, degree=3)
     nx_graph.add_node(2, type=node_types[0], phase=-0.5, degree=2)
     nx_graph.add_node(3, type=node_types[0], phase=-0.5, degree=2)
-    nx_graph.add_edge(0, 1, type=S_ETYPE_INDEX)
-    nx_graph.add_edge(1, 2, type=S_ETYPE_INDEX)
-    nx_graph.add_edge(1, 3, type=S_ETYPE_INDEX)
+    nx_graph.add_edges_from([(0, 1), (1, 2), (1, 3)], type=S_ETYPE_INDEX)
     return nx_graph
 
 
@@ -73,10 +70,11 @@ def y_right_pattern_x() -> nx.MultiGraph:
 
 
 def match_y_right(nx_graph: nx.MultiGraph, rule_mode: RuleMode) -> Matches[YRightMatch]:
-    return dicts_to_tuples(filter_permutations(nx.isomorphism.MultiGraphMatcher(nx_graph, y_right_pattern(rule_mode),
-                                                                                node_match=y_nodes_match,
-                                                                                edge_match=y_edges_match)
-                                               .subgraph_isomorphisms_iter()))
+    return (YRightMatch(*match) for match in
+            dicts_to_tuples(filter_permutations(nx.isomorphism.MultiGraphMatcher(nx_graph, y_right_pattern(rule_mode),
+                                                                                 node_match=y_nodes_match,
+                                                                                 edge_match=y_edges_match)
+                                                .subgraph_isomorphisms_iter())))
 
 
 def match_y_right_z(nx_graph: nx.MultiGraph) -> Matches[YRightMatch]:

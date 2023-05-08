@@ -1,9 +1,8 @@
-from typing import Dict, Any, Generator, Callable
+from typing import Dict, Any
 
 import networkx as nx
 
-from graph.pyzx_nx_conversion import is_basis, Z_NTYPE_NAME, X_NTYPE_NAME, S_ETYPE_INDEX, is_simple_edge, NTYPE, \
-    ETYPE
+from graph.pyzx_nx_conversion import is_basis, Z_NTYPE_NAME, X_NTYPE_NAME, S_ETYPE_INDEX, is_simple_edge, NTYPE, ETYPE
 from matching.base import RuleMode, rule_mode_to_ntype_index, filter_permutations, Matches, FRightMatch, FLeftMatch, \
     dicts_to_tuples
 
@@ -11,8 +10,7 @@ from matching.base import RuleMode, rule_mode_to_ntype_index, filter_permutation
 def f_left_pattern(rule_mode: RuleMode) -> nx.MultiGraph:
     node_type = rule_mode_to_ntype_index(rule_mode)
     nx_graph = nx.MultiGraph()
-    nx_graph.add_node(0, type=node_type)
-    nx_graph.add_node(1, type=node_type)
+    nx_graph.add_nodes_from([0, 1], type=node_type)
     nx_graph.add_edge(0, 1, type=S_ETYPE_INDEX)
     return nx_graph
 
@@ -38,10 +36,11 @@ def f_left_edges_match(e: Dict[int, Dict[str, Any]], _: Dict[int, Dict[str, Any]
 
 
 def match_f_left(nx_graph: nx.MultiGraph, rule_mode: RuleMode) -> Matches[FLeftMatch]:
-    return dicts_to_tuples(filter_permutations(nx.isomorphism.MultiGraphMatcher(nx_graph, f_left_pattern(rule_mode),
-                                                                                node_match=f_nodes_match,
-                                                                                edge_match=f_left_edges_match)
-                                               .subgraph_monomorphisms_iter()))
+    return (FLeftMatch(*match) for match in
+            dicts_to_tuples(filter_permutations(nx.isomorphism.MultiGraphMatcher(nx_graph, f_left_pattern(rule_mode),
+                                                                                 node_match=f_nodes_match,
+                                                                                 edge_match=f_left_edges_match)
+                                                .subgraph_monomorphisms_iter())))
 
 
 def match_f_left_z(nx_graph: nx.MultiGraph) -> Matches[FLeftMatch]:
@@ -68,8 +67,9 @@ def f_right_pattern_x() -> nx.MultiGraph:
 
 
 def match_f_right(nx_graph: nx.MultiGraph, rule_mode: RuleMode) -> Matches[FRightMatch]:
-    return dicts_to_tuples(nx.isomorphism.MultiGraphMatcher(nx_graph, f_right_pattern(rule_mode),
-                                                            node_match=f_nodes_match).subgraph_isomorphisms_iter())
+    return (FRightMatch(*match) for match in
+            dicts_to_tuples(nx.isomorphism.MultiGraphMatcher(nx_graph, f_right_pattern(rule_mode),
+                                                             node_match=f_nodes_match).subgraph_isomorphisms_iter()))
 
 
 def match_f_right_z(nx_graph: nx.MultiGraph) -> Matches[FRightMatch]:

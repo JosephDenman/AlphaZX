@@ -1,9 +1,9 @@
-
+import networkx as nx
 import pyzx
 import torch_geometric as pyg
-import networkx as nx
+
 from graph.pyzx_nx_conversion import nx_to_pyg_heterograph, add_degree, node_phases_to_ints, \
-    add_connected_to, remove_attributes, ETYPE, NTYPE, DEGREE, PHASE
+    add_connected_to, ETYPE, NTYPE, DEGREE, PHASE
 
 
 def graph_to_nx_graph(graph: pyzx.Graph) -> nx.MultiGraph:
@@ -44,9 +44,9 @@ def post_process(nx_graph: nx.MultiGraph) -> None:
     #remove_attributes(nx_graph)
 
 
-def nx_clifford_graph(num_qubits: int, depth: int, no_hadamard: bool = False,
-                      t_gates: bool = False) -> nx.MultiGraph:
-    nx_graph = graph_to_nx_graph(pyzx.generate.cliffordT(num_qubits, depth, no_hadamard, t_gates))
+def nx_clifford_graph(num_qubits: int, depth: int, no_hadamard: bool = True,
+                      t_gates: bool = True) -> nx.MultiGraph:
+    nx_graph = graph_to_nx_graph(pyzx.generate.cliffords(num_qubits, depth, no_hadamard, t_gates))
     post_process(nx_graph)
     return nx_graph
 
@@ -54,10 +54,3 @@ def nx_clifford_graph(num_qubits: int, depth: int, no_hadamard: bool = False,
 def pyg_clifford_graph(num_qubits: int, depth: int, no_hadamard: bool = True,
                        t_gates: bool = True) -> pyg.data.HeteroData:
     return nx_to_pyg_heterograph(nx_clifford_graph(num_qubits, depth, no_hadamard, t_gates))
-
-
-#nx_graph = nx_clifford_graph(10, 10)
-
-#pos = nx.nx_pydot.pydot_layout(nx_graph, prog='dot')
-#draw_nx_zx_diagram(nx_graph, None, pos)
-#plt.show()

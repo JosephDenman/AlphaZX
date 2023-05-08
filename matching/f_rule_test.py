@@ -1,13 +1,9 @@
 import unittest
 
 import networkx as nx
-from matplotlib import pyplot as plt
 
-from graph.nx_drawing import draw_nx_zx_diagram
-from graph.pyzx_graph_generator import nx_clifford_graph
-from graph.pyzx_nx_conversion import Z_NTYPE_NAME, X_NTYPE_NAME, S_ETYPE_INDEX, \
-    H_ETYPE_INDEX
-from matching.base import RuleMode, rule_mode_to_ntype_index
+from graph.pyzx_nx_conversion import Z_NTYPE_NAME, X_NTYPE_NAME, S_ETYPE_INDEX, H_ETYPE_INDEX
+from matching.base import RuleMode, rule_mode_to_ntype_index, FLeftMatch, FRightMatch
 from matching.f_rule import match_f_left_z, match_f_left_x, f_left_pattern_z, f_left_pattern_x, match_f_right_z, \
     f_right_pattern_z, match_f_right_x, f_right_pattern_x
 
@@ -53,21 +49,21 @@ def disconnected_test_graph(rule_mode: RuleMode) -> nx.MultiGraph:
     return nx_graph
 
 
-class FMatchLeft(unittest.TestCase):
+class FLeftMatchTest(unittest.TestCase):
 
     def test_self_match_z(self):
-        self.assertListEqual(list(match_f_left_z(f_left_pattern_z())), [{0: 0, 1: 1}])
+        self.assertListEqual(list(match_f_left_z(f_left_pattern_z())), [FLeftMatch(0, 1)])
 
     def test_self_match_x(self):
-        self.assertListEqual(list(match_f_left_x(f_left_pattern_x())), [{0: 0, 1: 1}])
+        self.assertListEqual(list(match_f_left_x(f_left_pattern_x())), [FLeftMatch(0, 1)])
 
     def test_parallel_edge_match_z(self):
         self.assertListEqual(list(match_f_left_z(consecutive_parallel_edge_test_graph(Z_NTYPE_NAME))),
-                             [{23: 0, 45: 1}, {45: 0, 57: 1}])
+                             [FLeftMatch(23, 45), FLeftMatch(45, 57)])
 
     def test_parallel_edge_match_x(self):
         self.assertListEqual(list(match_f_left_x(consecutive_parallel_edge_test_graph(X_NTYPE_NAME))),
-                             [{23: 0, 45: 1}, {45: 0, 57: 1}])
+                             [FLeftMatch(23, 45), FLeftMatch(45, 57)])
 
     def test_hadamard_edge_no_match_z(self):
         self.assertListEqual(list(match_f_left_z(hadamard_edge_test_graph(Z_NTYPE_NAME))), [])
@@ -76,10 +72,10 @@ class FMatchLeft(unittest.TestCase):
         self.assertListEqual(list(match_f_left_x(hadamard_edge_test_graph(X_NTYPE_NAME))), [])
 
     def test_hadamard_edge_match_z(self):
-        self.assertListEqual(list(match_f_left_z(simple_hadamard_edge_test_graph(Z_NTYPE_NAME))), [{0: 0, 1: 1}])
+        self.assertListEqual(list(match_f_left_z(simple_hadamard_edge_test_graph(Z_NTYPE_NAME))), [FLeftMatch(0, 1)])
 
     def test_hadamard_edge_match_x(self):
-        self.assertListEqual(list(match_f_left_x(simple_hadamard_edge_test_graph(X_NTYPE_NAME))), [{0: 0, 1: 1}])
+        self.assertListEqual(list(match_f_left_x(simple_hadamard_edge_test_graph(X_NTYPE_NAME))), [FLeftMatch(0, 1)])
 
     def test_disconnected_no_match_z(self):
         self.assertListEqual(list(match_f_left_z(disconnected_test_graph(Z_NTYPE_NAME))), [])
@@ -87,35 +83,20 @@ class FMatchLeft(unittest.TestCase):
     def test_disconnected_no_match_x(self):
         self.assertListEqual(list(match_f_left_x(disconnected_test_graph(X_NTYPE_NAME))), [])
 
-    def test_draw(self):
-        self.assertTrue(True)
-        my_num_qubits = 10
-        my_depth = 20
-        nx_graph = nx_clifford_graph(my_num_qubits, my_depth)
-        x_matches = match_f_left_x(nx_graph)
-        for i, match in enumerate(list(x_matches)):
-            plt.figure()
-            draw_nx_zx_diagram(nx_graph, match)
-        #z_matches = match_f_left_z(nx_graph)
-        #for i, match in enumerate(list(z_matches)):
-        #    plt.figure()
-        #    draw_nx_zx_diagram(nx_graph, match)
-        plt.show()
 
-
-class FMatchRight(unittest.TestCase):
+class FRightMatchTest(unittest.TestCase):
 
     def test_self_match_z(self):
-        self.assertListEqual(list(match_f_right_z(f_right_pattern_z())), [(0,)])
+        self.assertListEqual(list(match_f_right_z(f_right_pattern_z())), [FRightMatch(0)])
 
     def test_self_match_x(self):
-        self.assertListEqual(list(match_f_right_x(f_right_pattern_x())), [(0,)])
+        self.assertListEqual(list(match_f_right_x(f_right_pattern_x())), [FRightMatch(0)])
 
     def test_match_f_left_pattern_z(self):
-        self.assertListEqual(list(match_f_right_z(f_left_pattern_z())), [(0,), (1,)])
+        self.assertListEqual(list(match_f_right_z(f_left_pattern_z())), [FRightMatch(0), FRightMatch(1)])
 
     def test_match_f_left_pattern_x(self):
-        self.assertListEqual(list(match_f_right_x(f_left_pattern_x())), [(0,), (1,)])
+        self.assertListEqual(list(match_f_right_x(f_left_pattern_x())), [FRightMatch(0), FRightMatch(1)])
 
     def test_different_basis_no_match_z(self):
         self.assertListEqual(list(match_f_right_z(f_right_pattern_x())), [])
@@ -124,18 +105,20 @@ class FMatchRight(unittest.TestCase):
         self.assertListEqual(list(match_f_right_x(f_right_pattern_z())), [])
 
     def test_disconnected_match_z(self):
-        self.assertListEqual(list(match_f_right_z(disconnected_test_graph(Z_NTYPE_NAME))), [(0,), (1,)])
+        self.assertListEqual(list(match_f_right_z(disconnected_test_graph(Z_NTYPE_NAME))),
+                             [FRightMatch(0), FRightMatch(1)])
 
     def test_disconnected_match_x(self):
-        self.assertListEqual(list(match_f_right_x(disconnected_test_graph(X_NTYPE_NAME))), [(0,), (1,)])
+        self.assertListEqual(list(match_f_right_x(disconnected_test_graph(X_NTYPE_NAME))),
+                             [FRightMatch(0), FRightMatch(1)])
 
     def test_consecutive_parallel_edge_match_z(self):
         self.assertListEqual(list(match_f_right_z(consecutive_parallel_edge_test_graph(Z_NTYPE_NAME))),
-                             [(23,), (45,), (57,)])
+                             [FRightMatch(23), FRightMatch(45), FRightMatch(57)])
 
     def test_consecutive_parallel_edge_match_x(self):
         self.assertListEqual(list(match_f_right_x(consecutive_parallel_edge_test_graph(X_NTYPE_NAME))),
-                             [(23,), (45,), (57,)])
+                             [FRightMatch(23), FRightMatch(45), FRightMatch(57)])
 
     """
     def test_parallel_edge_match_x(self):

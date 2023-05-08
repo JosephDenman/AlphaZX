@@ -1,11 +1,11 @@
 from fractions import Fraction
-from typing import Tuple, List, Dict, Any
+from typing import Tuple, List, Dict, Optional
 
 import networkx as nx
 
 from graph.pyzx_nx_conversion import Z_NTYPE_INDEX, X_NTYPE_INDEX, S_ETYPE_INDEX, H_ETYPE_INDEX, B_NTYPE_INDEX, \
     is_boundary, H_NTYPE_INDEX, is_basis, is_simple_edge, PHASE, NTYPE, ETYPE, ROW, COLUMN
-from matching.base import Match
+from matching.base import Match, subgraph_from_match
 
 Z_NTYPE_COLOR = '#d8f8d8'
 X_NTYPE_COLOR = '#e8a5b0'
@@ -67,44 +67,48 @@ def node_size(ndata: Dict) -> int:
 
 
 # TODO: Adjust row offsets based on computed node size
-def node_styling(nx_graph: nx.MultiGraph, match: nx.MultiGraph) -> Tuple[Dict, Dict, List, List, List]:
+def node_styling(nx_graph: nx.MultiGraph, match: Optional[Match] = None) -> Tuple[Dict, Dict, List, List, List]:
     labels = {}
     positions = {}
     sizes = []
     colors = []
     border_colors = [NODE_BORDER_COLOR] * nx_graph.number_of_nodes()
+    matched_subgraph = subgraph_from_match(nx_graph, match) if match is not None else None
     for n, ndata in nx_graph.nodes(data=True):
         if is_basis(ndata[NTYPE]) and ndata[PHASE] != 0:
             labels[n] = ndata[PHASE]
         positions[n] = [ndata[ROW], ndata[COLUMN]]
         sizes.append(node_size(ndata))
-        colors.append(node_match_to_color(ndata[NTYPE]) if match.has_node(n) else node_type_to_color(ndata[NTYPE]))
+        colors.append(node_match_to_color(ndata[NTYPE]) if matched_subgraph is not None and matched_subgraph.has_node(
+            n) else node_type_to_color(ndata[NTYPE]))
     return labels, positions, sizes, colors, border_colors
 
 
 EdgeList = List[Tuple[int, int]]
 
 
-def edge_styling(nx_graph: nx.MultiGraph, match: nx.MultiGraph) -> Tuple[EdgeList, EdgeList, EdgeList, EdgeList]:
+# TODO: Fix to work with updated Match structure
+
+def edge_styling(nx_graph: nx.MultiGraph, match: Optional[Match] = None) -> Tuple[
+    EdgeList, EdgeList, EdgeList, EdgeList]:
+    matched_subgraph = subgraph_from_match(nx_graph, match) if match is not None else None
     h_edge_list = []
     simple_edge_list = []
     matched_h_edge_list = []
     matched_simple_edge_list = []
     for *edge, edge_data in nx_graph.edges(data=True):
-        ([matched_h_edge_list, matched_simple_edge_list] if match.has_edge(*edge) else [h_edge_list,
-                                                                                        simple_edge_list])[
+        ([matched_h_edge_list, matched_simple_edge_list] if matched_subgraph is not None and matched_subgraph.has_edge(
+            *edge) else [h_edge_list,
+                         simple_edge_list])[
             is_simple_edge(edge_data[ETYPE])].append(edge)
     return h_edge_list, simple_edge_list, matched_h_edge_list, matched_simple_edge_list
 
 
-def draw_nx_zx_diagram(nx_graph: nx.MultiGraph, match: Match = None,
-                       pos: Dict[int, Tuple[int, int]] = None) -> None:
-    matched_subgraph = nx_graph.subgraph(match)
-    node_labels, node_positions, node_sizes, node_colors, node_border_colors = node_styling(nx_graph, matched_subgraph)
-    if pos is not None:
-        node_positions = pos
-    h_edge_list, simple_edge_list, matched_h_edge_list, matched_simple_edge_list = edge_styling(nx_graph,
-                                                                                                matched_subgraph)
+def draw_nx_zx_diagram(nx_graph: nx.MultiGraph, match: Optional[Match] = None,
+                       pos: Optional[Dict[int, Tuple[int, int]]] = None) -> None:
+    node_labels, node_positions, node_sizes, node_colors, node_border_colors = node_styling(nx_graph, match)
+    node_positions = pos if pos is not None else node_positions
+    h_edge_list, simple_edge_list, matched_h_edge_list, matched_simple_edge_list = edge_styling(nx_graph, match)
     nx.draw_networkx_nodes(nx_graph, node_size=node_sizes, node_color=node_colors, pos=node_positions,
                            edgecolors=node_border_colors)
     nx.draw_networkx_edges(nx_graph, edgelist=h_edge_list, node_size=node_sizes, edge_color=H_ETYPE_COLOR,
