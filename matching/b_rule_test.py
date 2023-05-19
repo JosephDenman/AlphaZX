@@ -29,6 +29,37 @@ def diamond_graph() -> nx.MultiGraph:
     return graph
 
 
+def square_graph(bottom_left: int = 0, bottom_right: int = 1, top_left: int = 2, top_right: int = 3) -> nx.MultiGraph:
+    """
+    ---z0---z1---
+        |    |
+    ---x1---x2---
+    """
+    nx_graph = nx.MultiGraph()
+    nx_graph.add_nodes_from([bottom_left, top_left], type=Z_NTYPE_INDEX, phase=0, degree=3)
+    nx_graph.add_nodes_from([bottom_right, top_right], type=X_NTYPE_INDEX, phase=0, degree=3)
+    nx_graph.add_edges_from(
+        [(bottom_left, bottom_right), (bottom_left, top_left), (bottom_right, top_right), (top_left, top_right)],
+        type=S_ETYPE_INDEX)
+    return nx_graph
+
+
+def square_graph_alternating(bottom_left: int = 0, bottom_right: int = 1, top_left: int = 2,
+                             top_right: int = 3) -> nx.MultiGraph:
+    """
+    ---z0---x1---
+        |    |
+    ---z1---x2---
+    """
+    nx_graph = nx.MultiGraph()
+    nx_graph.add_nodes_from([bottom_left, bottom_right], type=Z_NTYPE_INDEX, phase=0, degree=3)
+    nx_graph.add_nodes_from([top_left, top_right], type=X_NTYPE_INDEX, phase=0, degree=3)
+    nx_graph.add_edges_from(
+        [(bottom_left, bottom_right), (bottom_left, top_left), (bottom_right, top_right), (top_left, top_right)],
+        type=S_ETYPE_INDEX)
+    return nx_graph
+
+
 class BRuleLeft(unittest.TestCase):
 
     def test_self_match(self):
@@ -333,6 +364,22 @@ class BRuleLeft(unittest.TestCase):
         self.assertListEqual(list(match_b_left(diamond_graph())),
                              [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 8, 9), BLeftMatch(6, 7, 10, 11),
                               BLeftMatch(12, 13, 14, 15)])
+
+    def test_square(self):
+        """
+        ---z0---z2---
+            |    |
+        ---x1---x3---
+        """
+        self.assertListEqual(list(match_b_left(square_graph(3, 5, 7, 9))), [])
+
+    def test_square_alternating(self):
+        """
+        ---z0---x2---
+            |    |
+        ---z1---x3---
+        """
+        self.assertListEqual(list(match_b_left(square_graph_alternating(3, 5, 7, 9))), [])
 
 
 def wrong_degree_no_match_test_graph(rule_mode: RuleMode) -> nx.MultiGraph:

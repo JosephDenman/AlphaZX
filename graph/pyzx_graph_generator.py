@@ -1,9 +1,11 @@
+from fractions import Fraction
+
 import networkx as nx
 import pyzx
 import torch_geometric as pyg
 
-from graph.pyzx_nx_conversion import nx_to_pyg_heterograph, add_degree, node_phases_to_ints, \
-    add_connected_to, ETYPE, NTYPE, DEGREE, PHASE
+from graph.pyzx_nx_conversion import nx_to_pyg_heterograph, ETYPE, NTYPE, PHASE, Z_NTYPE_INDEX, S_ETYPE_INDEX, \
+    nx_remove_position_attributes
 
 
 def graph_to_nx_graph(graph: pyzx.Graph) -> nx.MultiGraph:
@@ -25,23 +27,28 @@ def nx_cnot_had_phase_graph(num_qubits: int, depth: int, p_had: float = 0.2, p_t
     return nx_graph
 
 
+def node_phases_to_ints(nx_graph: nx.MultiGraph) -> None:
+    for node in nx_graph.nodes:
+        phase_string = nx_graph.nodes[node][PHASE]
+        phase_float = float(Fraction(phase_string))
+        nx_graph.nodes[node][PHASE] = phase_float
+
+
 def remove_boundary_zero_z_spiders(nx_graph: nx.MultiGraph) -> None:
     assert not nx_graph.is_directed(), "Graph must be undirected"
     boundary_zero_z_spiders = [n for n, ndata in nx_graph.nodes(data=True) if
-                               ndata[NTYPE] == 1 and ndata[DEGREE] == 2 and ndata[PHASE] == 0]
+                               ndata[NTYPE] == Z_NTYPE_INDEX and nx_graph.degree(n) == 2 and ndata[PHASE] == 0]
     for n in boundary_zero_z_spiders:
         neighbors = list(nx_graph.neighbors(n))
         nx_graph.remove_node(n)
-        nx_graph.add_edge(neighbors[0], neighbors[1], type=1)
+        nx_graph.add_edge(neighbors[0], neighbors[1], type=S_ETYPE_INDEX)
 
 
 def post_process(nx_graph: nx.MultiGraph) -> None:
     nx_graph.to_undirected()
-    add_degree(nx_graph)
-    add_connected_to(nx_graph)
     node_phases_to_ints(nx_graph)
     remove_boundary_zero_z_spiders(nx_graph)
-    #remove_attributes(nx_graph)
+    nx_remove_position_attributes(nx_graph)
 
 
 def nx_clifford_graph(num_qubits: int, depth: int, no_hadamard: bool = True,
