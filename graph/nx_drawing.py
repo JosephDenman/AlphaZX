@@ -5,7 +5,7 @@ import networkx as nx
 
 from graph.pyzx_nx_conversion import Z_NTYPE_INDEX, X_NTYPE_INDEX, S_ETYPE_INDEX, H_ETYPE_INDEX, B_NTYPE_INDEX, \
     is_boundary, H_NTYPE_INDEX, is_basis, is_simple_edge, PHASE, NTYPE, ETYPE, ROW, COLUMN
-from matching.base import Match, subgraph_from_match
+from matching.match import Match, subgraph_from_match
 
 Z_NTYPE_COLOR = '#d8f8d8'
 X_NTYPE_COLOR = '#e8a5b0'

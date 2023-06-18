@@ -1,4 +1,3 @@
-from typing import Union
 
 import networkx as nx
 import torch
@@ -31,16 +30,32 @@ CONNECTED_TO = 'connected_to'
 ETYPE = 'type'
 
 
-def is_basis(ntype: Union[str, int]) -> bool:
-    if isinstance(ntype, str):
-        return ntype in [Z_NTYPE_NAME, X_NTYPE_NAME]
-    elif isinstance(ntype, int):
-        return ntype in [Z_NTYPE_INDEX, X_NTYPE_INDEX]
+def is_basis(ntype: str | int) -> bool:
+    if isinstance(ntype, str) or isinstance(ntype, int):
+        return is_z_basis(ntype) or is_x_basis(ntype)
     else:
         raise Exception('Unexpected node type representation ' + str(ntype))
 
 
-def is_boundary(ntype: Union[str, int]) -> bool:
+def is_z_basis(ntype: str | int) -> bool:
+    if isinstance(ntype, str):
+        return ntype == Z_NTYPE_NAME
+    elif isinstance(ntype, int):
+        return ntype == Z_NTYPE_INDEX
+    else:
+        raise Exception('Unexpected node type representation ' + str(ntype))
+
+
+def is_x_basis(ntype: str | int) -> bool:
+    if isinstance(ntype, str):
+        return ntype == X_NTYPE_NAME
+    elif isinstance(ntype, int):
+        return ntype == X_NTYPE_INDEX
+    else:
+        raise Exception('Unexpected node type representation ' + str(ntype))
+
+
+def is_boundary(ntype: str | int) -> bool:
     if isinstance(ntype, str):
         return ntype == B_NTYPE_NAME
     elif isinstance(ntype, int):
@@ -49,7 +64,7 @@ def is_boundary(ntype: Union[str, int]) -> bool:
         raise Exception('Unexpected node type representation ' + str(ntype))
 
 
-def is_hadamard_edge(etype: Union[str, int]) -> bool:
+def is_hadamard_edge(etype: str | int) -> bool:
     if isinstance(etype, str):
         return etype == H_ETYPE_NAME
     elif isinstance(etype, int):
@@ -58,7 +73,7 @@ def is_hadamard_edge(etype: Union[str, int]) -> bool:
         raise Exception('Unexpected edge type representation ' + str(etype))
 
 
-def is_simple_edge(etype: Union[str, int]) -> bool:
+def is_simple_edge(etype: str | int) -> bool:
     return not is_hadamard_edge(etype)
 
 
@@ -86,17 +101,17 @@ PYG_ETYPE_NAMES = [
 PYG_ETYPE_NAMES_TO_INDICES = {name: i for i, name in enumerate(PYG_ETYPE_NAMES)}
 
 
-def edge_type_index(nx_graph: nx.MultiGraph, u: int, v: int, etype: int) -> int:
+def edge_type_index(nx_graph: nx.Graph, u: int, v: int, etype: int) -> int:
     return PYG_ETYPE_NAMES_TO_INDICES[
         (NTYPE_NAMES[nx_graph.nodes[u][NTYPE]], ETYPE_NAMES[etype],
          NTYPE_NAMES[nx_graph.nodes[v][NTYPE]])]
 
 
-def node_types(nx_graph: nx.MultiGraph) -> torch.Tensor:
+def node_types(nx_graph: nx.Graph) -> torch.Tensor:
     return torch.tensor([t for _, t in nx_graph.nodes(data=NTYPE)])
 
 
-def edge_types(nx_graph: nx.MultiGraph) -> torch.Tensor:
+def edge_types(nx_graph: nx.Graph) -> torch.Tensor:
     return torch.tensor([edge_type_index(nx_graph, u, v, t) for u, v, t in nx_graph.edges(data=NTYPE)])
 
 

@@ -1,11 +1,11 @@
 from collections.abc import Iterator
-from typing import Dict, Any
+from typing import Any
 
 import networkx as nx
 
 from graph.pyzx_nx_conversion import is_basis, Z_NTYPE_NAME, X_NTYPE_NAME, S_ETYPE_INDEX, is_simple_edge, NTYPE, ETYPE
-from matching.base import RuleMode, rule_mode_to_ntype_index, filter_permutations, FRightMatch, FLeftMatch, \
-    dicts_to_tuples
+from matching.match import RuleMode, FRightZMatch, FLeftXMatch, FLeftZMatch, FRightXMatch, FLeftMatch, FRightMatch
+from matching.utils import filter_permutations, rule_mode_to_ntype_index
 
 
 def f_left_pattern(rule_mode: RuleMode) -> nx.MultiGraph:
@@ -16,11 +16,11 @@ def f_left_pattern(rule_mode: RuleMode) -> nx.MultiGraph:
     return nx_graph
 
 
-def f_left_pattern_z() -> nx.MultiGraph:
+def f_left_z_pattern() -> nx.MultiGraph:
     return f_left_pattern(Z_NTYPE_NAME)
 
 
-def f_left_pattern_x() -> nx.MultiGraph:
+def f_left_x_pattern() -> nx.MultiGraph:
     return f_left_pattern(X_NTYPE_NAME)
 
 
@@ -28,28 +28,30 @@ def f_nodes_match(v: dict[str, Any], w: dict[str, Any]) -> bool:
     return is_basis(v[NTYPE]) and v[NTYPE] == w[NTYPE]
 
 
-def non_hadamard_edge_exists(e: dict[int, dict[str, Any]]) -> bool:
+def f_left_edges_match(e: dict[int, dict[str, Any]], _: dict[int, dict[str, Any]]) -> bool:
+    # true if non-Hadamard edge exists
     return any([is_simple_edge(attributes[ETYPE]) for attributes in e.values()])
 
 
-def f_left_edges_match(e: dict[int, dict[str, Any]], _: dict[int, dict[str, Any]]) -> bool:
-    return non_hadamard_edge_exists(e)
+def f_left_matches(nx_graph: nx.MultiGraph) -> Iterator[FLeftMatch]:
+    yield from f_left_z_matches(nx_graph)
+    yield from f_left_x_matches(nx_graph)
 
 
-def match_f_left(nx_graph: nx.MultiGraph, rule_mode: RuleMode) -> Iterator[FLeftMatch]:
-    return (FLeftMatch(*match) for match in
-            filter_permutations(nx.isomorphism.MultiGraphMatcher(nx_graph, f_left_pattern(rule_mode),
+def f_left_z_matches(nx_graph: nx.MultiGraph) -> Iterator[FLeftZMatch]:
+    return (FLeftZMatch(match) for match in
+            filter_permutations(nx.isomorphism.MultiGraphMatcher(nx_graph, f_left_z_pattern(),
                                                                  node_match=f_nodes_match,
                                                                  edge_match=f_left_edges_match)
                                 .subgraph_monomorphisms_iter()))
 
 
-def match_f_left_z(nx_graph: nx.MultiGraph) -> Iterator[FLeftMatch]:
-    return match_f_left(nx_graph, Z_NTYPE_NAME)
-
-
-def match_f_left_x(nx_graph: nx.MultiGraph) -> Iterator[FLeftMatch]:
-    return match_f_left(nx_graph, X_NTYPE_NAME)
+def f_left_x_matches(nx_graph: nx.MultiGraph) -> Iterator[FLeftXMatch]:
+    return (FLeftXMatch(match) for match in
+            filter_permutations(nx.isomorphism.MultiGraphMatcher(nx_graph, f_left_x_pattern(),
+                                                                 node_match=f_nodes_match,
+                                                                 edge_match=f_left_edges_match)
+                                .subgraph_monomorphisms_iter()))
 
 
 def f_right_pattern(rule_mode: RuleMode) -> nx.MultiGraph:
@@ -59,23 +61,28 @@ def f_right_pattern(rule_mode: RuleMode) -> nx.MultiGraph:
     return nx_graph
 
 
-def f_right_pattern_z() -> nx.MultiGraph:
+def f_right_z_pattern() -> nx.MultiGraph:
     return f_right_pattern(Z_NTYPE_NAME)
 
 
-def f_right_pattern_x() -> nx.MultiGraph:
+def f_right_x_pattern() -> nx.MultiGraph:
     return f_right_pattern(X_NTYPE_NAME)
 
 
-def match_f_right(nx_graph: nx.MultiGraph, rule_mode: RuleMode) -> Iterator[FRightMatch]:
-    return (FRightMatch(*match) for match in nx.isomorphism.MultiGraphMatcher(nx_graph, f_right_pattern(rule_mode),
-                                                                              node_match=f_nodes_match)
+def f_right_matches(nx_graph: nx.MultiGraph) -> Iterator[FRightMatch]:
+    yield from f_right_z_matches(nx_graph)
+    yield from f_right_x_matches(nx_graph)
+
+
+def f_right_z_matches(nx_graph: nx.MultiGraph) -> Iterator[FRightZMatch]:
+    return (FRightZMatch(match) for match in
+            nx.isomorphism.MultiGraphMatcher(nx_graph, f_right_z_pattern(),
+                                             node_match=f_nodes_match)
             .subgraph_isomorphisms_iter())
 
 
-def match_f_right_z(nx_graph: nx.MultiGraph) -> Iterator[FRightMatch]:
-    return match_f_right(nx_graph, Z_NTYPE_NAME)
-
-
-def match_f_right_x(nx_graph: nx.MultiGraph) -> Iterator[FRightMatch]:
-    return match_f_right(nx_graph, X_NTYPE_NAME)
+def f_right_x_matches(nx_graph: nx.MultiGraph) -> Iterator[FRightXMatch]:
+    return (FRightXMatch(match) for match in
+            nx.isomorphism.MultiGraphMatcher(nx_graph, f_right_x_pattern(),
+                                             node_match=f_nodes_match)
+            .subgraph_isomorphisms_iter())

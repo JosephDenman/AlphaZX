@@ -5,8 +5,9 @@ import networkx as nx
 
 from graph.pyzx_nx_conversion import S_ETYPE_INDEX, Z_NTYPE_NAME, X_NTYPE_NAME, H_ETYPE_INDEX, COLUMN, ROW, \
     Z_NTYPE_INDEX, X_NTYPE_INDEX, DEGREE
-from matching.b_rule import match_b_right, b_right_pattern, match_b_left, b_left_pattern
-from matching.base import RuleMode, rule_mode_to_ntype_indices, BLeftMatch, BRightMatch
+from matching.b_rule import b_right_matches, b_right_pattern, b_left_matches, b_left_pattern
+from matching.match import RuleMode, BLeftMatch, BRightMatch
+from matching.utils import rule_mode_to_ntype_indices
 
 
 def diamond_graph() -> nx.MultiGraph:
@@ -47,20 +48,20 @@ def square_graph(bottom_left: int = 0, bottom_right: int = 1, top_left: int = 2,
 def square_graph_alternating(bottom_left: int = 0, bottom_right: int = 1, top_left: int = 2,
                              top_right: int = 3) -> nx.MultiGraph:
     """
-    ---z0---x1---
+    ---x0---z2---
         |    |
-    ---z1---x2---
+    ---z1---x3---
     """
     nx_graph = nx.MultiGraph()
-    nx_graph.add_nodes_from([bottom_left, bottom_right], type=Z_NTYPE_INDEX, phase=0, degree=3)
-    nx_graph.add_nodes_from([top_left, top_right], type=X_NTYPE_INDEX, phase=0, degree=3)
+    nx_graph.add_nodes_from([bottom_left, top_right], type=X_NTYPE_INDEX, phase=0, degree=3)
+    nx_graph.add_nodes_from([bottom_right, top_left], type=Z_NTYPE_INDEX, phase=0, degree=3)
     nx_graph.add_edges_from(
         [(bottom_left, bottom_right), (bottom_left, top_left), (bottom_right, top_right), (top_left, top_right)],
         type=S_ETYPE_INDEX)
     return nx_graph
 
 
-class BRuleLeft(unittest.TestCase):
+class BRuleLeftTest(unittest.TestCase):
 
     def test_self_match(self):
         """
@@ -68,7 +69,7 @@ class BRuleLeft(unittest.TestCase):
               X
         ---z1---x3---
         """
-        self.assertListEqual(list(match_b_left(b_left_pattern(0, 1, 2, 3))), [BLeftMatch(0, 1, 2, 3)])
+        self.assertListEqual(list(b_left_matches(b_left_pattern(0, 1, 2, 3))), [BLeftMatch(0, 1, 2, 3)])
 
     def test_self_match_connected_left_right(self):
         """
@@ -78,7 +79,7 @@ class BRuleLeft(unittest.TestCase):
         """
         graph = b_left_pattern(0, 1, 2, 3)
         graph.add_edges_from([(0, 1), (2, 3)], type=S_ETYPE_INDEX)
-        self.assertListEqual(list(match_b_left(b_left_pattern(0, 1, 2, 3))), [BLeftMatch(0, 1, 2, 3)])
+        self.assertListEqual(list(b_left_matches(b_left_pattern(0, 1, 2, 3))), [BLeftMatch(0, 1, 2, 3)])
 
     def test_self_match_connected_top_bottom(self):
         """
@@ -92,7 +93,7 @@ class BRuleLeft(unittest.TestCase):
         """
         graph = b_left_pattern(0, 1, 2, 3)
         graph.add_edges_from([(0, 2), (1, 3)], type=S_ETYPE_INDEX)
-        self.assertListEqual(list(match_b_left(b_left_pattern(0, 1, 2, 3))), [BLeftMatch(0, 1, 2, 3)])
+        self.assertListEqual(list(b_left_matches(b_left_pattern(0, 1, 2, 3))), [BLeftMatch(0, 1, 2, 3)])
 
     def test_self_match_connected_right_end(self):
         """
@@ -102,7 +103,7 @@ class BRuleLeft(unittest.TestCase):
         """
         graph = b_left_pattern(0, 1, 2, 3)
         graph.add_edges_from([(2, 3)], type=S_ETYPE_INDEX)
-        self.assertListEqual(list(match_b_left(b_left_pattern(0, 1, 2, 3))), [BLeftMatch(0, 1, 2, 3)])
+        self.assertListEqual(list(b_left_matches(b_left_pattern(0, 1, 2, 3))), [BLeftMatch(0, 1, 2, 3)])
 
     def test_self_match_connected_left_end(self):
         """
@@ -112,7 +113,7 @@ class BRuleLeft(unittest.TestCase):
         """
         graph = b_left_pattern(0, 1, 2, 3)
         graph.add_edges_from([(2, 3)], type=S_ETYPE_INDEX)
-        self.assertListEqual(list(match_b_left(b_left_pattern(0, 1, 2, 3))), [BLeftMatch(0, 1, 2, 3)])
+        self.assertListEqual(list(b_left_matches(b_left_pattern(0, 1, 2, 3))), [BLeftMatch(0, 1, 2, 3)])
 
     def test_missing_x_no_match(self):
         """
@@ -124,7 +125,7 @@ class BRuleLeft(unittest.TestCase):
         graph.add_nodes_from([0, 1], phase=0, type=Z_NTYPE_INDEX, degree=2)
         graph.add_nodes_from([2, 3], phase=0, type=X_NTYPE_INDEX, degree=2)
         graph.add_edges_from([(0, 2), (1, 3)], type=S_ETYPE_INDEX)
-        self.assertListEqual(list(match_b_left(graph)), [])
+        self.assertListEqual(list(b_left_matches(graph)), [])
 
     def test_two_way_parallel_composition(self):
         """
@@ -138,7 +139,8 @@ class BRuleLeft(unittest.TestCase):
         left_graph = b_left_pattern()
         right_graph = b_left_pattern(4, 5, 6, 7)
         graph = nx.compose(left_graph, right_graph)
-        self.assertListEqual(list(match_b_left(graph)), [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 6, 7)])
+        self.assertListEqual(list(b_left_matches(graph)),
+                             [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 6, 7)])
 
     def test_two_way_parallel_composition_connected(self):
         """
@@ -158,7 +160,7 @@ class BRuleLeft(unittest.TestCase):
         graph.nodes[3][DEGREE] = 4
         graph.nodes[4][DEGREE] = 4
         graph.nodes[6][DEGREE] = 4
-        self.assertListEqual(list(match_b_left(graph)), [])
+        self.assertListEqual(list(b_left_matches(graph)), [])
 
     def test_sequential_composition_zx(self):
         """
@@ -170,7 +172,8 @@ class BRuleLeft(unittest.TestCase):
         top_graph = b_left_pattern(4, 5, 6, 7)
         graph = nx.compose(bottom_graph, top_graph)
         graph.add_edges_from([(2, 4), (3, 5)], type=S_ETYPE_INDEX)
-        self.assertListEqual(list(match_b_left(graph)), [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 6, 7)])
+        self.assertListEqual(list(b_left_matches(graph)),
+                             [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 6, 7)])
 
     def test_sequential_composition_zx_connected_ends(self):
         """
@@ -182,7 +185,8 @@ class BRuleLeft(unittest.TestCase):
         top_graph = b_left_pattern(4, 5, 6, 7)
         graph = nx.compose(bottom_graph, top_graph)
         graph.add_edges_from([(2, 4), (3, 5), (0, 1), (6, 7)], type=S_ETYPE_INDEX)
-        self.assertListEqual(list(match_b_left(graph)), [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 6, 7)])
+        self.assertListEqual(list(b_left_matches(graph)),
+                             [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 6, 7)])
 
     def test_sequential_composition_xx(self):
         """
@@ -195,7 +199,8 @@ class BRuleLeft(unittest.TestCase):
         graph = nx.compose(bottom_graph, top_graph)
         graph.add_edges_from([(2, 4), (3, 5)], type=S_ETYPE_INDEX)
         # We don't care about the order of the node matches, just the nodes that were matched.
-        self.assertListEqual(list(match_b_left(graph)), [BLeftMatch(0, 1, 2, 3), BLeftMatch(7, 6, 4, 5)])
+        self.assertListEqual(list(b_left_matches(graph)),
+                             [BLeftMatch(0, 1, 2, 3), BLeftMatch(7, 6, 4, 5)])
 
     def test_sequential_composition_zz(self):
         """
@@ -207,7 +212,8 @@ class BRuleLeft(unittest.TestCase):
         top_pattern = b_left_pattern(4, 5, 6, 7)
         graph = nx.compose(bottom_pattern, top_pattern)
         graph.add_edges_from([(4, 1), (5, 0)], type=S_ETYPE_INDEX)
-        self.assertListEqual(list(match_b_left(graph)), [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 6, 7)])
+        self.assertListEqual(list(b_left_matches(graph)),
+                             [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 6, 7)])
 
     def test_upper_left_sequential_composition_zx(self):
         """
@@ -221,7 +227,8 @@ class BRuleLeft(unittest.TestCase):
         top_pattern = b_left_pattern(4, 5, 6, 7)
         graph = nx.compose(bottom_pattern, top_pattern)
         graph.add_edges_from([(6, 1)], type=S_ETYPE_INDEX)
-        self.assertListEqual(list(match_b_left(graph)), [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 6, 7)])
+        self.assertListEqual(list(b_left_matches(graph)),
+                             [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 6, 7)])
 
     def test_upper_left_sequential_composition_zz(self):
         """
@@ -235,7 +242,8 @@ class BRuleLeft(unittest.TestCase):
         top_pattern = b_left_pattern(4, 5, 6, 7)
         graph = nx.compose(bottom_pattern, top_pattern)
         graph.add_edges_from([(5, 1)], type=S_ETYPE_INDEX)
-        self.assertListEqual(list(match_b_left(graph)), [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 6, 7)])
+        self.assertListEqual(list(b_left_matches(graph)),
+                             [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 6, 7)])
 
     def test_upper_left_sequential_composition_xx(self):
         """
@@ -249,7 +257,8 @@ class BRuleLeft(unittest.TestCase):
         top_pattern = b_left_pattern(4, 5, 6, 7)
         graph = nx.compose(bottom_pattern, top_pattern)
         graph.add_edges_from([(6, 2)], type=S_ETYPE_INDEX)
-        self.assertListEqual(list(match_b_left(graph)), [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 6, 7)])
+        self.assertListEqual(list(b_left_matches(graph)),
+                             [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 6, 7)])
 
     def test_upper_left_sequential_composition_xx_back_connected(self):
         """
@@ -263,7 +272,8 @@ class BRuleLeft(unittest.TestCase):
         bottom_graph = b_left_pattern(4, 5, 6, 7)
         graph = nx.compose(top_graph, bottom_graph)
         graph.add_edges_from([(6, 2), (0, 7)], type=S_ETYPE_INDEX)
-        self.assertListEqual(list(match_b_left(graph)), [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 6, 7)])
+        self.assertListEqual(list(b_left_matches(graph)),
+                             [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 6, 7)])
 
     def test_lower_right_sequential_composition_zx(self):
         """
@@ -277,7 +287,8 @@ class BRuleLeft(unittest.TestCase):
         bottom_graph = b_left_pattern(4, 5, 6, 7)
         graph = nx.compose(top_graph, bottom_graph)
         graph.add_edges_from([(7, 0)], type=S_ETYPE_INDEX)
-        self.assertListEqual(list(match_b_left(graph)), [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 6, 7)])
+        self.assertListEqual(list(b_left_matches(graph)),
+                             [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 6, 7)])
 
     def test_lower_right_sequential_composition_zz(self):
         """
@@ -291,7 +302,8 @@ class BRuleLeft(unittest.TestCase):
         bottom_graph = b_left_pattern(4, 5, 6, 7)
         graph = nx.compose(top_graph, bottom_graph)
         graph.add_edges_from([(4, 0)], type=S_ETYPE_INDEX)
-        self.assertListEqual(list(match_b_left(graph)), [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 6, 7)])
+        self.assertListEqual(list(b_left_matches(graph)),
+                             [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 6, 7)])
 
     def test_lower_right_sequential_composition_xx(self):
         """
@@ -305,7 +317,8 @@ class BRuleLeft(unittest.TestCase):
         bottom_graph = b_left_pattern(4, 5, 6, 7)
         graph = nx.compose(top_graph, bottom_graph)
         graph.add_edges_from([(7, 3)], type=S_ETYPE_INDEX)
-        self.assertListEqual(list(match_b_left(graph)), [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 6, 7)])
+        self.assertListEqual(list(b_left_matches(graph)),
+                             [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 6, 7)])
 
     def test_five_way_cross_composition(self):
         """
@@ -324,8 +337,9 @@ class BRuleLeft(unittest.TestCase):
         top_right_graph = b_left_pattern(16, 17, 18, 19)
         graph = nx.compose_all([bottom_left_graph, center_graph, top_left_graph, bottom_right_graph, top_right_graph])
         graph.add_edges_from([(3, 4), (6, 9), (14, 5), (7, 16)], type=S_ETYPE_INDEX)
-        self.assertListEqual(list(match_b_left(graph)),
-                             [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 6, 7), BLeftMatch(8, 9, 10, 11),
+        self.assertListEqual(list(b_left_matches(graph)),
+                             [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 6, 7),
+                              BLeftMatch(8, 9, 10, 11),
                               BLeftMatch(12, 13, 14, 15), BLeftMatch(16, 17, 18, 19)])
 
     def test_five_way_cross_composition_connected(self):
@@ -346,8 +360,9 @@ class BRuleLeft(unittest.TestCase):
         graph = nx.compose_all([bottom_left_graph, center_graph, top_left_graph, bottom_right_graph, top_right_graph])
         graph.add_edges_from([(0, 1), (3, 4), (2, 8), (6, 9), (10, 11), (12, 13), (14, 5), (7, 16), (18, 19), (15, 17)],
                              type=S_ETYPE_INDEX)
-        self.assertListEqual(list(match_b_left(graph)),
-                             [BLeftMatch(4, 5, 6, 7), BLeftMatch(0, 1, 2, 3), BLeftMatch(12, 13, 14, 15),
+        self.assertListEqual(list(b_left_matches(graph)),
+                             [BLeftMatch(4, 5, 6, 7), BLeftMatch(0, 1, 2, 3),
+                              BLeftMatch(12, 13, 14, 15),
                               BLeftMatch(8, 9, 10, 11),
                               BLeftMatch(16, 17, 18, 19)])
 
@@ -361,8 +376,10 @@ class BRuleLeft(unittest.TestCase):
                         X
                   ---z7---x11---
         """
-        self.assertListEqual(list(match_b_left(diamond_graph())),
-                             [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 8, 9), BLeftMatch(6, 7, 10, 11),
+        print('matches = ', list(b_left_matches(diamond_graph())))
+        self.assertListEqual(list(b_left_matches(diamond_graph())),
+                             [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 8, 9),
+                              BLeftMatch(6, 7, 10, 11),
                               BLeftMatch(12, 13, 14, 15)])
 
     def test_square(self):
@@ -371,15 +388,15 @@ class BRuleLeft(unittest.TestCase):
             |    |
         ---x1---x3---
         """
-        self.assertListEqual(list(match_b_left(square_graph(3, 5, 7, 9))), [])
+        self.assertListEqual(list(b_left_matches(square_graph(3, 5, 7, 9))), [])
 
     def test_square_alternating(self):
         """
-        ---z0---x2---
+        ---x0---z2---
             |    |
         ---z1---x3---
         """
-        self.assertListEqual(list(match_b_left(square_graph_alternating(3, 5, 7, 9))), [])
+        self.assertListEqual(list(b_left_matches(square_graph_alternating())), [BLeftMatch(1, 2, 0, 3)])
 
 
 def wrong_degree_no_match_test_graph(rule_mode: RuleMode) -> nx.MultiGraph:
@@ -435,31 +452,31 @@ def add_layer_data(graph: nx.MultiGraph) -> None:
         ndata['layer'] = ndata[COLUMN] / 100
 
 
-class BRuleRight(unittest.TestCase):
+class BRuleRightTest(unittest.TestCase):
 
     def test_self_match_z(self):
-        self.assertListEqual(list(match_b_right(b_right_pattern())), [BRightMatch(0, 1)])
+        self.assertListEqual(list(b_right_matches(b_right_pattern())), [BRightMatch(0, 1)])
 
     def test_line_graph_no_match_z(self):
-        self.assertListEqual(list(match_b_right(wrong_degree_no_match_test_graph(Z_NTYPE_NAME))), [])
+        self.assertListEqual(list(b_right_matches(wrong_degree_no_match_test_graph(Z_NTYPE_NAME))), [])
 
     def test_line_graph_no_match_x(self):
-        self.assertListEqual(list(match_b_right(wrong_degree_no_match_test_graph(X_NTYPE_NAME))), [])
+        self.assertListEqual(list(b_right_matches(wrong_degree_no_match_test_graph(X_NTYPE_NAME))), [])
 
     def test_parallel_edge_no_match_z(self):
-        self.assertListEqual(list(match_b_right(parallel_edge_no_match_test_graph(Z_NTYPE_NAME))), [])
+        self.assertListEqual(list(b_right_matches(parallel_edge_no_match_test_graph(Z_NTYPE_NAME))), [])
 
     def test_parallel_edge_no_match_x(self):
-        self.assertListEqual(list(match_b_right(parallel_edge_no_match_test_graph(X_NTYPE_NAME))), [])
+        self.assertListEqual(list(b_right_matches(parallel_edge_no_match_test_graph(X_NTYPE_NAME))), [])
 
     def test_nonzero_phase_no_match_z(self):
-        self.assertListEqual(list(match_b_right(nonzero_phase_no_match_test_graph(Z_NTYPE_NAME))), [])
+        self.assertListEqual(list(b_right_matches(nonzero_phase_no_match_test_graph(Z_NTYPE_NAME))), [])
 
     def test_nonzero_phase_no_match_x(self):
-        self.assertListEqual(list(match_b_right(nonzero_phase_no_match_test_graph(X_NTYPE_NAME))), [])
+        self.assertListEqual(list(b_right_matches(nonzero_phase_no_match_test_graph(X_NTYPE_NAME))), [])
 
     def test_hadamard_edge_no_match_z(self):
-        self.assertListEqual(list(match_b_right(hadamard_edge_no_match_test_graph(Z_NTYPE_NAME))), [])
+        self.assertListEqual(list(b_right_matches(hadamard_edge_no_match_test_graph(Z_NTYPE_NAME))), [])
 
     def test_hadamard_edge_no_match_x(self):
-        self.assertListEqual(list(match_b_right(hadamard_edge_no_match_test_graph(X_NTYPE_NAME))), [])
+        self.assertListEqual(list(b_right_matches(hadamard_edge_no_match_test_graph(X_NTYPE_NAME))), [])
