@@ -1,17 +1,4 @@
-from collections import defaultdict
-from collections.abc import Iterator
-from typing import Any
-
 import networkx as nx
-import torch
-import torch_geometric as pyg
-
-from graph.pyzx_graph_generator import nx_clifford_graph
-from graph.pyzx_nx_conv import NTYPE, is_basis, is_z_basis, is_x_basis, ETYPE
-from matching.b_rule_matcher import b_left_matches, b_right_matches
-from matching.match_types import Match, CompoundMatch, FRightZMatch, FRightXMatch, FRightMatch
-from matching.f_rule_matcher import f_left_z_matches, f_right_z_matches, f_left_x_matches, f_right_x_matches
-from matching.y_rule_matcher import y_left_z_matches, y_right_z_matches, y_left_x_matches, y_right_x_matches
 from matching.zx_diagram import ZXDiagram
 
 

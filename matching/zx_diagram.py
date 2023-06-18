@@ -1,5 +1,3 @@
-from collections.abc import Iterator
-
 import networkx as nx
 
 from graph.pyzx_nx_conv import nx_add_degree

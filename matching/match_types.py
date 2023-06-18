@@ -1,8 +1,5 @@
 import abc
 from collections.abc import Iterator
-from typing import Any, TypeVar, Generic, Type, TypeVarTuple
-
-import networkx as nx
 from typing_extensions import Literal
 
 """
