@@ -3,8 +3,8 @@ from typing import Dict, Any
 
 import networkx as nx
 
-from graph.pyzx_nx_conversion import S_ETYPE_INDEX, is_basis, Z_NTYPE_NAME, X_NTYPE_NAME, NTYPE, ETYPE
-from matching.match import RuleMode, YRightZMatch, YRightXMatch, YLeftZMatch, YLeftXMatch, YRightMatch
+from graph.pyzx_nx_conv import S_ETYPE_INDEX, is_basis, Z_NTYPE_NAME, X_NTYPE_NAME, NTYPE, ETYPE
+from matching.match_types import RuleMode, YRightZMatch, YRightXMatch, YLeftZMatch, YLeftXMatch, YRightMatch
 from matching.utils import rule_mode_to_ntype_indices, filter_permutations, node_attributes_equal
 
 

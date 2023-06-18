@@ -1,6 +1,6 @@
 import abc
 from collections.abc import Iterator
-from typing import Any, TypeVar, Generic
+from typing import Any, TypeVar, Generic, Type, TypeVarTuple
 
 import networkx as nx
 from typing_extensions import Literal
@@ -243,34 +243,37 @@ class YRightXMatch(YRightMatch):
             else:
                 yield FRightXMatch(node)
 
-
+"""
+P = TypeVar('P', bound=nx.Graph)
+G = TypeVar('G', bound=nx.Graph)
 M = TypeVar('M', bound=Match)
 
 
-class Matcher(abc.ABC, Generic[M]):
+class Matcher(abc.ABC, Generic[P, G, M]):
 
     @property
     @abc.abstractmethod
-    def pattern(self) -> nx.MultiGraph:
+    def pattern(self) -> P:
         pass
 
     @abc.abstractmethod
-    def matches(self, diagram: nx.MultiGraph) -> Iterator[M]:
+    def matches(self, diagram: G) -> Iterator[M]:
         pass
 
+class Rewriter(abc.ABC, Generic[P, G, M]):
+    @abc.abstractmethod
+    def rewrite(self, diagram: G, match: M) -> None:
+        pass
 
-class Rule(abc.ABC, Generic[M]):
+class Rule(abc.ABC, Generic[P, G, M]):
 
     @property
     @abc.abstractmethod
     def matcher(self) -> Matcher[M]:
         pass
 
+    @property
     @abc.abstractmethod
-    def rewrite(self, diagram: nx.MultiGraph, match: M) -> None:
+    def rewriter(self) -> Rewriter[P, G, M]:
         pass
-
-
-class RuleSet:
-    # Test that all constituent rules have different names and indices
-    pass
+"""

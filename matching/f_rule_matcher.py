@@ -3,8 +3,8 @@ from typing import Any
 
 import networkx as nx
 
-from graph.pyzx_nx_conversion import is_basis, Z_NTYPE_NAME, X_NTYPE_NAME, S_ETYPE_INDEX, is_simple_edge, NTYPE, ETYPE
-from matching.match import RuleMode, FRightZMatch, FLeftXMatch, FLeftZMatch, FRightXMatch, FLeftMatch, FRightMatch
+from graph.pyzx_nx_conv import is_basis, Z_NTYPE_NAME, X_NTYPE_NAME, S_ETYPE_INDEX, is_simple_edge, NTYPE, ETYPE
+from matching.match_types import RuleMode, FRightZMatch, FLeftXMatch, FLeftZMatch, FRightXMatch, FLeftMatch, FRightMatch
 from matching.utils import filter_permutations, rule_mode_to_ntype_index
 
 

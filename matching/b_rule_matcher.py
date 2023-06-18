@@ -2,8 +2,8 @@ from collections.abc import Iterator
 from typing import Any
 
 import networkx as nx
-from graph.pyzx_nx_conversion import is_basis, S_ETYPE_INDEX, NTYPE, ETYPE, Z_NTYPE_INDEX, X_NTYPE_INDEX
-from matching.match import BLeftMatch, BRightMatch
+from graph.pyzx_nx_conv import is_basis, S_ETYPE_INDEX, NTYPE, ETYPE, Z_NTYPE_INDEX, X_NTYPE_INDEX
+from matching.match_types import BLeftMatch, BRightMatch
 from matching.utils import node_attributes_equal, filter_permutations
 
 

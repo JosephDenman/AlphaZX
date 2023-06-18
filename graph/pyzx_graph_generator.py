@@ -4,7 +4,7 @@ import networkx as nx
 import pyzx
 import torch_geometric as pyg
 
-from graph.pyzx_nx_conversion import nx_to_pyg_heterograph, ETYPE, NTYPE, PHASE, Z_NTYPE_INDEX, S_ETYPE_INDEX, \
+from graph.pyzx_nx_conv import nx_to_pyg_heterograph, ETYPE, NTYPE, PHASE, Z_NTYPE_INDEX, S_ETYPE_INDEX, \
     nx_remove_position_attributes
 
 

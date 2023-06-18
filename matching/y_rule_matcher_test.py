@@ -2,9 +2,9 @@ import unittest
 
 import networkx as nx
 
-from graph.pyzx_nx_conversion import H_ETYPE_INDEX, Z_NTYPE_NAME, X_NTYPE_NAME
-from matching.match import RuleMode, YLeftZMatch, YLeftXMatch
-from matching.y_rule import y_left_z_matches, y_left_z_pattern, y_left_x_pattern, y_left_x_matches, y_left_pattern
+from graph.pyzx_nx_conv import H_ETYPE_INDEX, Z_NTYPE_NAME, X_NTYPE_NAME
+from matching.match_types import RuleMode, YLeftZMatch, YLeftXMatch
+from matching.y_rule_matcher import y_left_z_matches, y_left_z_pattern, y_left_x_pattern, y_left_x_matches, y_left_pattern
 
 
 def parallel_edge_no_match_test_graph(rule_mode: RuleMode, first: bool = False, second: bool = False,

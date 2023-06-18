@@ -1,8 +1,8 @@
 from collections.abc import Iterator
 from typing import Any
 
-from graph.pyzx_nx_conversion import Z_NTYPE_INDEX, X_NTYPE_INDEX, Z_NTYPE_NAME, NTYPE, PHASE, DEGREE
-from matching.match import RuleMode
+from graph.pyzx_nx_conv import Z_NTYPE_INDEX, X_NTYPE_INDEX, Z_NTYPE_NAME, NTYPE, PHASE, DEGREE
+from matching.match_types import RuleMode
 
 
 def rule_mode_to_ntype_indices(rule_mode: RuleMode) -> tuple[int, int]:

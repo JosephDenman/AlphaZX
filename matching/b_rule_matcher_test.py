@@ -3,10 +3,10 @@ from typing import List, Dict, Tuple
 
 import networkx as nx
 
-from graph.pyzx_nx_conversion import S_ETYPE_INDEX, Z_NTYPE_NAME, X_NTYPE_NAME, H_ETYPE_INDEX, COLUMN, ROW, \
+from graph.pyzx_nx_conv import S_ETYPE_INDEX, Z_NTYPE_NAME, X_NTYPE_NAME, H_ETYPE_INDEX, COLUMN, ROW, \
     Z_NTYPE_INDEX, X_NTYPE_INDEX, DEGREE
-from matching.b_rule import b_right_matches, b_right_pattern, b_left_matches, b_left_pattern
-from matching.match import RuleMode, BLeftMatch, BRightMatch
+from matching.b_rule_matcher import b_right_matches, b_right_pattern, b_left_matches, b_left_pattern
+from matching.match_types import RuleMode, BLeftMatch, BRightMatch
 from matching.utils import rule_mode_to_ntype_indices
 
 
