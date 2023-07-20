@@ -6,8 +6,8 @@ import networkx as nx
 from graph.pyzx_nx_conv import S_ETYPE_INDEX, Z_NTYPE_NAME, X_NTYPE_NAME, H_ETYPE_INDEX, COLUMN, ROW, \
     Z_NTYPE_INDEX, X_NTYPE_INDEX, DEGREE
 from matching.b_rule_matcher import b_right_matches, b_right_pattern, b_left_matches, b_left_pattern
-from matching.match_types import RuleMode, BLeftMatch, BRightMatch
-from matching.utils import rule_mode_to_ntype_indices
+from matching.match_types import Basis, BLeftMatch, BRightMatch
+from matching.utils import basis_to_ntype_indices
 
 
 def diamond_graph() -> nx.MultiGraph:
@@ -376,7 +376,6 @@ class BRuleLeftTest(unittest.TestCase):
                         X
                   ---z7---x11---
         """
-        print('matches = ', list(b_left_matches(diamond_graph())))
         self.assertListEqual(list(b_left_matches(diamond_graph())),
                              [BLeftMatch(0, 1, 2, 3), BLeftMatch(4, 5, 8, 9),
                               BLeftMatch(6, 7, 10, 11),
@@ -399,8 +398,8 @@ class BRuleLeftTest(unittest.TestCase):
         self.assertListEqual(list(b_left_matches(square_graph_alternating())), [BLeftMatch(1, 2, 0, 3)])
 
 
-def wrong_degree_no_match_test_graph(rule_mode: RuleMode) -> nx.MultiGraph:
-    node_types = rule_mode_to_ntype_indices(rule_mode)
+def wrong_degree_no_match_test_graph(rule_mode: Basis) -> nx.MultiGraph:
+    node_types = basis_to_ntype_indices(rule_mode)
     graph = nx.MultiGraph()
     graph.add_node(1, type=node_types[0], phase=0, degree=2)
     graph.add_node(2, type=node_types[1], phase=0, degree=2)
@@ -408,8 +407,8 @@ def wrong_degree_no_match_test_graph(rule_mode: RuleMode) -> nx.MultiGraph:
     return graph
 
 
-def parallel_edge_no_match_test_graph(rule_mode: RuleMode) -> nx.MultiGraph:
-    node_types = rule_mode_to_ntype_indices(rule_mode)
+def parallel_edge_no_match_test_graph(rule_mode: Basis) -> nx.MultiGraph:
+    node_types = basis_to_ntype_indices(rule_mode)
     graph = nx.MultiGraph()
     graph.add_node(23, type=node_types[0], phase=0, degree=3)
     graph.add_node(17, type=node_types[1], phase=0, degree=3)
@@ -418,8 +417,8 @@ def parallel_edge_no_match_test_graph(rule_mode: RuleMode) -> nx.MultiGraph:
     return graph
 
 
-def nonzero_phase_no_match_test_graph(rule_mode: RuleMode) -> nx.MultiGraph:
-    node_types = rule_mode_to_ntype_indices(rule_mode)
+def nonzero_phase_no_match_test_graph(rule_mode: Basis) -> nx.MultiGraph:
+    node_types = basis_to_ntype_indices(rule_mode)
     graph = nx.MultiGraph()
     graph.add_node(23, type=node_types[0], phase=4, degree=3)
     graph.add_node(17, type=node_types[1], phase=2, degree=3)
@@ -428,8 +427,8 @@ def nonzero_phase_no_match_test_graph(rule_mode: RuleMode) -> nx.MultiGraph:
     return graph
 
 
-def hadamard_edge_no_match_test_graph(rule_mode: RuleMode) -> nx.MultiGraph:
-    node_types = rule_mode_to_ntype_indices(rule_mode)
+def hadamard_edge_no_match_test_graph(rule_mode: Basis) -> nx.MultiGraph:
+    node_types = basis_to_ntype_indices(rule_mode)
     graph = nx.MultiGraph()
     graph.add_node(23, type=node_types[0], phase=0, degree=3)
     graph.add_node(17, type=node_types[1], phase=0, degree=3)
@@ -450,6 +449,12 @@ def spring_layout_data(graph: nx.MultiGraph) -> Tuple[List[int], Dict[int, Tuple
 def add_layer_data(graph: nx.MultiGraph) -> None:
     for n, ndata in graph.nodes(data=True):
         ndata['layer'] = ndata[COLUMN] / 100
+
+
+def two_identity_test_graph() -> nx.MultiGraph:
+    graph = b_right_pattern()
+    graph.add_edges_from([(0, 0), (1, 1)], type=S_ETYPE_INDEX)
+    return graph
 
 
 class BRuleRightTest(unittest.TestCase):
@@ -480,3 +485,6 @@ class BRuleRightTest(unittest.TestCase):
 
     def test_hadamard_edge_no_match_x(self):
         self.assertListEqual(list(b_right_matches(hadamard_edge_no_match_test_graph(X_NTYPE_NAME))), [])
+
+    def test_two_identity_match(self):
+        self.assertListEqual(list(b_right_matches(two_identity_test_graph())), [BRightMatch(0, 1)])

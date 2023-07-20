@@ -3,14 +3,14 @@ import unittest
 import networkx as nx
 
 from graph.pyzx_nx_conv import Z_NTYPE_NAME, X_NTYPE_NAME, S_ETYPE_INDEX, H_ETYPE_INDEX
-from matching.match_types import RuleMode, FLeftZMatch, FLeftXMatch, FRightZMatch, FRightXMatch
+from matching.match_types import Basis, FLeftZMatch, FLeftXMatch, FRightZMatch, FRightXMatch
 from matching.f_rule_matcher import f_left_z_matches, f_left_x_matches, f_left_z_pattern, f_left_x_pattern, f_right_z_matches, \
     f_right_z_pattern, f_right_x_matches, f_right_x_pattern
-from matching.utils import rule_mode_to_ntype_index
+from matching.utils import basis_to_ntype_index
 
 
-def consecutive_parallel_edge_test_graph(rule_mode: RuleMode):
-    node_type = rule_mode_to_ntype_index(rule_mode)
+def consecutive_parallel_edge_test_graph(basis: Basis):
+    node_type = basis_to_ntype_index(basis)
     nx_graph = nx.MultiGraph()
     nx_graph.add_node(23, type=node_type)
     nx_graph.add_node(45, type=node_type)
@@ -23,8 +23,8 @@ def consecutive_parallel_edge_test_graph(rule_mode: RuleMode):
     return nx_graph
 
 
-def hadamard_edge_test_graph(rule_mode: RuleMode) -> nx.MultiGraph:
-    node_type = rule_mode_to_ntype_index(rule_mode)
+def hadamard_edge_test_graph(basis: Basis) -> nx.MultiGraph:
+    node_type = basis_to_ntype_index(basis)
     nx_graph = nx.MultiGraph()
     nx_graph.add_node(0, type=node_type)
     nx_graph.add_node(1, type=node_type)
@@ -32,8 +32,8 @@ def hadamard_edge_test_graph(rule_mode: RuleMode) -> nx.MultiGraph:
     return nx_graph
 
 
-def simple_hadamard_edge_test_graph(rule_mode: RuleMode) -> nx.MultiGraph:
-    node_type = rule_mode_to_ntype_index(rule_mode)
+def simple_hadamard_edge_test_graph(basis: Basis) -> nx.MultiGraph:
+    node_type = basis_to_ntype_index(basis)
     nx_graph = nx.MultiGraph()
     nx_graph.add_node(0, type=node_type)
     nx_graph.add_node(1, type=node_type)
@@ -42,8 +42,8 @@ def simple_hadamard_edge_test_graph(rule_mode: RuleMode) -> nx.MultiGraph:
     return nx_graph
 
 
-def disconnected_test_graph(rule_mode: RuleMode) -> nx.MultiGraph:
-    node_type = rule_mode_to_ntype_index(rule_mode)
+def disconnected_test_graph(basis: Basis) -> nx.MultiGraph:
+    node_type = basis_to_ntype_index(basis)
     nx_graph = nx.MultiGraph()
     nx_graph.add_node(0, type=node_type)
     nx_graph.add_node(1, type=node_type)

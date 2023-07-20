@@ -6,7 +6,6 @@ class ZXMatchDiagram(nx.Graph):
     NTYPE = 'type'
     NTYPES = 'types'
     PHASES = 'phases'
-    DEGREES = 'degrees'
 
     def __init__(self, diagram: ZXDiagram, **attr):
         self.zx_diagram = diagram

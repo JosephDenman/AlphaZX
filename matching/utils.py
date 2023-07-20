@@ -2,15 +2,15 @@ from collections.abc import Iterator
 from typing import Any
 
 from graph.pyzx_nx_conv import Z_NTYPE_INDEX, X_NTYPE_INDEX, Z_NTYPE_NAME, NTYPE, PHASE, DEGREE
-from matching.match_types import RuleMode
+from matching.match_types import Basis
 
 
-def rule_mode_to_ntype_indices(rule_mode: RuleMode) -> tuple[int, int]:
-    return (Z_NTYPE_INDEX, X_NTYPE_INDEX) if rule_mode == Z_NTYPE_NAME else (X_NTYPE_INDEX, Z_NTYPE_INDEX)
+def basis_to_ntype_indices(basis: Basis) -> tuple[int, int]:
+    return (Z_NTYPE_INDEX, X_NTYPE_INDEX) if basis == Z_NTYPE_NAME else (X_NTYPE_INDEX, Z_NTYPE_INDEX)
 
 
-def rule_mode_to_ntype_index(rule_mode: RuleMode) -> int:
-    return Z_NTYPE_INDEX if rule_mode == Z_NTYPE_NAME else X_NTYPE_INDEX
+def basis_to_ntype_index(basis: Basis) -> int:
+    return Z_NTYPE_INDEX if basis == Z_NTYPE_NAME else X_NTYPE_INDEX
 
 
 def node_attributes_equal(v: dict[str, Any], w: dict[str, Any], *args: str) -> bool:

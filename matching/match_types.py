@@ -6,7 +6,7 @@ from typing_extensions import Literal
 Describes the color mode of a rule. The 'z' mode means that the bottom node of a rule has a z-basis. The remaining
 node bases can be deduced from the bottom node basis.
 """
-RuleMode = Literal['z', 'x']
+Basis = Literal['z', 'x']
 
 
 def camel_to_snake(s: str) -> str:
@@ -93,8 +93,16 @@ class FRightMatch(BaseMatch):
 
     @property
     @abc.abstractmethod
-    def rule_mode(self) -> RuleMode:
+    def rule_mode(self) -> Basis:
         pass
+
+    @property
+    def is_z_basis(self) -> bool:
+        return self.rule_mode == 'z'
+
+    @property
+    def is_x_basis(self) -> bool:
+        return not self.is_z_basis
 
 
 class FRightZMatch(FRightMatch):
@@ -114,8 +122,16 @@ class FLeftMatch(CompoundMatch):
 
     @property
     @abc.abstractmethod
-    def rule_mode(self) -> RuleMode:
+    def rule_mode(self) -> Basis:
         pass
+
+    @property
+    def is_z_basis(self) -> bool:
+        return self.rule_mode == 'z'
+
+    @property
+    def is_x_basis(self) -> bool:
+        return not self.is_z_basis
 
 
 class FLeftZMatch(FLeftMatch):
@@ -163,8 +179,8 @@ class BRightMatch(CompoundMatch):
 
     @property
     def sub_matches(self) -> Iterator[Match]:
-        yield FRightZMatch(self.nodes[0])
-        yield FRightXMatch(self.nodes[1])
+        yield FRightXMatch(self.nodes[0])
+        yield FRightZMatch(self.nodes[1])
 
 
 class YLeftMatch(CompoundMatch):
@@ -172,7 +188,7 @@ class YLeftMatch(CompoundMatch):
 
     @property
     @abc.abstractmethod
-    def rule_mode(self) -> RuleMode:
+    def rule_mode(self) -> Basis:
         pass
 
 
@@ -209,7 +225,7 @@ class YRightMatch(CompoundMatch):
 
     @property
     @abc.abstractmethod
-    def rule_mode(self) -> RuleMode:
+    def rule_mode(self) -> Basis:
         pass
 
 

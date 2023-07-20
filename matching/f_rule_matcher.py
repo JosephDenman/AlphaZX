@@ -4,12 +4,12 @@ from typing import Any
 import networkx as nx
 
 from graph.pyzx_nx_conv import is_basis, Z_NTYPE_NAME, X_NTYPE_NAME, S_ETYPE_INDEX, is_simple_edge, NTYPE, ETYPE
-from matching.match_types import RuleMode, FRightZMatch, FLeftXMatch, FLeftZMatch, FRightXMatch, FLeftMatch, FRightMatch
-from matching.utils import filter_permutations, rule_mode_to_ntype_index
+from matching.match_types import Basis, FRightZMatch, FLeftXMatch, FLeftZMatch, FRightXMatch, FLeftMatch, FRightMatch
+from matching.utils import filter_permutations, basis_to_ntype_index
 
 
-def f_left_pattern(rule_mode: RuleMode) -> nx.MultiGraph:
-    node_type = rule_mode_to_ntype_index(rule_mode)
+def f_left_pattern(basis: Basis) -> nx.MultiGraph:
+    node_type = basis_to_ntype_index(basis)
     nx_graph = nx.MultiGraph()
     nx_graph.add_nodes_from([0, 1], type=node_type)
     nx_graph.add_edge(0, 1, type=S_ETYPE_INDEX)
@@ -54,8 +54,8 @@ def f_left_x_matches(nx_graph: nx.MultiGraph) -> Iterator[FLeftXMatch]:
                                 .subgraph_monomorphisms_iter()))
 
 
-def f_right_pattern(rule_mode: RuleMode) -> nx.MultiGraph:
-    node_type = rule_mode_to_ntype_index(rule_mode)
+def f_right_pattern(basis: Basis) -> nx.MultiGraph:
+    node_type = basis_to_ntype_index(basis)
     nx_graph = nx.MultiGraph()
     nx_graph.add_node(0, type=node_type)
     return nx_graph

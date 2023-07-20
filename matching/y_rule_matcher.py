@@ -4,12 +4,12 @@ from typing import Dict, Any
 import networkx as nx
 
 from graph.pyzx_nx_conv import S_ETYPE_INDEX, is_basis, Z_NTYPE_NAME, X_NTYPE_NAME, NTYPE, ETYPE
-from matching.match_types import RuleMode, YRightZMatch, YRightXMatch, YLeftZMatch, YLeftXMatch, YRightMatch
-from matching.utils import rule_mode_to_ntype_indices, filter_permutations, node_attributes_equal
+from matching.match_types import Basis, YRightZMatch, YRightXMatch, YLeftZMatch, YLeftXMatch, YRightMatch
+from matching.utils import basis_to_ntype_indices, filter_permutations, node_attributes_equal
 
 
-def y_left_pattern(rule_mode: RuleMode) -> nx.MultiGraph:
-    node_types = rule_mode_to_ntype_indices(rule_mode)
+def y_left_pattern(basis: Basis) -> nx.MultiGraph:
+    node_types = basis_to_ntype_indices(basis)
     nx_graph = nx.MultiGraph()
     nx_graph.add_node(0, type=node_types[0], phase=-0.5, degree=2)
     nx_graph.add_node(1, type=node_types[1], phase=0.0, degree=3)
@@ -56,8 +56,8 @@ def y_left_x_matches(nx_graph: nx.MultiGraph) -> Iterator[YLeftXMatch]:
                                 .subgraph_isomorphisms_iter()))
 
 
-def y_right_pattern(rule_mode: RuleMode) -> nx.MultiGraph:
-    node_types = rule_mode_to_ntype_indices(rule_mode)
+def y_right_pattern(rule_mode: Basis) -> nx.MultiGraph:
+    node_types = basis_to_ntype_indices(rule_mode)
     nx_graph = nx.MultiGraph()
     nx_graph.add_node(0, type=node_types[0], phase=0.5, degree=2)
     nx_graph.add_node(1, type=node_types[1], phase=-0.5, degree=3)

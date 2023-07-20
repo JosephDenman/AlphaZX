@@ -3,13 +3,13 @@ import unittest
 import networkx as nx
 
 from graph.pyzx_nx_conv import H_ETYPE_INDEX, Z_NTYPE_NAME, X_NTYPE_NAME
-from matching.match_types import RuleMode, YLeftZMatch, YLeftXMatch
+from matching.match_types import Basis, YLeftZMatch, YLeftXMatch
 from matching.y_rule_matcher import y_left_z_matches, y_left_z_pattern, y_left_x_pattern, y_left_x_matches, y_left_pattern
 
 
-def parallel_edge_no_match_test_graph(rule_mode: RuleMode, first: bool = False, second: bool = False,
+def parallel_edge_no_match_test_graph(basis: Basis, first: bool = False, second: bool = False,
                                       third=False) -> nx.MultiGraph:
-    nx_graph = y_left_pattern(rule_mode)
+    nx_graph = y_left_pattern(basis)
     if first:
         nx_graph.add_edge(0, 1, type=H_ETYPE_INDEX)
     if second:
@@ -19,9 +19,9 @@ def parallel_edge_no_match_test_graph(rule_mode: RuleMode, first: bool = False, 
     return nx_graph
 
 
-def disconnected_no_match_test_graph(rule_mode: RuleMode, first: bool = False, second: bool = False,
+def disconnected_no_match_test_graph(basis: Basis, first: bool = False, second: bool = False,
                                      third=False) -> nx.MultiGraph:
-    nx_graph = y_left_pattern(rule_mode)
+    nx_graph = y_left_pattern(basis)
     if first:
         nx_graph.remove_edge(0, 1)
     if second:
