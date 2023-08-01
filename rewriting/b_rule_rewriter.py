@@ -1,3 +1,4 @@
+
 from matching.match_types import BLeftMatch, BRightMatch, Basis, Match
 from matching.zx_diagram import ZXDiagram
 
@@ -15,80 +16,71 @@ def assert_neighbors(n: int, m: int, diagram: ZXDiagram) -> None:
     assert n in diagram.neighbors(m), f'Expected {n} and {m} to be neighbors'
 
 
+def non_match_neighbors(a: int, match: Match, diagram: ZXDiagram) -> list[int]:
+    return [b for b in diagram.neighbors(a) if b not in match.nodes]
+
+
 def b_left_rewrite(b_left_match: BLeftMatch, diagram: ZXDiagram) -> None:
-    """
-    Replace these manual checks at the top with a subgraph verification match.
-    """
-    bottom_left, bottom_right, top_left, top_right = b_left_match
+    z, x, m, n = b_left_match
 
-    validate_node('z', bottom_left, diagram)
-    validate_node('z', bottom_right, diagram)
-    validate_node('x', top_left, diagram)
-    validate_node('x', top_right, diagram)
+    validate_node('z', z, diagram)
+    validate_node('x', x, diagram)
+    validate_node('z', m, diagram)
+    validate_node('x', n, diagram)
 
-    assert_neighbors(top_left, bottom_left, diagram)
-    assert_neighbors(top_left, bottom_right, diagram)
-    assert_neighbors(top_right, bottom_left, diagram)
-    assert_neighbors(top_right, bottom_right, diagram)
+    assert_neighbors(z, x, diagram)
+    assert_neighbors(x, m, diagram)
+    assert_neighbors(m, n, diagram)
+    assert_neighbors(n, z, diagram)
 
     bottom, top = diagram.add_x_node(0), diagram.add_z_node(0)
 
-    bottom_left_neighbors = match_neighbors(bottom_left, b_left_match, diagram)
-    assert len(bottom_left_neighbors) == 1, f'Expected {bottom_left_neighbors} to have one element'
+    [z_neighbor] = non_match_neighbors(z, b_left_match, diagram)
+    [x_neighbor] = non_match_neighbors(x, b_left_match, diagram)
+    [m_neighbor] = non_match_neighbors(m, b_left_match, diagram)
+    [n_neighbor] = non_match_neighbors(n, b_left_match, diagram)
 
-    bottom_right_neighbors = match_neighbors(bottom_right, b_left_match, diagram)
-    assert len(bottom_right_neighbors) == 1, f'Expected {bottom_right_neighbors} to have one element'
+    diagram.add_s_edges_from([(z_neighbor, bottom), (m_neighbor, bottom), (bottom, top), (top, x_neighbor),
+                              (top, n_neighbor)])
 
-    top_left_neighbors = match_neighbors(top_left, b_left_match, diagram)
-    assert len(top_left_neighbors) == 1, f'Expected {top_left_neighbors} to have one element'
+    diagram.remove_incident_edges(z)
+    diagram.remove_incident_edges(x)
+    diagram.remove_incident_edges(m)
+    diagram.remove_incident_edges(n)
 
-    top_right_neighbors = match_neighbors(top_right, b_left_match, diagram)
-    assert len(top_right_neighbors) == 1, f'Expected {top_right_neighbors} to have one element'
-
-    diagram.add_s_edges_from([(bottom, bottom_left_neighbors[0]), (bottom, bottom_right_neighbors[0])])
-    diagram.add_s_edge(bottom, top)
-    diagram.add_s_edges_from([(top, top_left_neighbors[0]), (top, top_right_neighbors[0])])
-
-    diagram.remove_incident_edges(top_left)
-    diagram.remove_incident_edges(top_right)
-    diagram.remove_incident_edges(bottom_left)
-    diagram.remove_incident_edges(bottom_right)
-
-    diagram.remove_x_node(top_left)
-    diagram.remove_x_node(top_right)
-    diagram.remove_z_node(bottom_left)
-    diagram.remove_z_node(bottom_right)
-
-
-def match_neighbors(n: int, match: Match, diagram: ZXDiagram) -> list[int]:
-    return [neighbor for neighbor in diagram.neighbors(n) if neighbor not in match]
+    diagram.remove_z_node(z)
+    diagram.remove_x_node(x)
+    diagram.remove_z_node(m)
+    diagram.remove_x_node(n)
 
 
 def b_right_rewrite(b_right_match: BRightMatch, diagram: ZXDiagram) -> None:
-    """
-    NOTE: This rewrite only works for ideal match case, with four distinct boundary nodes.
-    """
-    bottom, top = b_right_match
-    validate_node('x', bottom, diagram)
-    validate_node('z', top, diagram)
+    x, z = b_right_match
 
-    assert_neighbors(bottom, top, diagram)
+    validate_node('x', x, diagram)
+    validate_node('z', z, diagram)
+    assert_neighbors(x, z, diagram)
 
-    bottom_neighbors = match_neighbors(bottom, b_right_match, diagram)
-    assert len(bottom_neighbors) == 2, f'Expected {bottom_neighbors} to have two elements'
+    [bl, br] = non_match_neighbors(x, b_right_match, diagram)
+    [tl, tr] = non_match_neighbors(x, b_right_match, diagram)
+    z0, z1, x2, x3 = diagram.add_z_node(0), diagram.add_z_node(0), diagram.add_x_node(0), diagram.add_x_node(0)
 
-    top_neighbors = match_neighbors(top, b_right_match, diagram)
-    assert len(top_neighbors) == 2, f'Expected {bottom_neighbors} to have two elements'
+    diagram.add_s_edges_from([(bl, z0), (br, z1)])
+    diagram.add_s_edges_from([(n, m) for n in [z0, z1] for m in [x2, x3]])
+    diagram.add_s_edges_from([(x2, tl), (x3, tr)])
 
-    top_left, top_right = diagram.add_x_node(0), diagram.add_x_node(0)
-    bottom_left, bottom_right = diagram.add_z_node(0), diagram.add_z_node(0)
+    diagram.remove_incident_edges(x)
+    diagram.remove_incident_edges(z)
 
-    diagram.add_s_edges_from([(top_left, top_neighbors[0]), (top_right, top_neighbors[1])])
-    diagram.add_s_edges_from([(n, m) for n in [bottom_left, bottom_right] for m in [top_left, top_right]])
-    diagram.add_s_edges_from([(bottom_left, bottom_neighbors[0]), (bottom_right, bottom_neighbors[1])])
+    diagram.remove_x_node(x)
+    diagram.remove_z_node(z)
 
-    diagram.remove_incident_edges(top)
-    diagram.remove_incident_edges(bottom)
+    validate_node('z', z0, diagram)
+    validate_node('z', z1, diagram)
+    validate_node('x', x2, diagram)
+    validate_node('x', x3, diagram)
 
-    diagram.remove_x_node(bottom)
-    diagram.remove_z_node(top)
+    assert_neighbors(bl, z0, diagram)
+    assert_neighbors(br, z1, diagram)
+    assert_neighbors(x2, tl, diagram)
+    assert_neighbors(x3, tr, diagram)

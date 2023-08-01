@@ -1,3 +1,0 @@
-
-class HeteroGraph:
-    pass

@@ -163,13 +163,15 @@ class BLeftMatch(CompoundMatch):
 
     @property
     def sub_matches(self) -> Iterator[Match]:
-        for z in self.nodes[:2]:
-            for x in self.nodes[2:]:
-                yield BRightMatch(z, x)
-        yield FRightZMatch(self.nodes[0])
-        yield FRightZMatch(self.nodes[1])
-        yield FRightXMatch(self.nodes[2])
-        yield FRightXMatch(self.nodes[3])
+        z, x, m, n = self.nodes
+        yield BRightMatch(z, x)
+        yield BRightMatch(z, n)
+        yield BRightMatch(m, x)
+        yield BRightMatch(m, n)
+        yield FRightZMatch(z)
+        yield FRightXMatch(x)
+        yield FRightZMatch(m)
+        yield FRightXMatch(n)
 
 
 class BRightMatch(CompoundMatch):
@@ -179,6 +181,7 @@ class BRightMatch(CompoundMatch):
 
     @property
     def sub_matches(self) -> Iterator[Match]:
+        # TODO: Calculate sub-graphs involving boundary vertices
         yield FRightXMatch(self.nodes[0])
         yield FRightZMatch(self.nodes[1])
 

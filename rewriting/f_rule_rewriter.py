@@ -13,7 +13,7 @@ def f_left_rewrite(f_left_match: FLeftMatch, diagram: ZXDiagram) -> None:
     left, right = f_left_match
     assert diagram.is_basis(left), f'Node {left} is not a basis node'
     assert diagram.is_basis(right), f'Node {right} is not a basis node'
-    node = add_node(f_left_match, (diagram.get_phase(left) + diagram.get_phase(right)) % 2, diagram)
+    node = add_node(f_left_match, (diagram.phase(left) + diagram.phase(right)) % 2, diagram)
     for neighbor in diagram.neighbors_from(f_left_match):
         diagram.add_s_edge(node, neighbor)
     diagram.remove_incident_edges(left)
@@ -33,14 +33,14 @@ def f_right_rewrite(f_right_match: FRightMatch, phase: float, new_edges: int,
                            the match.
     :param diagram:
     """
-    assert 0 <= phase < 2, f'Expected {phase} to be in [0, 2)'
+    assert -2 < phase < 2, f'Expected {phase} to be in [0, 2)'
 
     center = f_right_match.nodes[0]
 
     assert diagram.is_basis(center), f'Node {center} is not a basis node'
 
-    center_phase = diagram.get_phase(center)
-    assert 0 <= center_phase < 2, f'Expected {center_phase} to be in [0, 2)'
+    center_phase = diagram.phase(center)
+    assert -2 < center_phase < 2, f'Expected {center_phase} to be in [0, 2)'
     left = add_node(f_right_match, phase, diagram)
     right = add_node(f_right_match, (center_phase - phase) % 2, diagram)
     diagram.add_s_edges_from([(left, right)] * new_edges)

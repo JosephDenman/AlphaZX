@@ -4,7 +4,7 @@ import networkx as nx
 import pyzx
 import torch_geometric as pyg
 
-from graph.pyzx_nx_conv import nx_to_pyg_heterograph, ETYPE, NTYPE, PHASE, Z_NTYPE_INDEX, S_ETYPE_INDEX, \
+from graph.pyzx_nx_conv import nx_to_pyg_hetero, ETYPE, NTYPE, PHASE, Z_NTYPE_INDEX, S_ETYPE_INDEX, \
     nx_remove_position_attributes
 
 
@@ -60,4 +60,5 @@ def nx_clifford_graph(num_qubits: int, depth: int, no_hadamard: bool = True,
 
 def pyg_clifford_graph(num_qubits: int, depth: int, no_hadamard: bool = True,
                        t_gates: bool = True) -> pyg.data.HeteroData:
-    return nx_to_pyg_heterograph(nx_clifford_graph(num_qubits, depth, no_hadamard, t_gates))
+    return nx_to_pyg_hetero(nx_clifford_graph(num_qubits, depth, no_hadamard, t_gates), 'type')
+

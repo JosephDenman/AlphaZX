@@ -1,43 +1,53 @@
 import unittest
 
-import networkx as nx
-
-from graph.pyzx_nx_conv import H_ETYPE_INDEX, Z_NTYPE_NAME, X_NTYPE_NAME
-from matching.match_types import Basis, YLeftZMatch, YLeftXMatch
-from matching.y_rule_matcher import y_left_z_matches, y_left_z_pattern, y_left_x_pattern, y_left_x_matches, y_left_pattern
+from graph.pyzx_nx_conv import Z_NTYPE_NAME, X_NTYPE_NAME
+from matching.match_types import Basis, YLeftZMatch, YLeftXMatch, YRightZMatch, YRightXMatch
+from matching.y_rule_matcher import y_left_z_matches, y_left_z_pattern, y_left_x_pattern, y_left_x_matches, \
+    y_left_pattern, y_right_z_pattern, y_right_z_matches, y_right_x_pattern, y_right_x_matches
+from matching.zx_diagram import ZXDiagram
 
 
 def parallel_edge_no_match_test_graph(basis: Basis, first: bool = False, second: bool = False,
-                                      third=False) -> nx.MultiGraph:
-    nx_graph = y_left_pattern(basis)
+                                      third=False) -> ZXDiagram:
+    diagram = y_left_pattern(basis)
+    b4, b5, b6 = diagram.add_b_nodes(3)
+    diagram.add_s_edges_from([(b4, 0), (2, b5), (3, b6)])
     if first:
-        nx_graph.add_edge(0, 1, type=H_ETYPE_INDEX)
+        diagram.add_s_edge(0, 1)
     if second:
-        nx_graph.add_edge(1, 2, type=H_ETYPE_INDEX)
+        diagram.add_s_edge(1, 2)
     if third:
-        nx_graph.add_edge(1, 3, type=H_ETYPE_INDEX)
-    return nx_graph
+        diagram.add_s_edge(1, 3)
+    return diagram
 
 
 def disconnected_no_match_test_graph(basis: Basis, first: bool = False, second: bool = False,
-                                     third=False) -> nx.MultiGraph:
-    nx_graph = y_left_pattern(basis)
+                                     third=False) -> ZXDiagram:
+    diagram = y_left_pattern(basis)
+    b4, b5, b6 = diagram.add_b_nodes(3)
+    diagram.add_s_edges_from([(b4, 0), (2, b5), (3, b6)])
     if first:
-        nx_graph.remove_edge(0, 1)
+        diagram.remove_edge(0, 1)
     if second:
-        nx_graph.remove_edge(1, 2)
+        diagram.remove_edge(1, 2)
     if third:
-        nx_graph.remove_edge(1, 3)
-    return nx_graph
+        diagram.remove_edge(1, 3)
+    return diagram
 
 
 class YLeftMatchTest(unittest.TestCase):
 
     def test_self_match_z(self):
-        self.assertListEqual(list(y_left_z_matches(y_left_z_pattern())), [YLeftZMatch(0, 1, 2, 3)])
+        diagram = y_left_z_pattern()
+        b4, b5, b6 = diagram.add_b_nodes(3)
+        diagram.add_s_edges_from([(b4, 0), (2, b5), (3, b6)])
+        self.assertListEqual(list(y_left_z_matches(diagram)), [YLeftZMatch(0, 1, 2, 3)])
 
     def test_self_match_x(self):
-        self.assertListEqual(list(y_left_x_matches(y_left_x_pattern())), [YLeftXMatch(0, 1, 2, 3)])
+        diagram = y_left_x_pattern()
+        b4, b5, b6 = diagram.add_b_nodes(3)
+        diagram.add_s_edges_from([(b4, 0), (2, b5), (3, b6)])
+        self.assertListEqual(list(y_left_x_matches(diagram)), [YLeftXMatch(0, 1, 2, 3)])
 
     def test_parallel_edge_no_match_z(self):
         for a in [True, False]:
@@ -79,6 +89,17 @@ class YLeftMatchTest(unittest.TestCase):
                     else:
                         self.assertListEqual(matches, [])
 
-    def test_symmetric(self):
-        # TODO: Test symmetric matches are filtered out.
-        self.assertTrue(True)
+
+class YRightMatchTest(unittest.TestCase):
+
+    def test_self_match_z(self):
+        diagram = y_right_z_pattern()
+        b4, b5, b6 = diagram.add_b_nodes(3)
+        diagram.add_s_edges_from([(b4, 0), (2, b5), (3, b6)])
+        self.assertListEqual(list(y_right_z_matches(diagram)), [YRightZMatch(0, 1, 2, 3)])
+
+    def test_self_match_x(self):
+        diagram = y_right_x_pattern()
+        b4, b5, b6 = diagram.add_b_nodes(3)
+        diagram.add_s_edges_from([(b4, 0), (2, b5), (3, b6)])
+        self.assertListEqual(list(y_right_x_matches(diagram)), [YRightXMatch(0, 1, 2, 3)])

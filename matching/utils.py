@@ -1,26 +1,16 @@
 from collections.abc import Iterator
-from typing import Any
 
-from graph.pyzx_nx_conv import Z_NTYPE_INDEX, X_NTYPE_INDEX, Z_NTYPE_NAME, NTYPE, PHASE, DEGREE
-from matching.match_types import Basis
-
-
-def basis_to_ntype_indices(basis: Basis) -> tuple[int, int]:
-    return (Z_NTYPE_INDEX, X_NTYPE_INDEX) if basis == Z_NTYPE_NAME else (X_NTYPE_INDEX, Z_NTYPE_INDEX)
+from matching.b_rule_matcher import b_left_matches, b_right_matches
+from matching.f_rule_matcher import f_right_matches, f_left_matches
+from matching.match_types import Match
+from matching.y_rule_matcher import y_left_matches, y_right_matches
+from matching.zx_diagram import ZXDiagram
 
 
-def basis_to_ntype_index(basis: Basis) -> int:
-    return Z_NTYPE_INDEX if basis == Z_NTYPE_NAME else X_NTYPE_INDEX
-
-
-def node_attributes_equal(v: dict[str, Any], w: dict[str, Any], *args: str) -> bool:
-    return all([v[attribute] == w[attribute] for attribute in ([NTYPE, PHASE, DEGREE] if len(args) == 0 else args)])
-
-
-def filter_permutations(nx_matches: Iterator[dict[int, int]]) -> Iterator[dict[int, int]]:
-    matched_pairs = set()
-    for match in nx_matches:
-        keys = tuple(sorted(list(match.keys())))
-        if keys not in matched_pairs:
-            matched_pairs.add(keys)
-            yield match
+def compute_matches(diagram: ZXDiagram) -> Iterator[Match]:
+    yield from f_right_matches(diagram)
+    yield from f_left_matches(diagram)
+    yield from b_left_matches(diagram)
+    yield from b_right_matches(diagram)
+    yield from y_left_matches(diagram)
+    yield from y_right_matches(diagram)

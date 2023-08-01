@@ -1,11 +1,10 @@
 from fractions import Fraction
 from typing import Tuple, List, Dict, Optional
-
 import networkx as nx
 
 from graph.pyzx_nx_conv import Z_NTYPE_INDEX, X_NTYPE_INDEX, S_ETYPE_INDEX, H_ETYPE_INDEX, B_NTYPE_INDEX, \
     is_boundary, H_NTYPE_INDEX, is_basis, is_simple_edge, PHASE, NTYPE, ETYPE, ROW, COLUMN
-from matching.match_types import Match, subgraph_from_match
+from matching.match_types import Match
 
 Z_NTYPE_COLOR = '#d8f8d8'
 X_NTYPE_COLOR = '#e8a5b0'
@@ -66,6 +65,10 @@ def node_size(ndata: Dict) -> int:
             return len(str(Fraction(phase))) ** 2 * 60
 
 
+def subgraph_from_match(nx_graph: nx.MultiGraph, match: Match) -> nx.MultiGraph:
+    return nx_graph.subgraph(match)
+
+
 # TODO: Adjust row offsets based on computed node size
 def node_styling(nx_graph: nx.MultiGraph, match: Optional[Match] = None) -> Tuple[Dict, Dict, List, List, List]:
     labels = {}
@@ -104,6 +107,8 @@ def edge_styling(nx_graph: nx.MultiGraph, match: Optional[Match] = None) -> Tupl
     return h_edge_list, simple_edge_list, matched_h_edge_list, matched_simple_edge_list
 
 
+# TODO - Draw groups of edges between two nodes as a single edge with a number label indicating the true number of edges
+#        between the vertices.
 def draw_nx_zx_diagram(nx_graph: nx.MultiGraph, match: Optional[Match] = None,
                        pos: Optional[Dict[int, Tuple[int, int]]] = None) -> None:
     node_labels, node_positions, node_sizes, node_colors, node_border_colors = node_styling(nx_graph, match)
