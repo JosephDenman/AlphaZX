@@ -3,7 +3,7 @@ from collections.abc import Iterator
 import networkx as nx
 
 from graph.pyzx_nx_conv import S_ETYPE_INDEX, Z_NTYPE_NAME, X_NTYPE_NAME, Z_NTYPE_INDEX, X_NTYPE_INDEX
-from matching.match_types import Basis, YRightZMatch, YRightXMatch, YLeftZMatch, YLeftXMatch, YRightMatch, YLeftMatch
+from matching.match import Basis, YRightZMatch, YRightXMatch, YLeftZMatch, YLeftXMatch, YRightMatch, YLeftMatch
 from matching.zx_diagram import ZXDiagram
 
 

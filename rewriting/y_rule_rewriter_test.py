@@ -1,6 +1,6 @@
 import unittest
 
-from matching.match_types import YRightXMatch, YRightZMatch, YLeftXMatch, YLeftZMatch
+from matching.match import YRightXMatch, YRightZMatch, YLeftXMatch, YLeftZMatch
 from matching.y_rule_matcher import y_left_z_pattern, y_left_z_matches, y_left_matches, y_right_matches, \
     y_left_x_pattern, y_right_z_pattern, y_right_x_pattern
 from rewriting.y_rule_rewriter import y_left_rewrite, y_right_rewrite

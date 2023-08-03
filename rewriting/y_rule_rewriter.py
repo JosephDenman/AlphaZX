@@ -1,4 +1,4 @@
-from matching.match_types import YRightMatch, YLeftMatch
+from matching.match import YRightMatch, YLeftMatch
 from matching.zx_diagram import ZXDiagram
 
 

@@ -2,7 +2,7 @@ import unittest
 
 from graph.pyzx_nx_conv import B_NTYPE_INDEX, X_NTYPE_INDEX, Z_NTYPE_INDEX, is_z_basis, is_x_basis, is_boundary
 from matching.b_rule_matcher import b_right_pattern, b_right_matches, b_left_matches, b_left_pattern
-from matching.match_types import BLeftMatch, BRightMatch
+from matching.match import BLeftMatch, BRightMatch
 from matching.zx_diagram import ZXDiagram
 from rewriting.b_rule_rewriter import b_right_rewrite, b_left_rewrite
 

@@ -4,7 +4,7 @@ import networkx as nx
 import torch
 
 from graph.pyzx_nx_conv import ETYPE
-from matching.match_types import Match, CompoundMatch, FRightMatch, FRightZMatch, FRightXMatch
+from matching.match import Match, CompoundMatch, FRightMatch, FRightZMatch, FRightXMatch
 from matching.utils import compute_matches
 from matching.zx_diagram import ZXDiagram
 

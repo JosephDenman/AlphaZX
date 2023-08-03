@@ -2,7 +2,7 @@ import random
 
 from graph.pyzx_graph_generator import nx_clifford_graph
 from graph.pyzx_nx_conv import nx_to_pyg_hetero
-from matching.match_types import Match, FRightMatch, FLeftMatch, BLeftMatch, BRightMatch, YLeftMatch, YRightMatch
+from matching.match import Match, FRightMatch, FLeftMatch, BLeftMatch, BRightMatch, YLeftMatch, YRightMatch
 from matching.utils import compute_matches
 from matching.zx_diagram import ZXDiagram
 import numpy as np
@@ -58,6 +58,16 @@ counts = {
     'y_lefts': 0,
     'y_rights': 0
 }
+
+"""
+Next steps:
+
+1. Use categorical representation of phase and type.
+2. Add degree information before converting to a match graph.
+3. Implement environment (MuZero)
+4. Implement model. 
+
+"""
 
 while True:
     m = np.random.choice(list(compute_matches(g)))

@@ -1,7 +1,7 @@
 import unittest
 
 from graph.pyzx_nx_conv import Z_NTYPE_NAME, X_NTYPE_NAME
-from matching.match_types import Basis, YLeftZMatch, YLeftXMatch, YRightZMatch, YRightXMatch
+from matching.match import Basis, YLeftZMatch, YLeftXMatch, YRightZMatch, YRightXMatch
 from matching.y_rule_matcher import y_left_z_matches, y_left_z_pattern, y_left_x_pattern, y_left_x_matches, \
     y_left_pattern, y_right_z_pattern, y_right_z_matches, y_right_x_pattern, y_right_x_matches
 from matching.zx_diagram import ZXDiagram

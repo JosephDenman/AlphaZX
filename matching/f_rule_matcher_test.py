@@ -3,7 +3,7 @@ import unittest
 import networkx as nx
 
 from graph.pyzx_nx_conv import Z_NTYPE_NAME, X_NTYPE_NAME, S_ETYPE_INDEX, H_ETYPE_INDEX
-from matching.match_types import Basis, FLeftZMatch, FLeftXMatch, FRightZMatch, FRightXMatch
+from matching.match import Basis, FLeftZMatch, FLeftXMatch, FRightZMatch, FRightXMatch
 from matching.f_rule_matcher import f_left_z_matches, f_left_x_matches, f_left_z_pattern, f_left_x_pattern, \
     f_right_z_matches, \
     f_right_z_pattern, f_right_x_matches, f_right_x_pattern, basis_to_ntype_index

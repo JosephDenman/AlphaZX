@@ -2,7 +2,7 @@ import unittest
 import networkx as nx
 
 from matching.b_rule_matcher import b_right_matches, b_right_pattern, b_left_matches, b_left_pattern
-from matching.match_types import BLeftMatch, BRightMatch
+from matching.match import BLeftMatch, BRightMatch
 from matching.zx_diagram import ZXDiagram
 
 

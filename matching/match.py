@@ -2,6 +2,11 @@ import abc
 from collections.abc import Iterator
 from typing_extensions import Literal
 
+from matching.b_rule_matcher import b_left_matches, b_right_matches
+from matching.f_rule_matcher import f_right_matches, f_left_matches
+from matching.y_rule_matcher import y_left_matches, y_right_matches
+from matching.zx_diagram import ZXDiagram
+
 """
 Describes the color mode of a rule. The 'z' mode means that the bottom node of a rule has a z-basis. The remaining
 node bases can be deduced from the bottom node basis.
@@ -258,6 +263,7 @@ class YRightXMatch(YRightMatch):
                 yield FRightZMatch(node)
             else:
                 yield FRightXMatch(node)
+
 
 """
 P = TypeVar('P', bound=nx.Graph)

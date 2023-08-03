@@ -1,4 +1,4 @@
-from matching.match_types import FLeftMatch, FRightMatch
+from matching.match import FLeftMatch, FRightMatch
 from matching.zx_diagram import ZXDiagram
 
 
