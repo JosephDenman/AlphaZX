@@ -1,4 +1,3 @@
-
 """
 Taken from page 589 of PQP
 
@@ -89,4 +88,3 @@ post-conditions (step):
     4.
 
 """
-

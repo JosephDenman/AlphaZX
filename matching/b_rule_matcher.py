@@ -1,6 +1,7 @@
 from collections.abc import Iterator
 
 import networkx as nx
+
 from graph.pyzx_nx_conv import S_ETYPE_INDEX, Z_NTYPE_INDEX, X_NTYPE_INDEX
 from matching.match import BLeftMatch, BRightMatch
 from matching.zx_diagram import ZXDiagram

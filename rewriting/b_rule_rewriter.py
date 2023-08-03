@@ -1,4 +1,3 @@
-
 from matching.match import BLeftMatch, BRightMatch, Basis, Match
 from matching.zx_diagram import ZXDiagram
 

@@ -1,4 +1,127 @@
 import unittest
+
+from graph.pyzx_nx_conv import S_ETYPE_INDEX, H_ETYPE_INDEX
+from matching.f_rule_matcher import f_left_z_matches, f_left_x_matches, f_left_z_pattern, f_left_x_pattern, \
+    f_right_z_matches, \
+    f_right_z_pattern, f_right_x_matches, f_right_x_pattern, basis_to_ntype_index
+from matching.match import Basis, FLeftZMatch, FLeftXMatch, FRightZMatch, FRightXMatch
+from matching.zx_diagram import ZXDiagram
+
+
+def consecutive_parallel_edge_test_graph(basis: Basis) -> ZXDiagram:
+    node_type = basis_to_ntype_index(basis)
+    nx_graph = nx.MultiGraph()
+    nx_graph.add_node(23, type=node_type)
+    nx_graph.add_node(45, type=node_type)
+    nx_graph.add_node(57, type=node_type)
+    nx_graph.add_edge(23, 45, type=S_ETYPE_INDEX)
+    nx_graph.add_edge(23, 45, type=S_ETYPE_INDEX)
+    nx_graph.add_edge(23, 45, type=S_ETYPE_INDEX)
+    nx_graph.add_edge(45, 57, type=S_ETYPE_INDEX)
+    nx_graph.add_edge(45, 57, type=S_ETYPE_INDEX)
+    return ZXDiagram(nx_graph)
+
+
+def hadamard_edge_test_graph(basis: Basis) -> ZXDiagram:
+    node_type = basis_to_ntype_index(basis)
+    nx_graph = nx.MultiGraph()
+    nx_graph.add_node(0, type=node_type)
+    nx_graph.add_node(1, type=node_type)
+    nx_graph.add_edge(0, 1, type=H_ETYPE_INDEX)
+    return ZXDiagram(nx_graph)
+
+
+def simple_hadamard_edge_test_graph(basis: Basis) -> ZXDiagram:
+    node_type = basis_to_ntype_index(basis)
+    nx_graph = nx.MultiGraph()
+    nx_graph.add_node(0, type=node_type)
+    nx_graph.add_node(1, type=node_type)
+    nx_graph.add_edge(0, 1, type=S_ETYPE_INDEX)
+    nx_graph.add_edge(0, 1, type=H_ETYPE_INDEX)
+    return ZXDiagram(nx_graph)
+
+
+def disconnected_test_graph(basis: Basis) -> ZXDiagram:
+    node_type = basis_to_ntype_index(basis)
+    nx_graph = nx.MultiGraph()
+    nx_graph.add_node(0, type=node_type)
+    nx_graph.add_node(1, type=node_type)
+    return ZXDiagram(nx_graph)
+
+
+class FLeftMatchTest(unittest.TestCase):
+
+    def test_self_match_z(self):
+        self.assertListEqual(list(f_left_z_matches(f_left_z_pattern())), [FLeftZMatch(0, 1)])
+
+    def test_self_match_x(self):
+        self.assertListEqual(list(f_left_x_matches(f_left_x_pattern())), [FLeftXMatch(0, 1)])
+
+    def test_parallel_edge_match_z(self):
+        self.assertListEqual(list(f_left_z_matches(consecutive_parallel_edge_test_graph(Z_NTYPE_NAME))),
+                             [FLeftZMatch(23, 45), FLeftZMatch(45, 57)])
+
+    def test_parallel_edge_match_x(self):
+        self.assertListEqual(list(f_left_x_matches(consecutive_parallel_edge_test_graph(X_NTYPE_NAME))),
+                             [FLeftXMatch(23, 45), FLeftXMatch(45, 57)])
+
+    def test_hadamard_edge_no_match_z(self):
+        self.assertListEqual(list(f_left_z_matches(hadamard_edge_test_graph(Z_NTYPE_NAME))), [])
+
+    def test_hadamard_edge_no_match_x(self):
+        self.assertListEqual(list(f_left_x_matches(hadamard_edge_test_graph(X_NTYPE_NAME))), [])
+
+    def test_hadamard_edge_match_z(self):
+        self.assertListEqual(list(f_left_z_matches(simple_hadamard_edge_test_graph(Z_NTYPE_NAME))), [])
+
+    def test_hadamard_edge_match_x(self):
+        self.assertListEqual(list(f_left_x_matches(simple_hadamard_edge_test_graph(X_NTYPE_NAME))), [])
+
+    def test_disconnected_no_match_z(self):
+        self.assertListEqual(list(f_left_z_matches(disconnected_test_graph(Z_NTYPE_NAME))), [])
+
+    def test_disconnected_no_match_x(self):
+        self.assertListEqual(list(f_left_x_matches(disconnected_test_graph(X_NTYPE_NAME))), [])
+
+
+class FRightMatchTest(unittest.TestCase):
+
+    def test_self_match_z(self):
+        self.assertListEqual(list(f_right_z_matches(f_right_z_pattern())), [FRightZMatch(0)])
+
+    def test_self_match_x(self):
+        self.assertListEqual(list(f_right_x_matches(f_right_x_pattern())), [FRightXMatch(0)])
+
+    def test_match_f_left_pattern_z(self):
+        self.assertListEqual(list(f_right_z_matches(f_left_z_pattern())), [FRightZMatch(0), FRightZMatch(1)])
+
+    def test_match_f_left_pattern_x(self):
+        self.assertListEqual(list(f_right_x_matches(f_left_x_pattern())), [FRightXMatch(0), FRightXMatch(1)])
+
+    def test_different_basis_no_match_z(self):
+        self.assertListEqual(list(f_right_z_matches(f_right_x_pattern())), [])
+
+    def test_different_basis_no_match_x(self):
+        self.assertListEqual(list(f_right_x_matches(f_right_z_pattern())), [])
+
+    def test_disconnected_match_z(self):
+        self.assertListEqual(list(f_right_z_matches(disconnected_test_graph(Z_NTYPE_NAME))),
+                             [FRightZMatch(0), FRightZMatch(1)])
+
+    def test_disconnected_match_x(self):
+        self.assertListEqual(list(f_right_x_matches(disconnected_test_graph(X_NTYPE_NAME))),
+                             [FRightXMatch(0), FRightXMatch(1)])
+
+    def test_consecutive_parallel_edge_match_z(self):
+        self.assertListEqual(list(f_right_z_matches(consecutive_parallel_edge_test_graph(Z_NTYPE_NAME))),
+                             [FRightZMatch(57), FRightZMatch(45), FRightZMatch(23)])
+
+    def test_consecutive_parallel_edge_match_x(self):
+        self.assertListEqual(list(f_right_x_matches(consecutive_parallel_edge_test_graph(X_NTYPE_NAME))),
+                             [FRightXMatch(57), FRightXMatch(45), FRightXMatch(23)])
+
+
+import unittest
 import networkx as nx
 
 from matching.b_rule_matcher import b_right_matches, b_right_pattern, b_left_matches, b_left_pattern
@@ -413,3 +536,110 @@ class BRuleRightTest(unittest.TestCase):
 
     def test_two_identity_match(self):
         self.assertListEqual(list(b_right_matches(two_identity_test_graph())), [BRightMatch(0, 1)])
+
+
+import unittest
+
+from graph.pyzx_nx_conv import Z_NTYPE_NAME, X_NTYPE_NAME
+from matching.match import Basis, YLeftZMatch, YLeftXMatch, YRightZMatch, YRightXMatch
+from matching.y_rule_matcher import y_left_z_matches, y_left_z_pattern, y_left_x_pattern, y_left_x_matches, \
+    y_left_pattern, y_right_z_pattern, y_right_z_matches, y_right_x_pattern, y_right_x_matches
+from matching.zx_diagram import ZXDiagram
+
+
+def parallel_edge_no_match_test_graph(basis: Basis, first: bool = False, second: bool = False,
+                                      third=False) -> ZXDiagram:
+    diagram = y_left_pattern(basis)
+    b4, b5, b6 = diagram.add_b_nodes(3)
+    diagram.add_s_edges_from([(b4, 0), (2, b5), (3, b6)])
+    if first:
+        diagram.add_s_edge(0, 1)
+    if second:
+        diagram.add_s_edge(1, 2)
+    if third:
+        diagram.add_s_edge(1, 3)
+    return diagram
+
+
+def disconnected_no_match_test_graph(basis: Basis, first: bool = False, second: bool = False,
+                                     third=False) -> ZXDiagram:
+    diagram = y_left_pattern(basis)
+    b4, b5, b6 = diagram.add_b_nodes(3)
+    diagram.add_s_edges_from([(b4, 0), (2, b5), (3, b6)])
+    if first:
+        diagram.remove_edge(0, 1)
+    if second:
+        diagram.remove_edge(1, 2)
+    if third:
+        diagram.remove_edge(1, 3)
+    return diagram
+
+
+class YLeftMatchTest(unittest.TestCase):
+
+    def test_self_match_z(self):
+        diagram = y_left_z_pattern()
+        b4, b5, b6 = diagram.add_b_nodes(3)
+        diagram.add_s_edges_from([(b4, 0), (2, b5), (3, b6)])
+        self.assertListEqual(list(y_left_z_matches(diagram)), [YLeftZMatch(0, 1, 2, 3)])
+
+    def test_self_match_x(self):
+        diagram = y_left_x_pattern()
+        b4, b5, b6 = diagram.add_b_nodes(3)
+        diagram.add_s_edges_from([(b4, 0), (2, b5), (3, b6)])
+        self.assertListEqual(list(y_left_x_matches(diagram)), [YLeftXMatch(0, 1, 2, 3)])
+
+    def test_parallel_edge_no_match_z(self):
+        for a in [True, False]:
+            for b in [True, False]:
+                for c in [True, False]:
+                    matches = list(y_left_z_matches(parallel_edge_no_match_test_graph(Z_NTYPE_NAME, a, b, c)))
+                    if not (a or b or c):
+                        self.assertListEqual(matches, [YLeftZMatch(0, 1, 2, 3)])
+                    else:
+                        self.assertListEqual(matches, [])
+
+    def test_parallel_edge_no_match_x(self):
+        for a in [True, False]:
+            for b in [True, False]:
+                for c in [True, False]:
+                    matches = list(y_left_x_matches(parallel_edge_no_match_test_graph(X_NTYPE_NAME, a, b, c)))
+                    if not (a or b or c):
+                        self.assertListEqual(matches, [YLeftXMatch(0, 1, 2, 3)])
+                    else:
+                        self.assertListEqual(matches, [])
+
+    def test_disconnected_no_match_z(self):
+        for a in [True, False]:
+            for b in [True, False]:
+                for c in [True, False]:
+                    matches = list(y_left_z_matches(disconnected_no_match_test_graph(Z_NTYPE_NAME, a, b, c)))
+                    if not (a or b or c):
+                        self.assertListEqual(matches, [YLeftZMatch(0, 1, 2, 3)])
+                    else:
+                        self.assertListEqual(matches, [])
+
+    def test_disconnected_no_match_x(self):
+        for a in [True, False]:
+            for b in [True, False]:
+                for c in [True, False]:
+                    matches = list(y_left_x_matches(disconnected_no_match_test_graph(X_NTYPE_NAME, a, b, c)))
+                    if not (a or b or c):
+                        self.assertListEqual(matches, [YLeftXMatch(0, 1, 2, 3)])
+                    else:
+                        self.assertListEqual(matches, [])
+
+
+class YRightMatchTest(unittest.TestCase):
+
+    def test_self_match_z(self):
+        diagram = y_right_z_pattern()
+        b4, b5, b6 = diagram.add_b_nodes(3)
+        diagram.add_s_edges_from([(b4, 0), (2, b5), (3, b6)])
+        self.assertListEqual(list(y_right_z_matches(diagram)), [YRightZMatch(0, 1, 2, 3)])
+
+    def test_self_match_x(self):
+        diagram = y_right_x_pattern()
+        b4, b5, b6 = diagram.add_b_nodes(3)
+        diagram.add_s_edges_from([(b4, 0), (2, b5), (3, b6)])
+        self.assertListEqual(list(y_right_x_matches(diagram)), [YRightXMatch(0, 1, 2, 3)])

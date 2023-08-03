@@ -61,4 +61,3 @@ def nx_clifford_graph(num_qubits: int, depth: int, no_hadamard: bool = True,
 def pyg_clifford_graph(num_qubits: int, depth: int, no_hadamard: bool = True,
                        t_gates: bool = True) -> pyg.data.HeteroData:
     return nx_to_pyg_hetero(nx_clifford_graph(num_qubits, depth, no_hadamard, t_gates), 'type')
-

@@ -1,5 +1,6 @@
 from fractions import Fraction
 from typing import Tuple, List, Dict, Optional
+
 import networkx as nx
 
 from graph.pyzx_nx_conv import Z_NTYPE_INDEX, X_NTYPE_INDEX, S_ETYPE_INDEX, H_ETYPE_INDEX, B_NTYPE_INDEX, \

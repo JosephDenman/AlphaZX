@@ -8,7 +8,6 @@ from matching.match import Match, CompoundMatch, FRightMatch, FRightZMatch, FRig
 from matching.utils import compute_matches
 from matching.zx_diagram import ZXDiagram
 
-
 I_ETYPE_INDEX = 3
 I_ETYPE_NAME = 'inclusion'
 B_ETYPE_INDEX = 4
@@ -119,4 +118,3 @@ def is_match_neighbor(match_diagram: ZXMatchDiagram, u_match: Match, v_match: Ma
 
 def connected(match_diagram: ZXMatchDiagram, u_match: Match, v_match: Match) -> bool:
     return is_match_neighbor(match_diagram, u_match, v_match) or has_b_edge(match_diagram, u_match, v_match)
-
