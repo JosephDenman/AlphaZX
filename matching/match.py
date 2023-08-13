@@ -3,10 +3,6 @@ from collections.abc import Iterator
 
 from typing_extensions import Literal
 
-"""
-Describes the color mode of a rule. The 'z' mode means that the bottom node of a rule has a z-basis. The remaining
-node bases can be deduced from the bottom node basis.
-"""
 Basis = Literal['z', 'x']
 
 

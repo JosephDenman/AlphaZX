@@ -2,9 +2,9 @@ from collections.abc import Iterator
 
 import networkx as nx
 
-from graph.pyzx_nx_conv import Z_NTYPE_NAME, X_NTYPE_NAME, S_ETYPE_INDEX, ETYPE, Z_NTYPE_INDEX, X_NTYPE_INDEX
+from diagram.pyzx_nx_conv import Z_NTYPE_NAME, X_NTYPE_NAME, S_ETYPE_INDEX, ETYPE, Z_NTYPE_INDEX, X_NTYPE_INDEX
+from diagram.zx_diagram import ZXDiagram
 from matching.match import Basis, FRightZMatch, FLeftXMatch, FLeftZMatch, FRightXMatch, FLeftMatch, FRightMatch
-from matching.zx_diagram import ZXDiagram
 
 
 def basis_to_ntype_index(basis: Basis) -> int:

@@ -1,5 +1,5 @@
+from diagram.zx_diagram import ZXDiagram
 from matching.match import YRightMatch, YLeftMatch
-from matching.zx_diagram import ZXDiagram
 
 
 def y_right_rewrite(y_right_match: YRightMatch, diagram: ZXDiagram) -> None:

@@ -2,11 +2,12 @@ from typing import Any, Iterator
 
 import networkx as nx
 import torch
+from torch_geometric.data import HeteroData
 
-from graph.pyzx_nx_conv import ETYPE
+from diagram.pyzx_nx_conv import ETYPE
+from diagram.zx_diagram import ZXDiagram
 from matching.match import Match, CompoundMatch, FRightMatch, FRightZMatch, FRightXMatch
-from matching.utils import compute_matches
-from matching.zx_diagram import ZXDiagram
+from matching.util import compute_matches
 
 I_ETYPE_INDEX = 3
 I_ETYPE_NAME = 'inclusion'
@@ -30,6 +31,9 @@ class ZXMatchDiagram(nx.Graph):
             add_match(self, diagram, match)
         assert self.number_of_nodes() == len(matches), "Number of nodes in match diagram != number of matches"
         add_composition_edges(self, diagram)
+
+    def to_hetero_data(self, one_hot_types: bool = True, one_hot_phases=True) -> HeteroData:
+        pass
 
 
 def add_match(match_diagram: ZXMatchDiagram, diagram: ZXDiagram, match: Match) -> None:

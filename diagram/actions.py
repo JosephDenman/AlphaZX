@@ -84,7 +84,7 @@ post-conditions (step):
     1. if there are no nodes besides boundary nodes in the initial observation, the game completes, no reward is given.
     2. if there are no nodes besides boundary nodes left after applying a rule, the game completes, the
        normal reward is given.
-    3. there should never be an isolated graph
+    3. there should never be an isolated diagram
     4.
 
 """

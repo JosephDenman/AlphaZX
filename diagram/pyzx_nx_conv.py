@@ -169,7 +169,7 @@ def nx_to_pyg_hetero(g: nx.Graph, node_type_attribute: str, edge_type_attribute:
     """Converts a :obj:`networkx.Graph` or :obj:`networkx.DiGraph` into a
     :class:`torch_geometric.data.HeteroData` structure.
     Args:
-        g (nx.Graph): A networkX graph to be converted.
+        g (nx.Graph): A networkX diagram to be converted.
         node_type_attribute (str): The node attribute containing the type of
         the node (each node must have one for it to be heterogeneous).
         edge_type_attribute (str): The edge attribute containing the type of
@@ -180,16 +180,16 @@ def nx_to_pyg_hetero(g: nx.Graph, node_type_attribute: str, edge_type_attribute:
         ...                    edge_type_attribute="type")
         <torch_geometric.data.HeteroData()>
     Returns:
-        HeteroData: Structure containing node, edge and graph attribute per
+        HeteroData: Structure containing node, edge and diagram attribute per
         type.
     """
 
     def get_edge_attributes(g: nx.Graph, edges: list, edge_attrs: list = None) -> dict:
-        """Gathers edge attributes from networkX graph into a dictionary.
+        """Gathers edge attributes from networkX diagram into a dictionary.
         Args:
             g (_type_): Graph containing the edges to collect.
             edges (list, optional): List of edges to include
-            (by default all edges of the graph). (default: :obj:`None`)
+            (by default all edges of the diagram). (default: :obj:`None`)
             edge_attrs (list, optional): Expected edge attributes
             to be found in every edges. (default: :obj:`None`)
         Raises:
@@ -214,11 +214,11 @@ def nx_to_pyg_hetero(g: nx.Graph, node_type_attribute: str, edge_type_attribute:
         return data
 
     def get_node_attributes(g: nx.Graph, nodes: list, expected_node_attrs: list = None) -> dict:
-        """Gathers node attributes from a networkX graph into a dictionary.
+        """Gathers node attributes from a networkX diagram into a dictionary.
         Args:
             g (_type_): Graph containing the nodes to collect.
             nodes (list, optional): List of nodes to include
-            (by default all nodes of the graph). Defaults to None.
+            (by default all nodes of the diagram). Defaults to None.
             expected_node_attrs (list, optional): Expected node attributes
             to be found in every node. Defaults to None.
         Raises:

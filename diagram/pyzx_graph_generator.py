@@ -4,15 +4,15 @@ import networkx as nx
 import pyzx
 import torch_geometric as pyg
 
-from graph.pyzx_nx_conv import nx_to_pyg_hetero, ETYPE, NTYPE, PHASE, Z_NTYPE_INDEX, S_ETYPE_INDEX, \
+from diagram.pyzx_nx_conv import nx_to_pyg_hetero, ETYPE, NTYPE, PHASE, Z_NTYPE_INDEX, S_ETYPE_INDEX, \
     nx_remove_position_attributes
 
 
 def graph_to_nx_graph(graph: pyzx.Graph) -> nx.MultiGraph:
     """
-    :param graph: A PyZX graph.
-    :return: A NetworkX multi-graph. The graph is an undirected graph. It does not contain backward links to denote
-             undirected edges. Convolutional layers must propagate both directions manually.
+    :param graph: A PyZX diagram.
+    :return: A NetworkX multi-diagram. The diagram is an undirected diagram. It does not contain backward links
+             to denote undirected edges. Convolutional layers must propagate both directions manually.
     """
     return nx.parse_graphml(graph.to_graphml().replace('edge type', ETYPE), node_type=int,
                             edge_key_type=int,

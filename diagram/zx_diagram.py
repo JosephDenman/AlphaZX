@@ -2,7 +2,7 @@ from collections.abc import Iterable
 
 import networkx as nx
 
-from graph.pyzx_nx_conv import is_basis, is_boundary, is_z_basis, is_x_basis, X_NTYPE_INDEX, \
+from diagram.pyzx_nx_conv import is_basis, is_boundary, is_z_basis, is_x_basis, X_NTYPE_INDEX, \
     Z_NTYPE_INDEX, S_ETYPE_INDEX, B_NTYPE_INDEX
 
 
@@ -77,14 +77,9 @@ class ZXDiagram(nx.MultiGraph):
 
     def flip_basis(self, n: int) -> None:
         assert self.is_basis(n), f'Attempted to basis flip non-basis node {n}'
-        if self.is_x_basis(n):
-            self.nodes[n][self.NTYPE] = Z_NTYPE_INDEX
-            self.x_nodes_set.remove(n)
-            self.z_nodes_set.add(n)
-        else:
-            self.nodes[n][self.NTYPE] = X_NTYPE_INDEX
-            self.z_nodes_set.remove(n)
-            self.x_nodes_set.add(n)
+        (self.x_nodes_set.remove if self.is_x_basis(n) else self.z_nodes_set.remove)(n)
+        self.nodes[n][self.NTYPE] = (X_NTYPE_INDEX if self.is_z_basis(n) else Z_NTYPE_INDEX)
+        (self.x_nodes_set.add if self.is_x_basis(n) else self.z_nodes_set.add)(n)
 
     def add_x_node(self, phase: float) -> int:
         assert -2 < phase < 2, f'Attempted to add Z-basis node with invalid phase {phase}'
@@ -110,6 +105,9 @@ class ZXDiagram(nx.MultiGraph):
     def x_nodes(self) -> set[int]:
         return self.x_nodes_set
 
+    def num_x_nodes(self) -> int:
+        return len(self.x_nodes())
+
     def remove_x_node(self, n: int) -> None:
         assert self.is_x_basis(n), f'Attempted to remove non-X-basis node {n}'
         self.remove_node(n)
@@ -128,6 +126,9 @@ class ZXDiagram(nx.MultiGraph):
     def z_nodes(self) -> set[int]:
         return self.z_nodes_set
 
+    def num_z_nodes(self) -> int:
+        return len(self.z_nodes())
+
     def remove_z_node(self, n: int) -> None:
         assert self.is_z_basis(n), f'Attempted to remove non-Z-basis node {n}'
         self.remove_node(n)
@@ -144,6 +145,9 @@ class ZXDiagram(nx.MultiGraph):
 
     def b_nodes(self) -> set[int]:
         return self.b_nodes_set
+
+    def num_b_nodes(self) -> int:
+        return len(self.b_nodes())
 
     def remove_b_node(self, n: int) -> None:
         assert self.is_boundary(n), f'Attempted to remove non-boundary node {n}'
@@ -194,7 +198,7 @@ class ZXDiagram(nx.MultiGraph):
         return next_node_index
 
     def edges_between(self, n: int, m: int, data=False) -> list[
-        tuple[int, int, int] | tuple[int, int, int, dict[str, any]]]:
+            tuple[int, int, int] | tuple[int, int, int, dict[str, any]]]:
         assert self.has_node(n), f'Node {n} does not exist'
         assert self.has_node(n), f'Node {m} does not exist'
         if data:

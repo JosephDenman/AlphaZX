@@ -1,10 +1,10 @@
 from collections.abc import Iterator
 
+from diagram.zx_diagram import ZXDiagram
 from matching.b_rule_matcher import b_left_matches, b_right_matches
 from matching.f_rule_matcher import f_right_matches, f_left_matches
 from matching.match import Match
 from matching.y_rule_matcher import y_left_matches, y_right_matches
-from matching.zx_diagram import ZXDiagram
 
 
 def compute_matches(diagram: ZXDiagram) -> Iterator[Match]:

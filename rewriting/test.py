@@ -4,13 +4,13 @@ from typing import Optional
 from hypothesis import strategies as st, given
 from hypothesis.strategies import composite, SearchStrategy
 
-from graph.pyzx_nx_conv import Z_NTYPE_INDEX, X_NTYPE_INDEX, B_NTYPE_INDEX, is_z_basis, is_x_basis, is_boundary
+from diagram.pyzx_nx_conv import Z_NTYPE_INDEX, X_NTYPE_INDEX, B_NTYPE_INDEX, is_z_basis, is_x_basis, is_boundary
+from diagram.zx_diagram import ZXDiagram
 from matching.b_rule_matcher import b_right_pattern, b_right_matches, b_left_matches, b_left_pattern
 from matching.f_rule_matcher import f_right_matches
 from matching.match import BLeftMatch, YLeftZMatch, YLeftXMatch, YRightZMatch, YRightXMatch, BRightMatch
 from matching.y_rule_matcher import y_left_z_pattern, y_left_matches, y_right_matches, y_left_x_pattern, \
     y_right_x_pattern, y_right_z_pattern
-from matching.zx_diagram import ZXDiagram
 from rewriting.b_rule_rewriter import b_right_rewrite, b_left_rewrite
 from rewriting.f_rule_rewriter import f_right_rewrite
 from rewriting.y_rule_rewriter import y_left_rewrite, y_right_rewrite

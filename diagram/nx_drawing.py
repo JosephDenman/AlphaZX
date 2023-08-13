@@ -3,7 +3,7 @@ from typing import Tuple, List, Dict, Optional
 
 import networkx as nx
 
-from graph.pyzx_nx_conv import Z_NTYPE_INDEX, X_NTYPE_INDEX, S_ETYPE_INDEX, H_ETYPE_INDEX, B_NTYPE_INDEX, \
+from diagram.pyzx_nx_conv import Z_NTYPE_INDEX, X_NTYPE_INDEX, S_ETYPE_INDEX, H_ETYPE_INDEX, B_NTYPE_INDEX, \
     is_boundary, H_NTYPE_INDEX, is_basis, is_simple_edge, PHASE, NTYPE, ETYPE, ROW, COLUMN
 from matching.match import Match
 
@@ -94,7 +94,7 @@ EdgeList = List[Tuple[int, int]]
 # TODO: Fix to work with updated Match structure
 
 def edge_styling(nx_graph: nx.MultiGraph, match: Optional[Match] = None) -> Tuple[
-    EdgeList, EdgeList, EdgeList, EdgeList]:
+        EdgeList, EdgeList, EdgeList, EdgeList]:
     matched_subgraph = subgraph_from_match(nx_graph, match) if match is not None else None
     h_edge_list = []
     simple_edge_list = []

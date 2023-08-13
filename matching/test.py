@@ -1,11 +1,15 @@
 import unittest
-
-from graph.pyzx_nx_conv import S_ETYPE_INDEX, H_ETYPE_INDEX
+import networkx as nx
+from diagram.pyzx_nx_conv import S_ETYPE_INDEX, H_ETYPE_INDEX, Z_NTYPE_NAME, X_NTYPE_NAME
+from diagram.zx_diagram import ZXDiagram
+from matching.match import Basis, FLeftZMatch, FLeftXMatch, FRightZMatch, FRightXMatch, BLeftMatch, BRightMatch, \
+    YLeftZMatch, YLeftXMatch, YRightZMatch, YRightXMatch
+from matching.b_rule_matcher import b_right_matches, b_right_pattern, b_left_matches, b_left_pattern
 from matching.f_rule_matcher import f_left_z_matches, f_left_x_matches, f_left_z_pattern, f_left_x_pattern, \
     f_right_z_matches, \
     f_right_z_pattern, f_right_x_matches, f_right_x_pattern, basis_to_ntype_index
-from matching.match import Basis, FLeftZMatch, FLeftXMatch, FRightZMatch, FRightXMatch
-from matching.zx_diagram import ZXDiagram
+from matching.y_rule_matcher import y_left_z_matches, y_left_z_pattern, y_left_x_pattern, y_left_x_matches, \
+    y_left_pattern, y_right_z_pattern, y_right_z_matches, y_right_x_pattern, y_right_x_matches
 
 
 def consecutive_parallel_edge_test_graph(basis: Basis) -> ZXDiagram:
@@ -119,14 +123,6 @@ class FRightMatchTest(unittest.TestCase):
     def test_consecutive_parallel_edge_match_x(self):
         self.assertListEqual(list(f_right_x_matches(consecutive_parallel_edge_test_graph(X_NTYPE_NAME))),
                              [FRightXMatch(57), FRightXMatch(45), FRightXMatch(23)])
-
-
-import unittest
-import networkx as nx
-
-from matching.b_rule_matcher import b_right_matches, b_right_pattern, b_left_matches, b_left_pattern
-from matching.match import BLeftMatch, BRightMatch
-from matching.zx_diagram import ZXDiagram
 
 
 def diamond_graph() -> ZXDiagram:
@@ -536,15 +532,6 @@ class BRuleRightTest(unittest.TestCase):
 
     def test_two_identity_match(self):
         self.assertListEqual(list(b_right_matches(two_identity_test_graph())), [BRightMatch(0, 1)])
-
-
-import unittest
-
-from graph.pyzx_nx_conv import Z_NTYPE_NAME, X_NTYPE_NAME
-from matching.match import Basis, YLeftZMatch, YLeftXMatch, YRightZMatch, YRightXMatch
-from matching.y_rule_matcher import y_left_z_matches, y_left_z_pattern, y_left_x_pattern, y_left_x_matches, \
-    y_left_pattern, y_right_z_pattern, y_right_z_matches, y_right_x_pattern, y_right_x_matches
-from matching.zx_diagram import ZXDiagram
 
 
 def parallel_edge_no_match_test_graph(basis: Basis, first: bool = False, second: bool = False,

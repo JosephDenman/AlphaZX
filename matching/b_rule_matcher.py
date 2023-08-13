@@ -2,9 +2,9 @@ from collections.abc import Iterator
 
 import networkx as nx
 
-from graph.pyzx_nx_conv import S_ETYPE_INDEX, Z_NTYPE_INDEX, X_NTYPE_INDEX
+from diagram.pyzx_nx_conv import S_ETYPE_INDEX, Z_NTYPE_INDEX, X_NTYPE_INDEX
+from diagram.zx_diagram import ZXDiagram
 from matching.match import BLeftMatch, BRightMatch
-from matching.zx_diagram import ZXDiagram
 
 
 def b_right_pattern() -> ZXDiagram:

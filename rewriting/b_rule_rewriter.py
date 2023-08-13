@@ -1,5 +1,5 @@
+from diagram.zx_diagram import ZXDiagram
 from matching.match import BLeftMatch, BRightMatch, Basis, Match
-from matching.zx_diagram import ZXDiagram
 
 
 def validate_node(basis: Basis, n: int, diagram: ZXDiagram) -> None:
