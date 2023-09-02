@@ -5,7 +5,7 @@ import numpy as np
 from diagram.pyzx_graph_generator import nx_clifford_graph
 from diagram.pyzx_nx_conv import nx_to_pyg_hetero
 from diagram.zx_diagram import ZXDiagram
-from diagram.zx_match_diagram import ZXMatchDiagram
+from matching.zx_match_diagram import ZXMatchDiagram
 from matching.match import FRightMatch
 from matching.util import compute_matches
 from rewriting.util import rewrite
@@ -31,7 +31,7 @@ Next steps:
 1. Use categorical representation of phase and type.
 2. Add degree information before converting to a match diagram.
 3. Implement environment (MuZero)
-4. Implement model. 
+4. Implement models. 
 
 """
 

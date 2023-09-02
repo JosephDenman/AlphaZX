@@ -4,7 +4,7 @@ import networkx as nx
 import torch
 from torch_geometric.data import HeteroData
 
-from diagram.pyzx_nx_conv import ETYPE
+from diagram.pyzx_nx_conv import ETYPE, nx_to_pyg_hetero
 from diagram.zx_diagram import ZXDiagram
 from matching.match import Match, CompoundMatch, FRightMatch, FRightZMatch, FRightXMatch
 from matching.util import compute_matches
@@ -16,7 +16,7 @@ B_ETYPE_NAME = 'bridge'
 NTYPES = 'types'
 
 
-class ZXMatchDiagram(nx.Graph):
+class ZXMatchDiagram(nx.DiGraph):
     NTYPE = 'type'
     NTYPES = 'types'
     PHASES = 'phases'
@@ -25,27 +25,32 @@ class ZXMatchDiagram(nx.Graph):
         self.zx_diagram = diagram
         self.node_attrs = self.zx_diagram.node_attrs
         self.edge_attrs = self.zx_diagram.edge_attrs
-        super().__init__(nx.Graph(), **attr)
+        super().__init__(nx.DiGraph(), **attr)
         matches = list(compute_matches(diagram))
         for match in matches:
             add_match(self, diagram, match)
-        assert self.number_of_nodes() == len(matches), "Number of nodes in match diagram != number of matches"
         add_composition_edges(self, diagram)
+        num_nodes = self.number_of_nodes()
+        num_matches = len(matches)
+        assert num_nodes == num_matches, f'Number of nodes {num_nodes} in match diagram != number of matches ' \
+                                         f'{num_matches}'
 
     def to_hetero_data(self, one_hot_types: bool = True, one_hot_phases=True) -> HeteroData:
-        pass
+        return nx_to_pyg_hetero(self, node_type_attribute='type', edge_type_attribute='type',
+                                group_node_attrs=['phases'])
 
 
 def add_match(match_diagram: ZXMatchDiagram, diagram: ZXDiagram, match: Match) -> None:
     if not match_diagram.has_node(match):
-        match_diagram.add_node(match, type=match.index,
-                               **collect([diagram.nodes[node] for node in match]))
+        match_diagram.add_node(match, type=match.name,
+                               **collect([diagram.nodes[node] for node in match], ['phase']))
     if isinstance(match, CompoundMatch):
         for sub_match in match.sub_matches:
             if not match_diagram.has_node(sub_match):
                 add_match(match_diagram, diagram, sub_match)
             if not match_diagram.has_edge(sub_match, match):
-                match_diagram.add_edge(sub_match, match, type=I_ETYPE_INDEX)
+                match_diagram.add_edge(sub_match, match, type=(sub_match.name, I_ETYPE_NAME, match.name))
+                match_diagram.add_edge(match, sub_match, type=(match.name, I_ETYPE_NAME, sub_match.name))
     return
 
 
@@ -55,15 +60,16 @@ def add_composition_edges(match_diagram: ZXMatchDiagram, diagram: ZXDiagram) -> 
             u_match = f_right_match_from_ndata(diagram, u)
             v_match = f_right_match_from_ndata(diagram, v)
             if not connected(match_diagram, u_match, v_match):
-                match_diagram.add_edge(u_match, v_match, type=B_ETYPE_INDEX)
+                match_diagram.add_edge(u_match, v_match, type=(u_match.name, B_ETYPE_NAME, v_match.name))
+                match_diagram.add_edge(v_match, u_match, type=(v_match.name, B_ETYPE_NAME, u_match.name))
 
 
 def basis_neighbors(diagram: ZXDiagram, n: int) -> set[int]:
     return {m for m in diagram.neighbors(n) if diagram.is_basis(m)}
 
 
-def collect(dicts: list[dict[str, Any]]) -> dict[str, list[Any]]:
-    return {f'{k}s': torch.tensor([d[k] for d in dicts]) for k in dicts[0]}
+def collect(dicts: list[dict[str, Any]], ks: list[str]) -> dict[str, list[Any]]:
+    return {f'{k}s': torch.tensor([d[k] for d in dicts]) for k in dicts[0] if k in ks}
 
 
 def f_right_match_from_ndata(diagram: ZXDiagram, n: int) -> FRightMatch:
@@ -75,11 +81,9 @@ def f_right_match_from_ndata(diagram: ZXDiagram, n: int) -> FRightMatch:
         raise Exception(f'Unexpected node type {diagram.type(n)}')
 
 
-def is_inclusion_edge(etype: str | int) -> bool:
-    if isinstance(etype, str):
-        return etype == I_ETYPE_NAME
-    elif isinstance(etype, int):
-        return etype == I_ETYPE_INDEX
+def is_inclusion_edge(etype: tuple[str, str, str]) -> bool:
+    if isinstance(etype, tuple) and len(etype) == 3:
+        return etype[1] == I_ETYPE_NAME
     else:
         raise Exception('Unexpected node type representation ' + str(etype))
 
@@ -97,11 +101,9 @@ def inclusion_neighbors(match_diagram: ZXMatchDiagram, u_match: Match) -> Iterat
             yield u_neighbor
 
 
-def is_bridge_edge(etype: str | int) -> bool:
-    if isinstance(etype, str):
-        return etype == B_ETYPE_NAME
-    elif isinstance(etype, int):
-        return etype == B_ETYPE_INDEX
+def is_bridge_edge(etype: tuple[str, str, str]) -> bool:
+    if isinstance(etype, tuple) and len(etype) == 3:
+        return etype[1] == B_ETYPE_NAME
     else:
         raise Exception('Unexpected node type representation ' + str(etype))
 

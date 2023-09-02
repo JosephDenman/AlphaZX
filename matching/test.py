@@ -1,5 +1,7 @@
 import unittest
 import networkx as nx
+
+from diagram.pyzx_graph_generator import nx_clifford_graph
 from diagram.pyzx_nx_conv import S_ETYPE_INDEX, H_ETYPE_INDEX, Z_NTYPE_NAME, X_NTYPE_NAME
 from diagram.zx_diagram import ZXDiagram
 from matching.match import Basis, FLeftZMatch, FLeftXMatch, FRightZMatch, FRightXMatch, BLeftMatch, BRightMatch, \
@@ -8,8 +10,10 @@ from matching.b_rule_matcher import b_right_matches, b_right_pattern, b_left_mat
 from matching.f_rule_matcher import f_left_z_matches, f_left_x_matches, f_left_z_pattern, f_left_x_pattern, \
     f_right_z_matches, \
     f_right_z_pattern, f_right_x_matches, f_right_x_pattern, basis_to_ntype_index
+from matching.util import compute_matches
 from matching.y_rule_matcher import y_left_z_matches, y_left_z_pattern, y_left_x_pattern, y_left_x_matches, \
     y_left_pattern, y_right_z_pattern, y_right_z_matches, y_right_x_pattern, y_right_x_matches
+from matching.zx_match_diagram import ZXMatchDiagram
 
 
 def consecutive_parallel_edge_test_graph(basis: Basis) -> ZXDiagram:
@@ -630,3 +634,14 @@ class YRightMatchTest(unittest.TestCase):
         b4, b5, b6 = diagram.add_b_nodes(3)
         diagram.add_s_edges_from([(b4, 0), (2, b5), (3, b6)])
         self.assertListEqual(list(y_right_x_matches(diagram)), [YRightXMatch(0, 1, 2, 3)])
+
+
+class ZXMatchDiagramTest(unittest.TestCase):
+
+    # TODO - This test fails intermittently. Match diagram construction has errors.
+    def test_match_node_correspondence(self):
+        for _ in range(1000):
+            d = ZXDiagram(nx_clifford_graph(100, 100))
+            md = ZXMatchDiagram(d)
+            for m in list(compute_matches(d)):
+                self.assertTrue(md.has_node(m))
