@@ -5,7 +5,7 @@ import networkx as nx
 from diagram.pyzx_nx_conv import is_basis, is_boundary, is_z_basis, is_x_basis, X_NTYPE_INDEX, \
     Z_NTYPE_INDEX, S_ETYPE_INDEX, B_NTYPE_INDEX
 
-
+# TODO: Add between-ness centrality as a node feature before converting to HeteroData.
 class ZXDiagram(nx.MultiGraph):
     NTYPE = 'type'
     PHASE = 'phase'

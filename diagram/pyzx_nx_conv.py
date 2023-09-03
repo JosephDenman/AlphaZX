@@ -167,29 +167,18 @@ def nx_to_pyg_heterograph_post_process(hdata: pyg.data.HeteroData) -> None:
     edge_type_to_one_hot(hdata)
 
 
-def nx_to_pyg_hetero(g: Any, node_type_attribute: str, edge_type_attribute: Optional[str] = None,
-                     graph_attrs: Optional[Iterable[str]] = None, nodes: Optional[List] = None,
-                     group_node_attrs: Optional[Union[List[str], all]] = None,
-                     group_edge_attrs: Optional[Union[List[str], all]] = None) -> HeteroData:
-    def get_edge_attributes(g, edge_indexes: list, edge_attrs: list = None) -> dict:
-        r"""Collects the attributes of a list of graph edges in a dictionary.
+def nx_to_pyg_hetero(
+    G: Any, node_type_attribute: str,
+    edge_type_attribute: Optional[str] = None,
+    graph_attrs: Optional[Iterable[str]] = None, nodes: Optional[List] = None,
+    group_node_attrs: Optional[Union[List[str], all]] = None,
+    group_edge_attrs: Optional[Union[List[str], all]] = None
+) -> HeteroData:
 
-        Args:
-            g (networkx.Graph or networkx.DiGraph): A networkx graph.
-            edge_indexes (list, optional): The list of edge indexes whose
-                attributes are to be collected. If set to :obj:`None`, all
-                edges of the graph will be included. (default: :obj:`None`)
-            edge_attrs (list, optional): The list of expected attributes to
-                be found in every edge. If set to :obj:`None`, the first
-                edge encountered will set the values for the rest of the
-                process. (default: :obj:`None`)
-
-        Raises:
-            ValueError: If some edges do not share the same list
-            of attributes as the rest, an error will be raised.
-        """
+    def get_edge_attributes(G, edge_indexes: list,
+                            edge_attrs: list = None) -> dict:
         data = defaultdict(list)
-        edge_to_data = list(g.edges(data=True))
+        edge_to_data = list(G.edges(data=True))
         for edge_index in edge_indexes:
             _, _, feat_dict = edge_to_data[edge_index]
             if edge_attrs is None:
@@ -197,29 +186,14 @@ def nx_to_pyg_hetero(g: Any, node_type_attribute: str, edge_type_attribute: Opti
             if set(feat_dict.keys()) != set(edge_attrs):
                 raise ValueError('Not all edges contain the same attributes.')
             for key, value in feat_dict.items():
-                if key != edge_type_attribute:
-                    data[str(key)].append(value)
+                data[str(key)].append(value)
+
         return data
 
-    def get_node_attributes(g, nodes: list, expected_node_attrs: list = None) -> dict:
-        r"""Collects the attributes of a list of graph nodes in a dictionary.
-
-        Args:
-            g (networkx.Graph or networkx.DiGraph): A networkx graph.
-            nodes (list, optional): The list of nodes whose attributes are to
-                be collected. If set to :obj:`None`, all nodes of the graph
-                will be included. (default: :obj:`None`)
-            expected_node_attrs (list, optional): The list of expected
-                attributes to be found in every node. If set to :obj:`None`,
-                the first node encountered will set the values for the rest
-                of the process. (default: :obj:`None`)
-
-        Raises:
-            ValueError: If some nodes do not share the same
-            list of attributes as the rest, an error will be raised.
-        """
+    def get_node_attributes(G, nodes: list,
+                            expected_node_attrs: list = None) -> dict:
         data = defaultdict(list)
-        node_to_data = g.nodes(data=True)
+        node_to_data = G.nodes(data=True)
         for node in nodes:
             feat_dict = node_to_data[node]
             if expected_node_attrs is None:
@@ -227,14 +201,13 @@ def nx_to_pyg_hetero(g: Any, node_type_attribute: str, edge_type_attribute: Opti
             if set(feat_dict.keys()) != set(expected_node_attrs):
                 raise ValueError('Not all nodes contain the same attributes.')
             for key, value in feat_dict.items():
-                if key != node_type_attribute:
-                    data[str(key)].append(value)
+                data[str(key)].append(value)
         return data
 
-    g = g.to_directed() if not nx.is_directed(g) else g
+    G = G.to_directed() if not nx.is_directed(G) else G
 
     if nodes is not None:
-        g = nx.subgraph(g, nodes)
+        G = nx.subgraph(G, nodes)
 
     hetero_data_dict = {}
 
@@ -243,7 +216,7 @@ def nx_to_pyg_hetero(g: Any, node_type_attribute: str, edge_type_attribute: Opti
     group_to_nodes = defaultdict(list)
     group_to_edges = defaultdict(list)
 
-    for node, node_data in g.nodes(data=True):
+    for node, node_data in G.nodes(data=True):
         if node_type_attribute not in node_data:
             raise KeyError(f"Given node_type_attribute: {node_type_attribute} \
                 missing from node {node}.")
@@ -252,7 +225,7 @@ def nx_to_pyg_hetero(g: Any, node_type_attribute: str, edge_type_attribute: Opti
         node_to_group_id[node] = len(group_to_nodes[node_type]) - 1
         node_to_group[node] = node_type
 
-    for i, (node_a, node_b, edge_data) in enumerate(g.edges(data=True)):
+    for i, (node_a, node_b, edge_data) in enumerate(G.edges(data=True)):
         if edge_type_attribute is not None:
             if edge_type_attribute not in edge_data:
                 raise KeyError(
@@ -260,22 +233,33 @@ def nx_to_pyg_hetero(g: Any, node_type_attribute: str, edge_type_attribute: Opti
                     missing from edge {(node_a, node_b)}.")
             node_type_a, edge_type, node_type_b = edge_data[
                 edge_type_attribute]
-            if node_to_group[node_a] != node_type_a or node_to_group[node_b] != node_type_b:
+            if node_to_group[node_a] != node_type_a or node_to_group[
+                    node_b] != node_type_b:
                 raise ValueError(f'Edge {node_a}-{node_b} of type\
                          {edge_data[edge_type_attribute]} joins nodes of types\
-                         {node_to_group[node_a]} and {node_to_group[node_b]}.')
+                         {node_to_group[node_a]} and { node_to_group[node_b]}.'
+                                 )
         else:
             edge_type = "to"
         group_to_edges[(node_to_group[node_a], edge_type,
                         node_to_group[node_b])].append(i)
 
     for group, group_nodes in group_to_nodes.items():
-        hetero_data_dict[str(group)] = get_node_attributes(g, nodes=group_nodes)
+        hetero_data_dict[str(group)] = {
+            k: v
+            for k, v in get_node_attributes(G, nodes=group_nodes).items()
+            if k != node_type_attribute
+        }
 
     for group, group_edges in group_to_edges.items():
         group_name = '__'.join(group)
-        hetero_data_dict[group_name] = get_edge_attributes(g, edge_indexes=group_edges)
-        edge_list = list(g.edges(data=False))
+        hetero_data_dict[group_name] = {
+            k: v
+            for k, v in get_edge_attributes(G,
+                                            edge_indexes=group_edges).items()
+            if k != edge_type_attribute
+        }
+        edge_list = list(G.edges(data=False))
         global_edge_index = [edge_list[edge] for edge in group_edges]
         group_edge_index = [(node_to_group_id[node_a],
                              node_to_group_id[node_b])
@@ -283,7 +267,7 @@ def nx_to_pyg_hetero(g: Any, node_type_attribute: str, edge_type_attribute: Opti
         hetero_data_dict[group_name]["edge_index"] = torch.tensor(
             group_edge_index, dtype=torch.long).t().contiguous().view(2, -1)
 
-    graph_items = g.graph
+    graph_items = G.graph
     if graph_attrs is not None:
         graph_items = {
             k: v
@@ -293,6 +277,8 @@ def nx_to_pyg_hetero(g: Any, node_type_attribute: str, edge_type_attribute: Opti
         hetero_data_dict[str(key)] = value
 
     for group, group_dict in hetero_data_dict.items():
+        print('group = ', group)
+        print('group_dict = ', group_dict)
         if isinstance(group_dict, dict):
             xs = []
             is_edge_group = group in [
@@ -303,9 +289,12 @@ def nx_to_pyg_hetero(g: Any, node_type_attribute: str, edge_type_attribute: Opti
             else:
                 group_attrs = group_node_attrs
             for key, value in group_dict.items():
+                print('value = ', value)
                 if isinstance(value, (tuple, list)) and isinstance(
                         value[0], torch.Tensor):
                     hetero_data_dict[group][key] = torch.stack(value, dim=0)
+                elif isinstance(value, nx.Graph):
+                    hetero_data_dict[group][key] = nx_to_pyg_hetero(value, node_type_attribute='type')
                 else:
                     try:
                         hetero_data_dict[group][key] = torch.tensor(value)
@@ -324,22 +313,15 @@ def nx_to_pyg_hetero(g: Any, node_type_attribute: str, edge_type_attribute: Opti
                     hetero_data_dict[group]['x'] = torch.cat(xs, dim=-1)
         else:
             value = group_dict
+            print('value = ', value)
             if isinstance(value, (tuple, list)) and isinstance(
                     value[0], torch.Tensor):
                 hetero_data_dict[group] = torch.stack(value, dim=0)
+            elif isinstance(value, nx.Graph):
+                hetero_data_dict[group] = nx_to_pyg_hetero(value, node_type_attribute='type')
             else:
                 try:
                     hetero_data_dict[group] = torch.tensor(value)
                 except (ValueError, TypeError):
                     pass
     return HeteroData(**hetero_data_dict)
-
-
-"""
-g = nx.DiGraph()
-g.add_node(0, type='A', types=[0, 1, 0], phases=[1, 2, 3])
-g.add_node(1, type='B', types=[2, 2, 2], phases=[4, 5, 6])
-g.add_edge(0, 1, type=('A', 'i', 'B'))
-g.add_edge(1, 0, type=('B', 'i', 'A'))
-print('hdata = ', nx_to_pyg_hetero(g, 'type', 'type'))
-"""
