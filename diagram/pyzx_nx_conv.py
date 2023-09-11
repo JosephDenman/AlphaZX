@@ -277,8 +277,6 @@ def nx_to_pyg_hetero(
         hetero_data_dict[str(key)] = value
 
     for group, group_dict in hetero_data_dict.items():
-        print('group = ', group)
-        print('group_dict = ', group_dict)
         if isinstance(group_dict, dict):
             xs = []
             is_edge_group = group in [
@@ -289,7 +287,6 @@ def nx_to_pyg_hetero(
             else:
                 group_attrs = group_node_attrs
             for key, value in group_dict.items():
-                print('value = ', value)
                 if isinstance(value, (tuple, list)) and isinstance(
                         value[0], torch.Tensor):
                     hetero_data_dict[group][key] = torch.stack(value, dim=0)
@@ -313,7 +310,6 @@ def nx_to_pyg_hetero(
                     hetero_data_dict[group]['x'] = torch.cat(xs, dim=-1)
         else:
             value = group_dict
-            print('value = ', value)
             if isinstance(value, (tuple, list)) and isinstance(
                     value[0], torch.Tensor):
                 hetero_data_dict[group] = torch.stack(value, dim=0)

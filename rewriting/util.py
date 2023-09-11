@@ -1,5 +1,5 @@
 from diagram.zx_diagram import ZXDiagram
-from matching.match import Match, FLeftMatch, FRightMatch, BLeftMatch, BRightMatch, YLeftMatch, YRightMatch
+from diagram.match import Match, FLeftMatch, FRightMatch, BLeftMatch, BRightMatch, YLeftMatch, YRightMatch
 from rewriting.b_rule_rewriter import b_left_rewrite, b_right_rewrite
 from rewriting.f_rule_rewriter import f_left_rewrite, f_right_rewrite
 from rewriting.y_rule_rewriter import y_left_rewrite, y_right_rewrite

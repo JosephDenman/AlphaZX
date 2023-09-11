@@ -1,5 +1,5 @@
 from diagram.zx_diagram import ZXDiagram
-from matching.match import FLeftMatch, FRightMatch
+from diagram.match import FLeftMatch, FRightMatch
 
 
 def add_node(f_match: FRightMatch | FLeftMatch, phase: float, diagram: ZXDiagram) -> int:

@@ -1,9 +1,16 @@
+from collections import defaultdict
 from collections.abc import Iterable
+from typing import Iterator
 
 import networkx as nx
+import torch
+import torch_geometric as pyg
 
-from diagram.pyzx_nx_conv import is_basis, is_boundary, is_z_basis, is_x_basis, X_NTYPE_INDEX, \
+from diagram.match import Match, FRightMatch, FRightZMatch, FRightXMatch, FLeftZMatch, FLeftMatch, FLeftXMatch, \
+    BLeftMatch, BRightMatch, YLeftMatch, YRightMatch, YLeftXMatch, YLeftZMatch, YRightZMatch, YRightXMatch
+from diagram.pyzx_nx_conv import nx_to_pyg_hetero, is_basis, is_boundary, is_z_basis, is_x_basis, X_NTYPE_INDEX, \
     Z_NTYPE_INDEX, S_ETYPE_INDEX, B_NTYPE_INDEX
+
 
 # TODO: Add between-ness centrality as a node feature before converting to HeteroData.
 class ZXDiagram(nx.MultiGraph):
@@ -198,9 +205,147 @@ class ZXDiagram(nx.MultiGraph):
         return next_node_index
 
     def edges_between(self, n: int, m: int, data=False) -> list[
-            tuple[int, int, int] | tuple[int, int, int, dict[str, any]]]:
+        tuple[int, int, int] | tuple[int, int, int, dict[str, any]]]:
         assert self.has_node(n), f'Node {n} does not exist'
         assert self.has_node(n), f'Node {m} does not exist'
         if data:
             return [(n, m, k, edata) for k, edata in self[n][m].items()]
         return [(n, m, k) for k in self[n][m]]
+
+    def f_left_z_matches(self) -> Iterator[FLeftZMatch]:
+        candidates = set()
+        for s, t, edata in self.edges(data=True):
+            if self.is_z_basis(s) and self.is_z_basis(t):
+                candidates.add((s, t))
+        for s, t in candidates:
+            if all([edata[self.ETYPE] == S_ETYPE_INDEX for _, _, _, edata in self.edges_between(s, t, data=True)]):
+                yield FLeftZMatch({s: 0, t: 1})
+
+    def f_left_x_matches(self) -> Iterator[FLeftXMatch]:
+        candidates = set()
+        for s, t, edata in self.edges(data=True):
+            if self.is_x_basis(s) and self.is_x_basis(t):
+                candidates.add((s, t))
+        for s, t in candidates:
+            if all([edata[self.ETYPE] == S_ETYPE_INDEX for _, _, _, edata in self.edges_between(s, t, data=True)]):
+                yield FLeftXMatch({s: 0, t: 1})
+
+    def f_left_matches(self) -> Iterator[FLeftMatch]:
+        yield from self.f_left_z_matches()
+        yield from self.f_left_x_matches()
+
+    def f_right_z_matches(self) -> Iterator[FRightZMatch]:
+        yield from (FRightZMatch({z: 0}) for z in self.z_nodes())
+
+    def f_right_x_matches(self) -> Iterator[FRightXMatch]:
+        yield from (FRightXMatch({x: 0}) for x in self.x_nodes())
+
+    def f_right_matches(self) -> Iterator[FRightMatch]:
+        yield from self.f_right_z_matches()
+        yield from self.f_right_x_matches()
+
+    def b_left_matches(self) -> Iterator[BLeftMatch]:
+        candidates = {(s, t) if self.is_z_basis(s) and self.is_x_basis(t) else (t, s) for s, t in
+                      set(self.edges(data=False))
+                      if self.degree(s) == 3 and self.degree(t) == 3 and
+                      self.is_basis(s) and self.is_basis(t) and self.type(s) != self.type(t) and
+                      self.phase(s) == 0 and self.phase(t) == 0}
+        while len(candidates) > 0:
+            z, x = candidates.pop()
+            for n in self.neighbors(z):
+                if not n == x and self.is_x_basis(n) and self.phase(n) == 0 and self.degree(n) == 3:
+                    for m in self.neighbors(n):
+                        if not m == z and self.is_z_basis(m) and self.phase(m) == 0 and self.degree(m) == 3:
+                            for o in self.neighbors(m):
+                                if o == x:
+                                    candidates.discard((z, x))
+                                    candidates.discard((z, n))
+                                    candidates.discard((m, x))
+                                    candidates.discard((m, n))
+                                    yield BLeftMatch(z, x, m, n)
+
+    def b_right_matches(self) -> Iterator[BRightMatch]:
+        for s, t in set(self.edges(data=False)):
+            if self.degree(s) == 3 and self.degree(t) == 3:
+                if self.is_basis(s) and self.is_basis(t) and self.type(s) != self.type(t):
+                    if self.phase(s) == 0 and self.phase(t) == 0:
+                        x, z = (s, t) if self.is_x_basis(s) and self.is_z_basis(t) else (t, s)
+                        yield BRightMatch(x, z)
+
+    def y_left_z_matches(self) -> Iterator[YLeftZMatch]:
+        for n in self.x_nodes():
+            if self.degree(n) == 3 and self.phase(n) == 0:
+                if all([self.degree(m) == 2 and self.is_z_basis(m) for m in self.neighbors(n)]) and sum(
+                        [self.phase(m) for m in self.neighbors(n)]) == 0.5:
+                    z0, z2, z3 = sorted(self.neighbors(n), key=lambda m: self.phase(m))
+                    yield YLeftZMatch(z0, n, z2, z3)
+
+    def y_left_x_matches(self) -> Iterator[YLeftXMatch]:
+        for n in self.z_nodes():
+            if self.degree(n) == 3 and self.phase(n) == 0:
+                if all([self.degree(m) == 2 and self.is_x_basis(m) for m in self.neighbors(n)]) and sum(
+                        [self.phase(m) for m in self.neighbors(n)]) == 0.5:
+                    x0, x2, x3 = sorted(self.neighbors(n), key=lambda m: self.phase(m))
+                    yield YLeftXMatch(x0, n, x2, x3)
+
+    def y_left_matches(self) -> Iterator[YLeftMatch]:
+        yield from self.y_left_z_matches()
+        yield from self.y_left_x_matches()
+
+    def y_right_z_matches(self) -> Iterator[YRightZMatch]:
+        for n in self.x_nodes():
+            if self.degree(n) == 3 and self.phase(n) == -0.5:
+                if all([self.degree(m) == 2 and self.is_z_basis(m) for m in self.neighbors(n)]) and sum(
+                        [self.phase(m) for m in self.neighbors(n)]) == -0.5:
+                    x0, x2, x3 = sorted(self.neighbors(n), key=lambda m: self.phase(m), reverse=True)
+                    yield YRightZMatch(x0, n, x2, x3)
+
+    def y_right_x_matches(self) -> Iterator[YRightXMatch]:
+        for n in self.z_nodes():
+            if self.degree(n) == 3 and self.phase(n) == -0.5:
+                if all([self.degree(m) == 2 and self.is_x_basis(m) for m in self.neighbors(n)]) and sum(
+                        [self.phase(m) for m in self.neighbors(n)]) == -0.5:
+                    x0, x2, x3 = sorted(self.neighbors(n), key=lambda m: self.phase(m), reverse=True)
+                    yield YRightXMatch(x0, n, x2, x3)
+
+    def y_right_matches(self) -> Iterator[YRightMatch]:
+        yield from self.y_right_z_matches()
+        yield from self.y_right_x_matches()
+
+    def compute_matches(self) -> Iterator[Match]:
+        yield from self.f_left_matches()
+        yield from self.f_right_matches()
+        yield from self.b_left_matches()
+        yield from self.b_right_matches()
+        yield from self.y_left_matches()
+        yield from self.y_right_matches()
+
+    def to_hetero_data(self, one_hot_types: bool = True, one_hot_phases=True) -> pyg.data.HeteroData:
+
+        current_b = 0
+        current_z = 0
+        current_x = 0
+        node_to_tensor_index = defaultdict()  # Maps NetworkX nodes to their tensor indices
+        for node, ndata in self.nodes(data=True):
+            ntype = ndata[self.NTYPE]
+            if is_z_basis(ntype):
+                node_to_tensor_index[node] = current_z
+                current_z = current_z + 1
+            elif is_x_basis(ntype):
+                node_to_tensor_index[node] = current_x
+                current_x = current_x + 1
+            elif is_boundary(ntype):
+                node_to_tensor_index[node] = current_b
+                current_b = current_b + 1
+            else:
+                raise Exception(f'Node {node} has unexpected type {ntype}')
+
+        group_to_matches = defaultdict(list)
+        for match in self.compute_matches():
+            group_to_matches[match.name].append(torch.tensor([node_to_tensor_index[node] for node in match.nodes]))
+
+        hdata = nx_to_pyg_hetero(self, 'type')
+
+        for m_name, m_instances in group_to_matches.items():
+            hdata[m_name] = torch.stack(m_instances, dim=0)
+        return hdata

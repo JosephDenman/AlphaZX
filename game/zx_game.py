@@ -3,8 +3,8 @@ from torch_geometric.data import HeteroData
 
 from diagram.pyzx_graph_generator import nx_clifford_graph
 from diagram.zx_diagram import ZXDiagram
-from matching.zx_match_diagram import ZXMatchDiagram
-from matching.match import Match
+from diagram.match import Match
+from models.model import MatchType
 from rewriting.util import rewrite, FRightParameters
 
 """
@@ -39,6 +39,10 @@ def is_simplified(diagram: ZXDiagram) -> bool:
     return diagram.number_of_nodes() == diagram.num_b_nodes()
 
 
+def remap_matches(match_dict: dict[MatchType, list[Match]]):
+    pass
+
+
 class ZXGame:
     def __init__(self, num_qubits: int, depth: int, t_gates: bool = True, one_hot_phases: bool = False,
                  one_hot_types: bool = False,
@@ -60,12 +64,12 @@ class ZXGame:
         done = is_simplified(self.zx_diagram)  # TODO: What if a graph is repeated? Is there a step limit?
         reward = self.previous_value - current_value + (self.simplified_reward if done else 0)
         self.previous_value = current_value
-        self.zx_match_diagram = ZXMatchDiagram(self.zx_diagram)
-        return self.zx_match_diagram.to_hetero_data(self.one_hot_types,
-                                                    self.one_hot_phases), reward, done
+        # self.zx_match_diagram = ZXMatchDiagram(self.zx_diagram)
+        return self.zx_diagram.to_hetero_data(self.one_hot_types,
+                                              self.one_hot_phases), reward, done
 
     def reset(self) -> HeteroData:
         self.zx_diagram = ZXDiagram(nx_clifford_graph(self.num_qubits, self.depth, t_gates=self.t_gates))
-        self.zx_match_diagram = ZXMatchDiagram(self.zx_diagram)
+        # self.zx_match_diagram = ZXMatchDiagram(self.zx_diagram)
         self.previous_value = diagram_value(self.zx_diagram)
-        return self.zx_match_diagram.to_hetero_data(self.one_hot_types, self.one_hot_phases)
+        return self.zx_diagram.to_hetero_data(self.one_hot_types, self.one_hot_phases)

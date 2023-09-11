@@ -6,8 +6,7 @@ from torch_geometric.data import HeteroData
 
 from diagram.pyzx_nx_conv import ETYPE, nx_to_pyg_hetero
 from diagram.zx_diagram import ZXDiagram
-from matching.match import Match, CompoundMatch, FRightMatch, FRightZMatch, FRightXMatch
-from matching.util import compute_matches
+from diagram.match import Match, CompoundMatch, FRightMatch, FRightZMatch, FRightXMatch
 
 I_ETYPE_INDEX = 3
 I_ETYPE_NAME = 'inclusion'
@@ -26,7 +25,7 @@ class ZXMatchDiagram(nx.DiGraph):
         self.node_attrs = self.zx_diagram.node_attrs
         self.edge_attrs = self.zx_diagram.edge_attrs
         super().__init__(nx.DiGraph(), **attr)
-        matches = list(compute_matches(diagram))
+        matches = list(diagram.compute_matches())
         for match in matches:
             add_match(self, diagram, match)
         add_composition_edges(self, diagram)

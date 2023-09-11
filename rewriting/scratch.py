@@ -5,9 +5,8 @@ import numpy as np
 from diagram.pyzx_graph_generator import nx_clifford_graph
 from diagram.pyzx_nx_conv import nx_to_pyg_hetero
 from diagram.zx_diagram import ZXDiagram
-from matching.zx_match_diagram import ZXMatchDiagram
-from matching.match import FRightMatch
-from matching.util import compute_matches
+from diagram.zx_match_diagram import ZXMatchDiagram
+from diagram.match import FRightMatch
 from rewriting.util import rewrite
 
 
@@ -36,7 +35,7 @@ Next steps:
 """
 
 while True:
-    m = np.random.choice(list(compute_matches(g)))
+    m = np.random.choice(list(g.compute_matches()))
     print(
         '-------------------------------------------------------------------------------------------------------------')
     print('i = ', i)
