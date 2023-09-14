@@ -8,15 +8,14 @@ import torch_geometric as pyg
 
 from diagram.match import Match, FRightMatch, FRightZMatch, FRightXMatch, FLeftZMatch, FLeftMatch, FLeftXMatch, \
     BLeftMatch, BRightMatch, YLeftMatch, YRightMatch, YLeftXMatch, YLeftZMatch, YRightZMatch, YRightXMatch
-from diagram.pyzx_nx_conv import nx_to_pyg_hetero, is_basis, is_boundary, is_z_basis, is_x_basis, X_NTYPE_INDEX, \
-    Z_NTYPE_INDEX, S_ETYPE_INDEX, B_NTYPE_INDEX
+from diagram.pyzx_nx_conv import nx_to_pyg_hetero, is_basis, is_boundary, is_z_basis, is_x_basis, \
+    Z_NTYPE_NAME, B_NTYPE_NAME, X_NTYPE_NAME
 
 
 # TODO: Add between-ness centrality as a node feature before converting to HeteroData.
 class ZXDiagram(nx.MultiGraph):
     NTYPE = 'type'
     PHASE = 'phase'
-    ETYPE = 'type'
 
     def __init__(self, nx_graph: nx.MultiGraph = None):
         # Assuming current nodes are 0-based consecutive integers...
@@ -43,13 +42,13 @@ class ZXDiagram(nx.MultiGraph):
 
     @property
     def edge_attrs(self):
-        return [self.ETYPE]
+        return []
 
-    def type(self, n: int) -> int:
+    def type(self, n: int) -> str:
         assert self.has_node(n), f'Node {n} does not exist'
         return self.nodes[n][self.NTYPE]
 
-    def types(self) -> dict[int, int]:
+    def types(self) -> dict[int, str]:
         return {n: ndata[self.NTYPE] for n, ndata in self.nodes(data=True)}
 
     def phase(self, n: int) -> float:
@@ -85,13 +84,13 @@ class ZXDiagram(nx.MultiGraph):
     def flip_basis(self, n: int) -> None:
         assert self.is_basis(n), f'Attempted to basis flip non-basis node {n}'
         (self.x_nodes_set.remove if self.is_x_basis(n) else self.z_nodes_set.remove)(n)
-        self.nodes[n][self.NTYPE] = (X_NTYPE_INDEX if self.is_z_basis(n) else Z_NTYPE_INDEX)
+        self.nodes[n][self.NTYPE] = (X_NTYPE_NAME if self.is_z_basis(n) else Z_NTYPE_NAME)
         (self.x_nodes_set.add if self.is_x_basis(n) else self.z_nodes_set.add)(n)
 
     def add_x_node(self, phase: float) -> int:
         assert -2 < phase < 2, f'Attempted to add Z-basis node with invalid phase {phase}'
         new_x = self.__next_node()
-        self.add_node(new_x, type=X_NTYPE_INDEX, phase=phase)
+        self.add_node(new_x, type=X_NTYPE_NAME, phase=phase)
         self.x_nodes_set.add(new_x)
         return new_x
 
@@ -123,7 +122,7 @@ class ZXDiagram(nx.MultiGraph):
     def add_z_node(self, phase: float) -> int:
         assert -2 < phase < 2, f'Attempted to add Z-basis node with invalid phase {phase}'
         new_z = self.__next_node()
-        self.add_node(new_z, type=Z_NTYPE_INDEX, phase=phase)
+        self.add_node(new_z, type=Z_NTYPE_NAME, phase=phase)
         self.z_nodes_set.add(new_z)
         return new_z
 
@@ -143,7 +142,7 @@ class ZXDiagram(nx.MultiGraph):
 
     def add_b_node(self) -> int:
         new_b = self.__next_node()
-        self.add_node(new_b, type=B_NTYPE_INDEX, phase=0)
+        self.add_node(new_b, type=B_NTYPE_NAME, phase=0)
         self.b_nodes_set.add(new_b)
         return new_b
 
@@ -164,13 +163,13 @@ class ZXDiagram(nx.MultiGraph):
     def add_s_edge(self, s: int, t: int) -> int:
         assert self.has_node(s), f'Node {s} does not exist'
         assert self.has_node(s), f'Node {t} does not exist'
-        return self.add_edge(s, t, type=S_ETYPE_INDEX)
+        return self.add_edge(s, t)
 
     def add_s_edges_from(self, es: Iterable[tuple[int, int]]) -> list[int]:
         for s, t in es:
             assert self.has_node(s), f'Node {s} does not exist'
             assert self.has_node(t), f'Node {t} does not exist'
-        return self.add_edges_from(es, type=S_ETYPE_INDEX)
+        return self.add_edges_from(es)
 
     def remove_edges(self, s: int, t: int) -> None:
         assert self.has_node(s), f'Node {s} does not exist'
@@ -218,8 +217,7 @@ class ZXDiagram(nx.MultiGraph):
             if self.is_z_basis(s) and self.is_z_basis(t):
                 candidates.add((s, t))
         for s, t in candidates:
-            if all([edata[self.ETYPE] == S_ETYPE_INDEX for _, _, _, edata in self.edges_between(s, t, data=True)]):
-                yield FLeftZMatch({s: 0, t: 1})
+            yield FLeftZMatch({s: 0, t: 1})
 
     def f_left_x_matches(self) -> Iterator[FLeftXMatch]:
         candidates = set()
@@ -227,8 +225,7 @@ class ZXDiagram(nx.MultiGraph):
             if self.is_x_basis(s) and self.is_x_basis(t):
                 candidates.add((s, t))
         for s, t in candidates:
-            if all([edata[self.ETYPE] == S_ETYPE_INDEX for _, _, _, edata in self.edges_between(s, t, data=True)]):
-                yield FLeftXMatch({s: 0, t: 1})
+            yield FLeftXMatch({s: 0, t: 1})
 
     def f_left_matches(self) -> Iterator[FLeftMatch]:
         yield from self.f_left_z_matches()
@@ -322,12 +319,12 @@ class ZXDiagram(nx.MultiGraph):
 
     def to_hetero_data(self, one_hot_types: bool = True, one_hot_phases=True) -> pyg.data.HeteroData:
 
-        current_b = 0
         current_z = 0
         current_x = 0
+        current_b = 0
         node_to_tensor_index = defaultdict()  # Maps NetworkX nodes to their tensor indices
         for node, ndata in self.nodes(data=True):
-            ntype = ndata[self.NTYPE]
+            ntype = self.type(node)
             if is_z_basis(ntype):
                 node_to_tensor_index[node] = current_z
                 current_z = current_z + 1
@@ -340,12 +337,20 @@ class ZXDiagram(nx.MultiGraph):
             else:
                 raise Exception(f'Node {node} has unexpected type {ntype}')
 
-        group_to_matches = defaultdict(list)
+        del self.graph['node_default']
+        del self.graph['edge_default']
+
+        hdata = nx_to_pyg_hetero(self, node_type_attribute='type', group_node_attrs=['phase'])
+
+        hdata['matches'] = defaultdict(list)
         for match in self.compute_matches():
-            group_to_matches[match.name].append(torch.tensor([node_to_tensor_index[node] for node in match.nodes]))
+            hdata['matches'][match.name].append({
+                Z_NTYPE_NAME: torch.tensor([node_to_tensor_index[node] for node in match if self.is_z_basis(node)],
+                                           dtype=torch.int),
+                X_NTYPE_NAME: torch.tensor([node_to_tensor_index[node] for node in match if self.is_x_basis(node)],
+                                           dtype=torch.int),
+                B_NTYPE_NAME: torch.tensor([node_to_tensor_index[node] for node in match if self.is_boundary(node)],
+                                           dtype=torch.int)
+            })
 
-        hdata = nx_to_pyg_hetero(self, 'type')
-
-        for m_name, m_instances in group_to_matches.items():
-            hdata[m_name] = torch.stack(m_instances, dim=0)
         return hdata

@@ -4,13 +4,11 @@ from typing import Optional
 from hypothesis import strategies as st, given
 from hypothesis.strategies import composite, SearchStrategy
 
-from diagram.pyzx_nx_conv import Z_NTYPE_INDEX, X_NTYPE_INDEX, B_NTYPE_INDEX, is_z_basis, is_x_basis, is_boundary
-from diagram.zx_diagram import ZXDiagram
-from diagram.b_rule_matcher import b_right_pattern, b_right_matches, b_left_matches, b_left_pattern
-from diagram.match_patterns import f_right_matches
 from diagram.match import BLeftMatch, YLeftZMatch, YLeftXMatch, YRightZMatch, YRightXMatch, BRightMatch
-from diagram.y_rule_matcher import y_left_z_pattern, y_left_matches, y_right_matches, y_left_x_pattern, \
+from diagram.match_patterns import b_right_pattern, b_left_pattern, y_left_z_pattern, y_left_x_pattern, \
     y_right_x_pattern, y_right_z_pattern
+from diagram.pyzx_nx_conv import is_z_basis, is_x_basis, is_boundary, Z_NTYPE_INDEX, X_NTYPE_INDEX, B_NTYPE_INDEX
+from diagram.zx_diagram import ZXDiagram
 from rewriting.b_rule_rewriter import b_right_rewrite, b_left_rewrite
 from rewriting.f_rule_rewriter import f_right_rewrite
 from rewriting.y_rule_rewriter import y_left_rewrite, y_right_rewrite
@@ -73,7 +71,7 @@ class FRightRewriteTest(unittest.TestCase):
             add_basis_node(ntype, phase, diagram)
         for s, t in edges:
             diagram.add_s_edge(s, t)
-        match = list(f_right_matches(diagram))[0]
+        match = list(diagram.f_right_matches())[0]
         f_right_rewrite(match, phase, new_edges, transfer_edges, diagram)
         self.assertEqual(len(neighbors) + 2, diagram.number_of_nodes())
         self.assertEqual(new_edges + len(edges), diagram.number_of_edges())
@@ -101,8 +99,8 @@ class BRightRewriteTest(unittest.TestCase):
         diagram.add_s_edge(add_node(br_data, diagram), 0)
         diagram.add_s_edge(1, add_node(tr_data, diagram))
         diagram.add_s_edge(1, add_node(tl_data, diagram))
-        b_right_rewrite(list(b_right_matches(diagram))[0], diagram)
-        self.assertEqual(list(b_left_matches(diagram))[0], BLeftMatch(7, 9, 6, 8))
+        b_right_rewrite(list(diagram.b_right_matches())[0], diagram)
+        self.assertEqual(list(diagram.b_left_matches())[0], BLeftMatch(7, 9, 6, 8))
 
 
 class BLeftRewriteTest(unittest.TestCase):
@@ -111,8 +109,8 @@ class BLeftRewriteTest(unittest.TestCase):
         diagram = b_left_pattern()
         b4, b5, b6, b7 = diagram.add_b_node(), diagram.add_b_node(), diagram.add_b_node(), diagram.add_b_node()
         diagram.add_s_edges_from([(b4, 0), (b5, 1), (2, b6), (3, b7)])
-        b_left_rewrite(list(b_left_matches(diagram))[0], diagram)
-        self.assertEqual(list(b_right_matches(diagram))[0], BRightMatch(8, 9))
+        b_left_rewrite(list(diagram.b_left_matches())[0], diagram)
+        self.assertEqual(list(diagram.b_right_matches())[0], BRightMatch(8, 9))
 
 
 class YLeftRewriteTest(unittest.TestCase):
@@ -121,15 +119,15 @@ class YLeftRewriteTest(unittest.TestCase):
         diagram = y_left_z_pattern()
         b4, b5, b6 = diagram.add_b_nodes(3)
         diagram.add_s_edges_from([(b4, 0), (2, b5), (3, b6)])
-        y_left_rewrite(list(y_left_matches(diagram))[0], diagram)
-        self.assertListEqual(list(y_right_matches(diagram)), [YRightXMatch(0, 1, 2, 3)])
+        y_left_rewrite(list(diagram.y_left_matches())[0], diagram)
+        self.assertListEqual(list(diagram.y_right_matches()), [YRightXMatch(0, 1, 2, 3)])
 
     def test_self_x_rewrite(self):
         diagram = y_left_x_pattern()
         b4, b5, b6 = diagram.add_b_nodes(3)
         diagram.add_s_edges_from([(b4, 0), (2, b5), (3, b6)])
-        y_left_rewrite(list(y_left_matches(diagram))[0], diagram)
-        self.assertListEqual(list(y_right_matches(diagram)), [YRightZMatch(0, 1, 2, 3)])
+        y_left_rewrite(list(diagram.y_left_matches())[0], diagram)
+        self.assertListEqual(list(diagram.y_right_matches()), [YRightZMatch(0, 1, 2, 3)])
 
 
 class YRightRewriteTest(unittest.TestCase):
@@ -138,12 +136,12 @@ class YRightRewriteTest(unittest.TestCase):
         diagram = y_right_z_pattern()
         b4, b5, b6 = diagram.add_b_nodes(3)
         diagram.add_s_edges_from([(b4, 0), (2, b5), (3, b6)])
-        y_right_rewrite(list(y_right_matches(diagram))[0], diagram)
-        self.assertListEqual(list(y_left_matches(diagram)), [YLeftXMatch(0, 1, 2, 3)])
+        y_right_rewrite(list(diagram.y_right_matches())[0], diagram)
+        self.assertListEqual(list(diagram.y_left_matches()), [YLeftXMatch(0, 1, 2, 3)])
 
     def test_self_x_rewrite(self):
         diagram = y_right_x_pattern()
         b4, b5, b6 = diagram.add_b_nodes(3)
         diagram.add_s_edges_from([(b4, 0), (2, b5), (3, b6)])
-        y_right_rewrite(list(y_right_matches(diagram))[0], diagram)
-        self.assertListEqual(list(y_left_matches(diagram)), [YLeftZMatch(0, 1, 2, 3)])
+        y_right_rewrite(list(diagram.y_right_matches())[0], diagram)
+        self.assertListEqual(list(diagram.y_left_matches()), [YLeftZMatch(0, 1, 2, 3)])

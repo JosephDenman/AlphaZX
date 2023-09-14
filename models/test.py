@@ -4,22 +4,21 @@ from game.zx_game import ZXGame
 from models.match_metadata import match_metadata_dict
 from models.model import HGTPolicy
 
-game = ZXGame(100, 100)
+game = ZXGame(10, 10)
 hdata = game.reset()
-
-print('hdata = ', hdata)
 
 diagram_hgt_params = (64, 4, 2, 1, 'sum')
 
-model = HGTPolicy(hdata.metadata(), diagram_hgt_params, match_metadata_dict,
+model = HGTPolicy(hdata.metadata(),
+                  diagram_hgt_params,
+                  match_metadata_dict,
                   {key: diagram_hgt_params for key in match_metadata_dict.keys()})
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-hdata, model = hdata.to(device.type), model.to(device)
+hdata = hdata.to('cpu')
+model = model.to('cpu')
 
 with torch.no_grad():  # Initialize lazy modules.
-    out = model(hdata.collect('x'), hdata.collect('edge_index'))
-    print('out = ', out)
+    out = model(hdata)
 
 """
 import torch_geometric as pyg

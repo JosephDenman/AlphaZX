@@ -4,53 +4,46 @@ import networkx as nx
 
 from diagram.match import Basis, FLeftZMatch, FLeftXMatch, FRightZMatch, FRightXMatch, BLeftMatch, BRightMatch, \
     YLeftZMatch, YLeftXMatch, YRightZMatch, YRightXMatch
-from diagram.match_patterns import f_left_z_pattern, f_left_x_pattern, f_right_z_pattern, f_right_x_pattern, \
-    basis_to_ntype_index, y_left_z_pattern, y_left_x_pattern, y_left_pattern, y_right_z_pattern, y_right_x_pattern, \
+from diagram.match_patterns import f_left_z_pattern, f_left_x_pattern, f_right_z_pattern, f_right_x_pattern, y_left_z_pattern, y_left_x_pattern, y_left_pattern, y_right_z_pattern, y_right_x_pattern, \
     b_left_pattern, b_right_pattern
-from diagram.pyzx_graph_generator import nx_clifford_graph
-from diagram.pyzx_nx_conv import S_ETYPE_INDEX, H_ETYPE_INDEX, Z_NTYPE_NAME, X_NTYPE_NAME
+from diagram.pyzx_nx_conv import H_ETYPE_INDEX, Z_NTYPE_NAME, X_NTYPE_NAME, H_ETYPE_NAME
 from diagram.zx_diagram import ZXDiagram
-from diagram.zx_match_diagram import ZXMatchDiagram
 
 
 def consecutive_parallel_edge_test_graph(basis: Basis) -> ZXDiagram:
-    node_type = basis_to_ntype_index(basis)
     nx_graph = nx.MultiGraph()
-    nx_graph.add_node(23, type=node_type)
-    nx_graph.add_node(45, type=node_type)
-    nx_graph.add_node(57, type=node_type)
-    nx_graph.add_edge(23, 45, type=S_ETYPE_INDEX)
-    nx_graph.add_edge(23, 45, type=S_ETYPE_INDEX)
-    nx_graph.add_edge(23, 45, type=S_ETYPE_INDEX)
-    nx_graph.add_edge(45, 57, type=S_ETYPE_INDEX)
-    nx_graph.add_edge(45, 57, type=S_ETYPE_INDEX)
+    nx_graph.add_node(23, type=basis)
+    nx_graph.add_node(45, type=basis)
+    nx_graph.add_node(57, type=basis)
+    nx_graph.add_edge(23, 45)
+    nx_graph.add_edge(23, 45)
+    nx_graph.add_edge(23, 45)
+    nx_graph.add_edge(45, 57)
+    nx_graph.add_edge(45, 57)
     return ZXDiagram(nx_graph)
 
 
 def hadamard_edge_test_graph(basis: Basis) -> ZXDiagram:
-    node_type = basis_to_ntype_index(basis)
     nx_graph = nx.MultiGraph()
-    nx_graph.add_node(0, type=node_type)
-    nx_graph.add_node(1, type=node_type)
-    nx_graph.add_edge(0, 1, type=H_ETYPE_INDEX)
+    nx_graph.add_node(0, type=basis)
+    nx_graph.add_node(1, type=basis)
+    nx_graph.add_edge(0, 1)
     return ZXDiagram(nx_graph)
 
 
 def simple_hadamard_edge_test_graph(basis: Basis) -> ZXDiagram:
-    node_type = basis_to_ntype_index(basis)
     nx_graph = nx.MultiGraph()
-    nx_graph.add_node(0, type=node_type)
-    nx_graph.add_node(1, type=node_type)
-    nx_graph.add_edge(0, 1, type=S_ETYPE_INDEX)
-    nx_graph.add_edge(0, 1, type=H_ETYPE_INDEX)
+    nx_graph.add_node(0, type=basis)
+    nx_graph.add_node(1, type=basis)
+    nx_graph.add_edge(0, 1)
+    nx_graph.add_edge(0, 1)
     return ZXDiagram(nx_graph)
 
 
 def disconnected_test_graph(basis: Basis) -> ZXDiagram:
-    node_type = basis_to_ntype_index(basis)
     nx_graph = nx.MultiGraph()
-    nx_graph.add_node(0, type=node_type)
-    nx_graph.add_node(1, type=node_type)
+    nx_graph.add_node(0, type=basis)
+    nx_graph.add_node(1, type=basis)
     return ZXDiagram(nx_graph)
 
 

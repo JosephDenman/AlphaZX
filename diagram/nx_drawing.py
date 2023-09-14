@@ -3,7 +3,7 @@ from typing import Tuple, List, Dict, Optional
 
 import networkx as nx
 
-from diagram.pyzx_nx_conv import Z_NTYPE_INDEX, X_NTYPE_INDEX, S_ETYPE_INDEX, H_ETYPE_INDEX, B_NTYPE_INDEX, \
+from diagram.pyzx_nx_conv import Z_NTYPE_INDEX, X_NTYPE_INDEX, H_ETYPE_INDEX, B_NTYPE_INDEX, \
     is_boundary, H_NTYPE_INDEX, is_basis, is_simple_edge, PHASE, NTYPE, ETYPE, ROW, COLUMN
 from diagram.match import Match
 
@@ -42,15 +42,6 @@ S_ETYPE_COLOR = '#000000'
 H_ETYPE_COLOR = '#0000f5'
 MATCHED_S_ETYPE_COLOR = '#ffcc00'
 MATCHED_H_ETYPE_COLOR = '#ffcc00'
-
-
-def edge_type_to_color(etype: int) -> str:
-    if etype == S_ETYPE_INDEX:
-        return S_ETYPE_COLOR
-    elif etype == H_ETYPE_INDEX:
-        return H_ETYPE_COLOR
-    else:
-        raise Exception('Unexpected edge type ' + str(etype))
 
 
 def node_size(ndata: Dict) -> int:
@@ -94,18 +85,15 @@ EdgeList = List[Tuple[int, int]]
 # TODO: Fix to work with updated Match structure
 
 def edge_styling(nx_graph: nx.MultiGraph, match: Optional[Match] = None) -> Tuple[
-        EdgeList, EdgeList, EdgeList, EdgeList]:
+        EdgeList, EdgeList, EdgeList]:
     matched_subgraph = subgraph_from_match(nx_graph, match) if match is not None else None
     h_edge_list = []
     simple_edge_list = []
-    matched_h_edge_list = []
     matched_simple_edge_list = []
     for *edge, edge_data in nx_graph.edges(data=True):
-        ([matched_h_edge_list, matched_simple_edge_list] if matched_subgraph is not None and matched_subgraph.has_edge(
-            *edge) else [h_edge_list,
-                         simple_edge_list])[
-            is_simple_edge(edge_data[ETYPE])].append(edge)
-    return h_edge_list, simple_edge_list, matched_h_edge_list, matched_simple_edge_list
+        if matched_subgraph is not None and matched_subgraph.has_edge(*edge):
+            simple_edge_list.append(edge)
+    return h_edge_list, simple_edge_list, matched_simple_edge_list
 
 
 # TODO - Draw groups of edges between two nodes as a single edge with a number label indicating the true number of edges
@@ -114,17 +102,17 @@ def draw_nx_zx_diagram(nx_graph: nx.MultiGraph, match: Optional[Match] = None,
                        pos: Optional[Dict[int, Tuple[int, int]]] = None) -> None:
     node_labels, node_positions, node_sizes, node_colors, node_border_colors = node_styling(nx_graph, match)
     node_positions = pos if pos is not None else node_positions
-    h_edge_list, simple_edge_list, matched_h_edge_list, matched_simple_edge_list = edge_styling(nx_graph, match)
+    h_edge_list, simple_edge_list, matched_simple_edge_list = edge_styling(nx_graph, match)
     nx.draw_networkx_nodes(nx_graph, node_size=node_sizes, node_color=node_colors, pos=node_positions,
                            edgecolors=node_border_colors)
     nx.draw_networkx_edges(nx_graph, edgelist=h_edge_list, node_size=node_sizes, edge_color=H_ETYPE_COLOR,
                            pos=node_positions, style='--')
     nx.draw_networkx_edges(nx_graph, edgelist=simple_edge_list, node_size=node_sizes, edge_color=S_ETYPE_COLOR,
                            pos=node_positions, style='-')
-    nx.draw_networkx_edges(nx_graph, edgelist=matched_h_edge_list, node_size=node_sizes,
-                           edge_color=MATCHED_H_ETYPE_COLOR,
-                           width=2.0,
-                           pos=node_positions, style='--')
+    # nx.draw_networkx_edges(nx_graph, edgelist=matched_h_edge_list, node_size=node_sizes,
+    #                       edge_color=MATCHED_H_ETYPE_COLOR,
+    #                       width=2.0,
+    #                       pos=node_positions, style='--')
     nx.draw_networkx_edges(nx_graph, edgelist=matched_simple_edge_list, node_size=node_sizes,
                            edge_color=MATCHED_S_ETYPE_COLOR,
                            width=2.0,

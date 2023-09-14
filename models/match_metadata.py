@@ -1,33 +1,49 @@
-f_left_z_metadata = (['1'], [('1', 'to', '1')])
+from diagram.pyzx_nx_conv import Z_NTYPE_NAME, X_NTYPE_NAME
 
-f_left_x_metadata = (['2'], [('2', 'to', '2')])
+f_left_z_metadata = ([Z_NTYPE_NAME], [(Z_NTYPE_NAME, 'to', Z_NTYPE_NAME)])
 
-f_right_z_metadata = (['1', '2'], [('1', 'to', '1'), ('1', 'to', '2'), ('2', 'to', '1')])
+f_left_x_metadata = ([X_NTYPE_NAME], [(X_NTYPE_NAME, 'to', X_NTYPE_NAME)])
 
-f_right_x_metadata = (['1', '2'], [('1', 'to', '2'), ('2', 'to', '1'), ('2', 'to', '2')])
+f_right_z_metadata = ([Z_NTYPE_NAME, X_NTYPE_NAME],
+                      [(Z_NTYPE_NAME, 'to', Z_NTYPE_NAME), (Z_NTYPE_NAME, 'to', X_NTYPE_NAME),
+                       (X_NTYPE_NAME, 'to', Z_NTYPE_NAME)])
 
-b_left_metadata = (['1', '2'], [('1', 'to', '2'), ('2', 'to', '1')])
+f_right_x_metadata = ([Z_NTYPE_NAME, X_NTYPE_NAME],
+                      [(Z_NTYPE_NAME, 'to', X_NTYPE_NAME), (X_NTYPE_NAME, 'to', Z_NTYPE_NAME),
+                       (X_NTYPE_NAME, 'to', X_NTYPE_NAME)])
 
-b_right_metadata = (['1', '2'], [('1', 'to', '2'), ('2', 'to', '1')])
+b_left_metadata = (
+    [Z_NTYPE_NAME, X_NTYPE_NAME], [(Z_NTYPE_NAME, 'to', X_NTYPE_NAME), (X_NTYPE_NAME, 'to', Z_NTYPE_NAME)])
 
-y_right_z_metadata = (['1', '2'], [('1', 'to', '2'), ('2', 'to', '1')])
+b_right_metadata = (
+    [Z_NTYPE_NAME, X_NTYPE_NAME], [(Z_NTYPE_NAME, 'to', X_NTYPE_NAME), (X_NTYPE_NAME, 'to', Z_NTYPE_NAME)])
 
-y_right_x_metadata = (['1', '2'], [('1', 'to', '2'), ('2', 'to', '1')])
+y_right_z_metadata = (
+    [Z_NTYPE_NAME, X_NTYPE_NAME], [(Z_NTYPE_NAME, 'to', X_NTYPE_NAME), (X_NTYPE_NAME, 'to', Z_NTYPE_NAME)])
 
-y_left_z_metadata = (['1', '2'], [('1', 'to', '2'), ('2', 'to', '1')])
+y_right_x_metadata = (
+    [Z_NTYPE_NAME, X_NTYPE_NAME], [(Z_NTYPE_NAME, 'to', X_NTYPE_NAME), (X_NTYPE_NAME, 'to', Z_NTYPE_NAME)])
 
-y_left_x_metadata = (['1', '2'], [('1', 'to', '2'), ('2', 'to', '1')])
+y_left_z_metadata = (
+    [Z_NTYPE_NAME, X_NTYPE_NAME], [(Z_NTYPE_NAME, 'to', X_NTYPE_NAME), (X_NTYPE_NAME, 'to', Z_NTYPE_NAME)])
+
+y_left_x_metadata = (
+    [Z_NTYPE_NAME, X_NTYPE_NAME], [(Z_NTYPE_NAME, 'to', X_NTYPE_NAME), (X_NTYPE_NAME, 'to', Z_NTYPE_NAME)])
 
 match_metadata_dict = {
-    'f_left_z': (['1'], [('1', 'to', '1')]),
-    'f_left_x': (['2'], [('2', 'to', '2')]),
-    'f_right_z': (['1', '2'], [('1', 'to', '1'), ('1', 'to', '2'), ('2', 'to', '1')]),
-    'f_right_x': (['1', '2'], [('1', 'to', '2'), ('2', 'to', '1'), ('2', 'to', '2')]),
-    'b_left': (['1', '2'], [('1', 'to', '2'), ('2', 'to', '1')]),
-    'b_right': (['1', '2'], [('1', 'to', '2'), ('2', 'to', '1')]),
-    'y_right_z': (['1', '2'], [('1', 'to', '2'), ('2', 'to', '1')]),
-    'y_right_x': (['1', '2'], [('1', 'to', '2'), ('2', 'to', '1')]),
-    'y_left_z': (['1', '2'], [('1', 'to', '2'), ('2', 'to', '1')]),
-    'y_left_x': (['1', '2'], [('1', 'to', '2'), ('2', 'to', '1')])
+    'f_left_z': ([Z_NTYPE_NAME], [(Z_NTYPE_NAME, 'to', Z_NTYPE_NAME)]),
+    'f_left_x': ([X_NTYPE_NAME], [(X_NTYPE_NAME, 'to', X_NTYPE_NAME)]),
+    'f_right_z': ([Z_NTYPE_NAME, X_NTYPE_NAME], [(Z_NTYPE_NAME, 'to', Z_NTYPE_NAME), (Z_NTYPE_NAME, 'to', X_NTYPE_NAME),
+                                                 (X_NTYPE_NAME, 'to', Z_NTYPE_NAME)]),
+    'f_right_x': ([Z_NTYPE_NAME, X_NTYPE_NAME], [(Z_NTYPE_NAME, 'to', X_NTYPE_NAME), (X_NTYPE_NAME, 'to', Z_NTYPE_NAME),
+                                                 (X_NTYPE_NAME, 'to', X_NTYPE_NAME)]),
+    'b_left': ([Z_NTYPE_NAME, X_NTYPE_NAME], [(Z_NTYPE_NAME, 'to', X_NTYPE_NAME), (X_NTYPE_NAME, 'to', Z_NTYPE_NAME)]),
+    'b_right': ([Z_NTYPE_NAME, X_NTYPE_NAME], [(Z_NTYPE_NAME, 'to', X_NTYPE_NAME), (X_NTYPE_NAME, 'to', Z_NTYPE_NAME)]),
+    'y_right_z': (
+    [Z_NTYPE_NAME, X_NTYPE_NAME], [(Z_NTYPE_NAME, 'to', X_NTYPE_NAME), (X_NTYPE_NAME, 'to', Z_NTYPE_NAME)]),
+    'y_right_x': (
+    [Z_NTYPE_NAME, X_NTYPE_NAME], [(Z_NTYPE_NAME, 'to', X_NTYPE_NAME), (X_NTYPE_NAME, 'to', Z_NTYPE_NAME)]),
+    'y_left_z': (
+    [Z_NTYPE_NAME, X_NTYPE_NAME], [(Z_NTYPE_NAME, 'to', X_NTYPE_NAME), (X_NTYPE_NAME, 'to', Z_NTYPE_NAME)]),
+    'y_left_x': ([Z_NTYPE_NAME, X_NTYPE_NAME], [(Z_NTYPE_NAME, 'to', X_NTYPE_NAME), (X_NTYPE_NAME, 'to', Z_NTYPE_NAME)])
 }
-
