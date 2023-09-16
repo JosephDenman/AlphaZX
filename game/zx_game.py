@@ -65,11 +65,11 @@ class ZXGame:
         reward = self.previous_value - current_value + (self.simplified_reward if done else 0)
         self.previous_value = current_value
         # self.zx_match_diagram = ZXMatchDiagram(self.zx_diagram)
-        return self.zx_diagram.to_hetero_data(self.one_hot_types,
-                                              self.one_hot_phases), reward, done
+        return self.zx_diagram.to_pyg_hetero_data(self.one_hot_types,
+                                                  self.one_hot_phases), reward, done
 
     def reset(self) -> HeteroData:
         self.zx_diagram = ZXDiagram(nx_clifford_graph(self.num_qubits, self.depth, t_gates=self.t_gates))
         # self.zx_match_diagram = ZXMatchDiagram(self.zx_diagram)
         self.previous_value = diagram_value(self.zx_diagram)
-        return self.zx_diagram.to_hetero_data(self.one_hot_types, self.one_hot_phases)
+        return self.zx_diagram.to_pyg_hetero_data(self.one_hot_types, self.one_hot_phases)

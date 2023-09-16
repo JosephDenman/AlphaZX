@@ -317,7 +317,10 @@ class ZXDiagram(nx.MultiGraph):
         yield from self.y_left_matches()
         yield from self.y_right_matches()
 
-    def to_hetero_data(self, one_hot_types: bool = True, one_hot_phases=True) -> pyg.data.HeteroData:
+    def to_pyg_data(self, one_hot_types=True, one_hot_phases=True) -> pyg.data.Data:
+        return pyg.data.from_network_x()
+
+    def to_pyg_hetero_data(self, one_hot_types=True, one_hot_phases=True) -> pyg.data.HeteroData:
 
         current_z = 0
         current_x = 0
@@ -346,11 +349,11 @@ class ZXDiagram(nx.MultiGraph):
         for match in self.compute_matches():
             hdata['matches'][match.name].append({
                 Z_NTYPE_NAME: torch.tensor([node_to_tensor_index[node] for node in match if self.is_z_basis(node)],
-                                           dtype=torch.int),
+                                           dtype=torch.long),
                 X_NTYPE_NAME: torch.tensor([node_to_tensor_index[node] for node in match if self.is_x_basis(node)],
-                                           dtype=torch.int),
+                                           dtype=torch.long),
                 B_NTYPE_NAME: torch.tensor([node_to_tensor_index[node] for node in match if self.is_boundary(node)],
-                                           dtype=torch.int)
+                                           dtype=torch.long)
             })
 
         return hdata

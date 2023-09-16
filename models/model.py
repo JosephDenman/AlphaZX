@@ -79,7 +79,7 @@ class HGTPolicy(torch.nn.Module):
         self.match_hgt_params_dict = match_hgt_params_dict
         self.diagram_module = HGT(self.diagram_metadata, *self.diagram_hgt_params)
         self.match_module_dict = torch.nn.ModuleDict({
-            key: HGT(match_meta_data, *self.match_hgt_params_dict[key]) for key, match_meta_data in
+            key: HGT(diagram_metadata, *self.match_hgt_params_dict[key]) for key, match_meta_data in
             self.match_metadata_dict.items()
         })
 
@@ -96,7 +96,6 @@ class HGTPolicy(torch.nn.Module):
             for match in matches:
                 print('match = ', match)
                 sub_hdata = hdata.subgraph(match)
-                del sub_hdata['b_node']
                 del sub_hdata['matches']
                 print('sub_new_hdata = ', sub_hdata)
                 match_x_dicts[match_type].append(self.match_module_dict[match_type](sub_hdata))
