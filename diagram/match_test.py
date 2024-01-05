@@ -527,6 +527,13 @@ class BRuleRightTest(unittest.TestCase):
     def test_two_identity_match(self):
         self.assertListEqual(list(two_identity_test_graph().b_right_matches()), [BRightMatch(0, 1)])
 
+    def test_four_b_right_matches_in_b_left(self):
+        diagram = b_left_pattern()
+        b2, b3, b4, b5 = diagram.add_b_nodes(4)
+        diagram.add_s_edges_from([(b2, 0), (b3, 1), (2, b4), (3, b5)])
+        self.assertListEqual(list(diagram.b_left_matches()), [BLeftMatch(0, 2, 1, 3)])
+        self.assertListEqual(list(diagram.b_right_matches()), [BRightMatch(2, 1), BRightMatch(3, 0), BRightMatch(2, 0), BRightMatch(3, 1)])
+
 
 def parallel_edge_no_match_test_graph(basis: Basis, first: bool = False, second: bool = False,
                                       third=False) -> ZXDiagram:

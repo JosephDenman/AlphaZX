@@ -1,12 +1,14 @@
 import random
 
+import networkx as nx
 import numpy as np
 
+from diagram.nx_drawing import draw_nx_zx_diagram
 from diagram.pyzx_graph_generator import nx_clifford_graph
 from diagram.pyzx_nx_conv import nx_to_pyg_hetero
 from diagram.zx_diagram import ZXDiagram
-from diagram.zx_match_diagram import ZXMatchDiagram
-from diagram.match import FRightMatch
+from diagram.zx_match_diagram import ZXMatchDiagram, intersection_zx_match_diagram, sub_match_zx_match_diagram
+from diagram.match import FRightMatch, Match
 from rewriting.util import rewrite
 
 
@@ -20,9 +22,29 @@ def gen_f_right_parameters(f_right_match: FRightMatch, diagram: ZXDiagram, d: in
     return phase, new_edges, transfer_edges
 
 
-denominator = 2
-g = ZXDiagram(nx_clifford_graph(10, 10))
-i = 0
+g = nx_clifford_graph(30, 30)
+d = ZXDiagram(g)
+print('d_nodes = ', d.nodes(data=True))
+print('d_edges = ', d.edges(data=False))
+print('md_nodes = ', d.nodes(data=False))
+print('md_edges = ', d.edges(data=False))
+smd = sub_match_zx_match_diagram(d)
+
+
+def stringify(v: Match | list | str) -> str:
+    if isinstance(v, Match):
+        return repr(v)
+    elif isinstance(v, list):
+        return str(v)
+    elif isinstance(v, str):
+        return v
+    else:
+        raise Exception(f'Unsupported value {type(v)}')
+
+
+nx.write_gml(d, './diagram.gml', stringify)
+nx.write_gml(smd, './submatch_match_diagram.gml', stringify)
+nx.write_gml(imd, './intersection_match_diagram.gml', stringify)
 
 """
 Next steps:
@@ -33,20 +55,3 @@ Next steps:
 4. Implement models. 
 
 """
-
-while True:
-    m = np.random.choice(list(g.compute_matches()))
-    print(
-        '-------------------------------------------------------------------------------------------------------------')
-    print('i = ', i)
-    print('m = ', m)
-    print('g = ', g)
-    params = gen_f_right_parameters(m, g, denominator) if isinstance(m, FRightMatch) else None
-    print('params = ', params)
-    rewrite(m, g, params)
-    m_diagram = ZXMatchDiagram(g)
-    print('match_diagram = ', m_diagram)
-    print('match_diagram.nodes = ', m_diagram.nodes(data=True))
-    print('match_diagram.edges = ', m_diagram.edges(data=True))
-    print('m_diagram_hetero = ', nx_to_pyg_hetero(g, 'type'))
-    i = i + 1

@@ -5,7 +5,7 @@ import pyzx
 import torch_geometric as pyg
 
 from diagram.pyzx_nx_conv import nx_to_pyg_hetero, ETYPE, NTYPE, PHASE, Z_NTYPE_NAME, \
-    nx_remove_position_attributes, X_NTYPE_INDEX, X_NTYPE_NAME, Z_NTYPE_INDEX, B_NTYPE_INDEX, B_NTYPE_NAME
+    nx_remove_position_attributes, X_NTYPE_INDEX, X_NTYPE_NAME, Z_NTYPE_INDEX, B_NTYPE_INDEX, B_NTYPE_NAME, COLUMN
 
 
 def graph_to_nx_graph(graph: pyzx.Graph) -> nx.MultiGraph:
@@ -19,15 +19,15 @@ def graph_to_nx_graph(graph: pyzx.Graph) -> nx.MultiGraph:
                             force_multigraph=True)
 
 
-def nx_cnot_had_phase_graph(num_qubits: int, depth: int, p_had: float = 0.2, p_t: float = 0.2,
-                            clifford=False) -> nx.MultiGraph:
+def nx_c_not_had_phase_graph(num_qubits: int, depth: int, p_had: float = 0.2, p_t: float = 0.2,
+                             clifford=False) -> nx.MultiGraph:
     nx_graph = graph_to_nx_graph(
         pyzx.generate.CNOT_HAD_PHASE_circuit(num_qubits, depth, p_had, p_t, clifford).to_graph())
     post_process(nx_graph)
     return nx_graph
 
 
-def node_phases_to_ints(nx_graph: nx.MultiGraph) -> None:
+def node_phases_to_floats(nx_graph: nx.MultiGraph) -> None:
     for node in nx_graph.nodes:
         phase_string = nx_graph.nodes[node][PHASE]
         phase_float = float(Fraction(phase_string))
@@ -67,10 +67,16 @@ def remove_edge_types(nx_graph: nx.MultiGraph) -> None:
 def post_process(nx_graph: nx.MultiGraph) -> None:
     nx_graph.to_undirected()
     node_types_to_strings(nx_graph)
-    node_phases_to_ints(nx_graph)
+    node_phases_to_floats(nx_graph)
     remove_boundary_zero_z_spiders(nx_graph)
-    nx_remove_position_attributes(nx_graph)
+    # nx_remove_position_attributes(nx_graph)
     remove_edge_types(nx_graph)
+
+
+"""def calculate_input_nodes(nx_graph: nx.MultiGraph) -> None:
+    input_node_x_pos = min([ndata[COLUMN] for _, ndata in nx_graph.nodes(data=True)])
+    output_node_x_pos = max([ndata[COLUMN] for _, ndata in nx_graph.nodes(data=True)])
+    for node, ndata in nx_graph.nodes(data=True):"""
 
 
 def nx_clifford_graph(num_qubits: int, depth: int,
