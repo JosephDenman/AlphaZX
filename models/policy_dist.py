@@ -42,11 +42,16 @@ def recover_original_tensor_batch(padded_tensors: torch.Tensor) -> list[torch.Te
     # This would be the first all-zero row and column for each tensor
 
     # Step 1: Find the size of the original tensor for each in the batch
-    N_batch = [next((i for i, row in enumerate(tensor) if torch.all(row == 0)), tensor.shape[0]) for tensor in
+    n_batch = [next((i for i, row in enumerate(tensor) if torch.all(row == 0)), tensor.shape[0]) for tensor in
                padded_tensors]
 
     # Step 2: Recover each tensor based on its original size
-    original_tensors = [tensor[:N, :N] for tensor, N in zip(padded_tensors, N_batch)]
+    tmp = []
+    for tensor, n in zip(padded_tensors, n_batch):
+        print('n = ', n)
+        print('t = ', tensor)
+        print(f't[:{n},:{n}+1 = ', tensor[:n, :n+1])
+    original_tensors = [tensor[:n, :n+1] for tensor, n in zip(padded_tensors, n_batch)]
     return original_tensors
 
 
@@ -88,7 +93,7 @@ class FRZDist:
         # print('n_edge_samples = ', n_edge_samples)
         o_edge_logits = recover_original_tensor(torch.squeeze(self.frz_oedge_logits[node_samples]))
         o_edge_mixture_logits, o_edge_component_logits = torch.squeeze(o_edge_logits[:, :1]), o_edge_logits[:, 1:]
-        # print('o_edge_logits = ', o_edge_logits)
+        print('o_edge_logits = ', o_edge_logits)
         # print('o_edge_mixture_logits = ', o_edge_mixture_logits)
         # print('o_edge_component_logits = ', o_edge_component_logits)
         o_edge_samples = BernoulliMixture(mixture_logits=o_edge_mixture_logits, component_logits=o_edge_component_logits).sample(size)
@@ -105,10 +110,10 @@ class FRZDist:
         pass
 
 
-nodes = 3
-phase_buckets = 8
+nodes = 5
+phase_buckets = 2
 n_edge_buckets = 4
-o_edge_buckets = 5
+o_edge_buckets = 3
 
 node_logits = torch.rand(torch.Size([nodes]))
 # print('node_logits = ', node_logits)
@@ -122,12 +127,14 @@ n_edge_logits = torch.rand(torch.Size([nodes, n_edge_buckets]))
 o_edge_logits_list = []
 for _ in range(nodes):
     o_edge_count = torch.randint(0, o_edge_buckets + 1, torch.Size([1])).item()
+    print('o_edge_count = ', o_edge_count)
     o_edge_padding = o_edge_buckets - o_edge_count
-    o_edge_logits_list.append(F.pad(torch.randint(0, 100, torch.Size([o_edge_count, o_edge_count]), dtype=torch.float),
-                                    (0, o_edge_padding, 0, o_edge_padding)))
+    print('o_edge_padding = ', o_edge_padding)
+    o_edge_logits_list.append(F.pad(torch.rand(torch.Size([o_edge_count, o_edge_count + 1])),
+                                    (0, o_edge_padding, 0, o_edge_padding + 1)))
 
 o_edge_logits = torch.stack(o_edge_logits_list)
-# print('o_edge_logits = ', o_edge_logits)
+print('o_edge_logits = ', o_edge_logits)
 
 frz_dist = FRZDist(
     frz_node_logits=node_logits,
@@ -135,4 +142,4 @@ frz_dist = FRZDist(
     frz_nedge_logits=n_edge_logits,
     frz_oedge_logits=o_edge_logits)
 
-print('sample = ', frz_dist.sample())
+print('sample = ', frz_dist.sample(2))
