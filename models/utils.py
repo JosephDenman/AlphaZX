@@ -1,115 +1,62 @@
 import torch
-import torch.nn.functional as F
-
-from models.alpha_zx_distribution import gather_phase_probs
 
 
-def rand_probs(size: torch.Size) -> torch.Tensor:
+def rand_distribution_with_zeros(size: torch.Size, zero_prob: float = 0.3) -> torch.Tensor:
     """
-    Generate a tensor with random values, normalized to sum to 1 along the last dimension. This function supports
-    generating 1D, 2D, and 3D tensors. For a 1D tensor, each element sums to 1. For a 2D tensor, each row sums to 1.
-    For a 3D tensor, each row in every 2D tensor sums to 1.
+    Generate a tensor of specified size where the last dimension represents a valid probability distribution,
+    potentially including zero entries. This function supports generating 1D, 2D, 3D, and 4D tensors.
 
-    :param size: The size of the tensor to generate. This can be a 1D, 2D, or 3D shape, specified as a `torch.Size`.
-                 For a 1D tensor, `size` should have one dimension. For a 2D tensor, `size` should have two dimensions.
-                 For a 3D tensor, `size` should have three dimensions.
-    :returns: A `torch.Tensor` of the specified `size`, where values are normalized to sum to 1 along the last dimension.
-              For a 1D tensor, the sum of the tensor will be 1. For a 2D tensor, the sum of each row will be 1.
-              For a 3D tensor, the sum of each row in every 2D tensor within it will be 1.
-    Raises:
-    - ValueError: If `size` is not for a 1D, 2D, or 3D tensor, indicating that the provided `size` argument does not
-                  conform to the expected dimensions.
+    :param size: A torch.Size object specifying the dimensions of the tensor.
+    :param zero_prob: The probability of an entry being set to zero, controlling the sparsity of the tensor.
+    :returns: A tensor of the specified size where each row in the last dimension sums to 1.
     """
-    # Generate random values based on the provided size
-    random_values = torch.rand(size)
-    # Normalize the values to sum to 1 along the last dimension
-    if len(size) == 1:
-        # For a 1D tensor, simply divide by the sum
-        distribution = random_values / random_values.sum()
-    elif len(size) == 2:
-        # For a 2D tensor, divide each row by its sum to get row-wise distributions
-        distribution = random_values / random_values.sum(dim=1, keepdim=True)
-    elif len(size) == 3:
-        # For a 3D tensor, divide each row by its sum within each 2D tensor to get row-wise distributions
-        distribution = random_values / random_values.sum(dim=2, keepdim=True)
-    else:
-        raise ValueError("Size must be for a 1D, 2D, or 3D tensor")
+    # Validate inputs
+    if not isinstance(size, torch.Size):
+        raise ValueError("size must be a torch.Size object.")
+    if not 1 <= len(size) <= 4:
+        raise ValueError("This function supports 1D, 2D, 3D, and 4D tensors only.")
+    if not (0 <= zero_prob <= 1):
+        raise ValueError("zero_prob must be between 0 and 1.")
+    if len(size) == 1 and size[0] == 1:
+        return torch.tensor([1.])
+    # Generate initial random values
+    distribution = torch.rand(size)
+    # Apply zero probability
+    zero_mask = torch.rand(size) < zero_prob
+    distribution[zero_mask] = 0
+    # Normalize the last dimension to sum to 1
+    sum_last_dim = distribution.sum(dim=-1, keepdim=True)
+    # Avoid division by zero by setting zero rows' sums to 1 (since dividing by 1 has no effect)
+    sum_last_dim[sum_last_dim == 0] = 1
+    distribution /= sum_last_dim
     return distribution
 
 
-def rand_probs_with_zeros(size: torch.Size, zero_frac=0.3) -> torch.Tensor:
+def rand_distribution(size: torch.Size) -> torch.Tensor:
     """
-    Generate a tensor with random values normalized to sum to 1 along the last dimension,
-    with a specified fraction of entries set to zero. Supports generating 1D, 2D, and 3D tensors.
+    Generate a tensor of specified size where the last dimension represents a valid probability distribution and has no
+    zero entries. This function supports generating 1D, 2D, 3D, and 4D tensors.
 
-    :param size: The size of the tensor to generate. Can be a 1D, 2D, or 3D shape, specified as a `torch.Size`.
-    :param zero_frac: The fraction of entries to set to zero, specified as a float between 0 and 1.
-    :returns: A `torch.Tensor` of the specified `size`, normalized along the last dimension,
-              including some zero entries according to `zero_frac`.
+    :param size: A torch.Size object specifying the dimensions of the tensor.
+    :returns: A tensor of the specified size where each row in the last dimension sums to 1.
     """
-    if len(size) not in [1, 2, 3]:
-        raise ValueError("Size must be for a 1D, 2D, or 3D tensor")
-    # Generate random values
-    random_values = torch.rand(size)
-    # Apply zeros to random positions
-    flat_random_values = random_values.view(-1)
-    num_zeros = int(flat_random_values.numel() * zero_frac)
-    if num_zeros > 0:
-        zero_indices = torch.randperm(flat_random_values.numel())[:num_zeros]
-        flat_random_values[zero_indices] = 0
-    random_values = flat_random_values.view(size)
-    # Normalize the tensor
-    if len(size) == 1:
-        distribution = random_values / random_values.sum()
-    else:
-        # Normalize 2D or 3D tensor row-wise
-        dim = -2 if len(size) == 3 else 1
-        sums = random_values.sum(dim=dim, keepdim=True)
-        # Avoid division by zero by adding a small epsilon where sums are zero
-        distribution = random_values / torch.where(sums != 0, sums, torch.ones_like(sums))
-    # Ensure at least one non-zero entry per row for 2D and 3D tensors
-    if len(size) in [2, 3]:
-        for i in range(size[0] if len(size) == 3 else 1):  # Iterate through batches if 3D
-            for j in range(size[1] if len(size) == 3 else size[0]):  # Iterate through rows
-                if torch.all(distribution[i][j] == 0):
-                    # Assign a small value to a random position in the row to avoid all zeros
-                    rand_pos = torch.randint(0, size[-1], (1,))
-                    distribution[i][j][rand_pos] = 1e-6
-        # Re-normalize after ensuring no all-zero rows
-        if len(size) == 3:
-            distribution = distribution / distribution.sum(dim=2, keepdim=True)
-        else:
-            distribution = distribution / distribution.sum(dim=1, keepdim=True)
-    return distribution
+    return rand_distribution_with_zeros(size, 0.)
 
 
 def rand_mixture_probs(batch_size: int, num_action_types: int) -> torch.Tensor:
-    return rand_probs(torch.Size([batch_size, num_action_types]))
+    return rand_distribution(torch.Size([batch_size, num_action_types]))
 
 
 def rand_node_probs(batch_size: int, num_nodes: int) -> torch.Tensor:
-    return rand_probs(torch.Size([batch_size, num_nodes]))
+    return rand_distribution(torch.Size([batch_size, num_nodes]))
 
 
 def rand_phase_probs(batch_size: int, num_nodes: int, num_phase_buckets: int) -> torch.Tensor:
-    return rand_probs(torch.Size([batch_size, num_nodes, num_phase_buckets]))
+    return rand_distribution(torch.Size([batch_size, num_nodes, num_phase_buckets]))
 
 
 def rand_new_edge_probs(batch_size: int, num_nodes: int, num_new_edge_buckets: int) -> torch.Tensor:
-    return rand_probs(torch.Size([batch_size, num_nodes, num_new_edge_buckets]))
-
-
-def rand_o_edge_probs(nodes: int, o_edge_buckets: int) -> torch.Tensor:
-    o_edge_probs = []
-    for _ in range(nodes):
-        o_edge_count = torch.randint(0, o_edge_buckets + 1, (1,)).item()
-        selection_probs = rand_probs(torch.Size([o_edge_count, o_edge_count]))
-        mixture_probs = rand_probs(torch.Size([o_edge_count]))
-        all_probs = prepend_column(selection_probs, mixture_probs)
-        o_edge_padding = o_edge_buckets - o_edge_count
-        padded_probs = F.pad(all_probs, (0, o_edge_padding, 0, o_edge_padding + 1))
-        o_edge_probs.append(padded_probs)
-    return torch.stack(o_edge_probs)
+    return rand_distribution(torch.Size([batch_size, num_nodes, num_new_edge_buckets]))
 
 
 def prepend_column(tensor: torch.Tensor, column: torch.Tensor) -> torch.Tensor:
@@ -142,6 +89,98 @@ def prepend_column(tensor: torch.Tensor, column: torch.Tensor) -> torch.Tensor:
     # Concatenate the column tensor and the original tensor along dimension 1 (columns)
     result = torch.cat((column, tensor), dim=1)
     return result
+
+
+def rand_single_node_transfer_edge_probs(incident_edges: int, zero_prob: float = 0.3) -> torch.Tensor:
+    """
+    Generate a 2D tensor of shape (incident_edges, incident_edges + 1) where:
+    - The first column is a normalized probability distribution with potentially zero entries.
+    - For every row, the entries after the first form a normalized probability distribution, also with potentially zero entries.
+
+    :param incident_edges: Number of incident edges, determining the tensor's shape.
+    :param zero_prob: Probability of an entry being set to zero, controlling the sparsity of the tensor.
+    :returns: A 2D tensor with the specified properties.
+    """
+    return prepend_column(rand_distribution_with_zeros(torch.Size([incident_edges, incident_edges]), zero_prob),
+                          rand_distribution_with_zeros(torch.Size([incident_edges]), zero_prob))
+
+
+def generate_distribution_adjusted(size: torch.Size, zero_prob: float = 0.5) -> torch.Tensor:
+    """
+    Adjusted function to generate distributions ensuring the first column is a valid distribution,
+    and for 2D tensors, ensuring the first two entries of each row can't be both zero.
+    """
+    distribution = torch.rand(size)
+    zero_mask = torch.rand(size) < zero_prob
+    distribution[zero_mask] = 0
+
+    # Ensure the first entry in each distribution isn't zero (for at least one incident edge)
+    if len(size) == 2:
+        distribution[:, 0] = torch.where(distribution[:, 0] == 0, torch.rand(size[0]), distribution[:, 0])
+
+    # Normalize
+    sum_last_dim = distribution.sum(dim=-1, keepdim=True)
+    sum_last_dim[sum_last_dim == 0] = 1  # Avoid division by zero
+    distribution /= sum_last_dim
+    return distribution
+
+
+def pad_tensor_to_size(input_tensor: torch.Tensor, new_size: int) -> torch.Tensor:
+    """
+    Pads a given tensor of shape (x, x + 1) with zeros to be of shape (y, y + 1).
+
+    :param input_tensor: The input tensor to pad, assumed to have shape (x, x + 1).
+    :param new_size: The desired size 'y' for the new tensor. Must be >= x.
+    :return: A new tensor of shape (y, y + 1) with the original tensor's values and additional zeros.
+    """
+    # Extract the current size 'x' from the input tensor
+    x = input_tensor.shape[0]
+    # Validate the new size
+    if new_size < x:
+        raise ValueError("new_size must be greater than or equal to the input tensor's size")
+    # Create a new zero tensor of the desired size (y, y + 1)
+    padded_tensor = torch.zeros(new_size, new_size + 1, dtype=input_tensor.dtype)
+    # Copy the values from the input tensor to the top-left corner of the new tensor
+    padded_tensor[:x, :x + 1] = input_tensor
+    return padded_tensor
+
+
+def rand_transfer_edge_probs(batch_size: int, max_num_nodes:int, max_incident_edges: int, zero_prob: float = 0.3) -> torch.Tensor:
+    # Initialize the output tensor with zeros
+    output_tensor = torch.zeros((batch_size, max_num_nodes, max_incident_edges, max_incident_edges + 1))
+    for b in range(batch_size):
+        num_nodes = torch.randint(1, max_num_nodes + 1, (1,)).item()  # Randomly select the number of nodes for this batch
+        print('num_nodes = ', num_nodes)
+        for n in range(num_nodes):
+            num_incident_edges = torch.randint(1, max_incident_edges + 1, (1,)).item()  # Randomly select the number of incident edges for this node
+            print('num_incident_edges = ', num_incident_edges)
+            mixture_probs = rand_distribution_with_zeros(torch.Size([num_incident_edges]), zero_prob)
+            print('mixture_probs = ', mixture_probs)
+            remaining_probs = torch.rand(num_incident_edges, num_incident_edges)
+            combined_probs = prepend_column(remaining_probs, mixture_probs)
+            padded_probs = pad_tensor_to_size(combined_probs, max_incident_edges)
+            print('padded_probs = ', padded_probs)
+            if (padded_probs == 0.).all():
+                padded_probs[0, 0] = 1.
+            print('padded_probs = ', padded_probs)
+            output_tensor[b, n, :, :] = padded_probs
+    return output_tensor
+
+
+# Example usage
+batch_size = 2
+max_num_nodes = 4
+max_incident_edges = 3
+transfer_edge_probs = rand_transfer_edge_probs(batch_size, max_num_nodes, max_incident_edges)
+print('transfer_edge_probs = ', transfer_edge_probs)
+print("Corrected Transfer edge probabilities tensor shape:", transfer_edge_probs.shape)
+
+# Validate the distributions
+for b in range(batch_size):
+    for n in range(max_num_nodes):
+        print(f"Batch {b}, Node {n}, Sum of first column:", transfer_edge_probs[b, n, :, 0].sum())
+        for e in range(max_incident_edges):
+            print(f"  Edge {e}, Sum of row:", transfer_edge_probs[b, n, e, :].sum())
 
 
 def recover_original_tensor_batch(padded_tensors: torch.Tensor) -> list[torch.Tensor]:
@@ -202,62 +241,71 @@ def replace_zero_rows_with_uniform(t: torch.Tensor) -> torch.Tensor:
     return t
 
 
-import torch
-
-
+# TODO: Have this function generate realistic samples, i.e., samples where batches have different node counts and are
+#       padded to a uniform dimension.
 def rand_sampled_actions_batch(batch_size: int, num_actions: int, action_length: int, num_action_types: int,
-                               num_nodes: int, num_phase_buckets: int,
+                               num_nodes: int, num_phase_buckets: int, num_new_edge_buckets: int,
                                non_parametric_action_types: list[int]) -> torch.Tensor:
+    """
+    Generate a batch of random tensors with the first entry in each row representing the type of the action,
+    the second entry randomly sampled from a predefined set of consecutive integers [0, num_nodes - 1] without repetition,
+    and the third entry randomly selected from a set of predefined consecutive integers [0, num_phase_buckets - 1].
+    For non-parametric action types, all entries in the row after the second are zeroed out.
+
+    :param batch_size: Number of tensors in the batch.
+    :param num_actions: Number of actions in each batch, assumes num_actions <= num_nodes.
+    :param action_length: Length of each row tensor, must be at least 4.
+    :param num_action_types: Number of action types to choose from.
+    :param num_nodes: Number of nodes, used to generate second entries.
+    :param num_phase_buckets: Number of possible phases, used to generate third entries.
+    :param num_new_edge_buckets: Numer of possible new edges, used to generate fourth entries.
+    :param non_parametric_action_types: Action types that trigger zeroing out all subsequent entries after the second entry.
+    :returns: A batch of tensors with dimensions (batch_size, num_actions, action_length). Rows in each tensor are sorted
+              according to the second entry (node index).
+    """
     if action_length < 4:
         raise ValueError("Action length must be at least 4.")
-
     # Generate random action types for the first column
     first_types = torch.randint(low=0, high=num_action_types, size=(batch_size, num_actions, 1), dtype=torch.float)
-
-    # Generate random second entries without repetition
+    # Generate random second entries without repetition and then sort them
     second_types = torch.zeros(batch_size, num_actions, 1, dtype=torch.float)
     for i in range(batch_size):
-        second_types[i] = torch.randperm(num_nodes)[:num_actions].unsqueeze(-1).float()
-
+        perm = torch.randperm(num_nodes)[:num_actions]
+        sorted_perm, _ = torch.sort(perm)
+        second_types[i] = sorted_perm.unsqueeze(-1).float()
     # Generate random third entries
     third_types = torch.randint(low=0, high=num_phase_buckets, size=(batch_size, num_actions, 1), dtype=torch.float)
-
+    fourth_types = torch.randint(low=0, high=num_new_edge_buckets, size=(batch_size, num_actions, 1), dtype=torch.float)
     # Generate random values for the rest of each row
-    values = torch.rand(batch_size, num_actions, action_length - 3)
-
+    values = torch.rand(batch_size, num_actions, action_length - 4)
     # Concatenate the components to form the complete tensor
-    batch = torch.cat((first_types, second_types, third_types, values), dim=2)
-
+    batch = torch.cat((first_types, second_types, third_types, fourth_types, values), dim=2)
     # Apply non-parametric action rule
     for np_type in non_parametric_action_types:
         mask = (batch[:, :, 0] == np_type).unsqueeze(-1)
         zeroed_values = torch.zeros(batch_size, num_actions, action_length - 2, dtype=torch.float)
         batch = torch.where(mask, torch.cat((batch[:, :, :2], zeroed_values), dim=2), batch)
-
     return batch
 
-#
+
 # Example parameters
-batch_size = 3
-num_actions = 3
-action_length = 6
-num_action_types = 4
-num_nodes = 5
-num_phase_buckets = 3
-non_parametric_action_types = [1, 2]
+# batch_size = 3
+# num_actions = 7
+# action_length = 6
+# num_action_types = 2
+# num_nodes = 8
+# num_phase_buckets = 4
+# num_new_edges_buckets = 10
+# non_parametric_action_types = [1]
 #
-# # Generate the batch
-sampled_actions_batch = rand_sampled_actions_batch(batch_size, num_actions, action_length, num_action_types,
-                                   num_nodes, num_phase_buckets, non_parametric_action_types)
-# print(sampled_actions_batch)
+# sampled_actions_batch = rand_sampled_actions_batch(batch_size, num_actions, action_length, num_action_types,
+#                                                    num_nodes, num_phase_buckets, num_new_edges_buckets,
+#                                                    non_parametric_action_types)
+#
+# print('sampled_actions = ', sampled_actions_batch)
 #
 # phase_probs_batch = rand_phase_probs(batch_size, num_nodes, num_phase_buckets)
-# print(phase_probs_batch)
-
-print('sampled_actions = ', sampled_actions_batch)
-
-phase_probs_batch = rand_phase_probs(batch_size, num_nodes, num_phase_buckets)
-
-print('phase_probs_batch = ', phase_probs_batch)
-
-print(gather_phase_probs(phase_probs_batch, sampled_actions_batch))
+#
+# print('phase_probs_batch = ', phase_probs_batch)
+#
+# print(gather_phase_probs(phase_probs_batch, sampled_actions_batch))
