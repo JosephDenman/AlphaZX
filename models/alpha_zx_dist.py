@@ -1,6 +1,8 @@
 import torch
 from torch.distributions.categorical import Categorical
 
+from models.bernoulli_mixture import MultivariateBernoulliMixture
+
 
 def gather_probs(probs_batch: torch.Tensor, sampled_actions_batch: torch.Tensor, column: int) -> torch.Tensor:
     """
@@ -52,7 +54,7 @@ class AlphaZXDistribution:
         K = number of samples
         L = length of the longest action (either in the batch or sample set)
         T = number of possible rewrites (frz, flz, frx, flx, etc.)
-        N = max number of nodes (either in batch of sample set)
+        N = max number of nodes (either in batch or sample set)
         P = number of phase buckets
         E_new = number of new edge buckets
         E_trans = max degree of any node in the batch
@@ -60,41 +62,44 @@ class AlphaZXDistribution:
     For simplicity, T is always fixed to the maximum (two in this case).
     """
     def __init__(self,
-                 mixture_prob_parameters: torch.Tensor,
-                 node_prob_parameters: torch.Tensor,
-                 phase_prob_parameters: torch.Tensor,
-                 new_edges_prob_parameters: torch.Tensor,
-                 transfer_edges_prob_parameters: torch.Tensor):
+                 mixture_dist_parameters: torch.Tensor,
+                 flz_node_dist_parameters: torch.Tensor,
+                 frz_node_dist_parameters: torch.Tensor,
+                 phase_dist_parameters: torch.Tensor,
+                 new_edges_dist_parameters: torch.Tensor,
+                 transfer_edges_dist_parameters: torch.Tensor):
         """
-        :param mixture_prob_parameters: B x T tensor of mixture probabilities. mixture_probs_batch[b] is the mixture probabilities
-                                              at some step in a trajectory. It is assumed to be a softmax output of a DNN. When B = 1,
-                                              we are in the MCTS portion of the algorithm.
-        :param: node_prob_parameters: B x N tensor of node probabilities.
-        :param phase_prob_parameters: B x N x P tensor of phase probabilities. For a node n in batch b, that does not
-                                            represent an f-right match, phase_prob_parameters[b, n] = torch.zeroes((P, ))
-        :param new_edges_prob_parameters: B x N x E_new tensor of new edge probabilities. For a node n in batch b that does not
+        :param mixture_dist_parameters: B x T tensor of mixture probabilities. mixture_probs_batch[b] is the mixture probabilities
+                                        at some step in a trajectory. It is assumed to be a softmax output of a DNN. When B = 1,
+                                        we are in the MCTS portion of the algorithm.
+        :param flz_node_dist_parameters: B x N tensor of node probabilities. For a node n in batch b, that does not represent an f-left match,
+                                         flz_node_dist_parameters[b, n] = 0.
+        :param frz_node_dist_parameters: B x N tensor of node probabilities. For a node n in batch b, that does not represent an f-right match,
+                                         frz_node_dist_parameters[b, n] = 0.
+        :param phase_dist_parameters: B x N x P tensor of phase probabilities. For a node n in batch b, that does not
+                                      represent an f-right match, phase_prob_parameters[b, n] = torch.zeroes((P, ))
+        :param new_edges_dist_parameters: B x N x E_new tensor of new edge probabilities. For a node n in batch b that does not
                                           represent an f-right match, new_edges_prob_parameters_batch[b, n] is all zeros.
-        :param transfer_edges_prob_parameters: B x N x E_trans x (E_trans + 1) tensor of probabilities for each node. For a node n in batch b
-                                               that does not represent an f-right match, new_edges_prob_parameters_batch[b, n] is all zeros.
+        :param transfer_edges_dist_parameters: B x N x E_trans x (E_trans + 1) tensor of probabilities for each node. For a node n in batch b
+                                               that does not represent an f-right match, new_edges_prob_parameters_batch[b, n] has a single 1 entry
+                                               in the top left corner of the innermost 2D tensor. All other entries in the innermost 2D tensor are 0.
+                                               Samples drawn from this distribution are all zeros (no edges are selected to be transferred).
         """
-        self.mixture_prob_parameters_batch = mixture_prob_parameters
-        self.node_prob_parameters_batch = node_prob_parameters
-        self.phase_prob_parameters_batch = phase_prob_parameters
-        self.new_edges_prob_parameters_batch = new_edges_prob_parameters
-        self.transfer_edges_prob_parameters = transfer_edges_prob_parameters
+        self.mixture_dist = Categorical(mixture_dist_parameters)
+        self.flz_node_dist = Categorical(flz_node_dist_parameters)
+        self.frz_node_dist = Categorical(frz_node_dist_parameters)
+        self.phase_dist = Categorical(phase_dist_parameters)
+        self.new_edges_dist = Categorical(new_edges_dist_parameters)
+        self.transfer_edges_dist = MultivariateBernoulliMixture(transfer_edges_dist_parameters)
 
-    def log_probability(self, sampled_actions: torch.Tensor) -> torch.Tensor:
+    def log_prob(self, sampled_actions: torch.Tensor) -> torch.Tensor:
         """
         :param sampled_actions: B x K x L tensor of actions. Each action has the form
-                                      [type, node, phase, new edges, old edges ...], where all entries after node are 0
-                                      for non-f-right actions. All actions are padded to the same length with zeroes.
-                                      sampled_actions_batch[b] is the set of actions sampled at some step in a trajectory.
+                                [type, node, phase, new edges, old edges ...], where all entries after node are 0
+                                for non-f-right actions. All actions are padded to the same length with zeroes.
+                                sampled_actions_batch[b] is the set of actions sampled at some step in a trajectory.
         :return: The log probability of each sampled action.
         """
-        mixture_dist = Categorical(self.mixture_prob_parameters_batch)
-        node_dist = Categorical(self.node_prob_parameters_batch)
-        phase_dist = Categorical(self.phase_prob_parameters_batch)
-        new_edges_dist = Categorical(self.new_edges_prob_parameters_batch)
         pass
 
     def sample(self, k: int) -> torch.Tensor:
@@ -102,4 +107,4 @@ class AlphaZXDistribution:
         :param k: The number of samples to produce.
         :return: K x L tensor of actions.
         """
-        pass
+        rewrite_type_samples = self.mixture_dist.sample(torch.Size([k]))

@@ -59,6 +59,31 @@ def rand_new_edge_probs(batch_size: int, num_nodes: int, num_new_edge_buckets: i
     return rand_distribution(torch.Size([batch_size, num_nodes, num_new_edge_buckets]))
 
 
+def insert_random_zeros(tensor: torch.Tensor, num_zeros: int) -> torch.Tensor:
+    """
+    Inserts a specified number of zeros into random positions within a 1D tensor.
+
+    :param tensor: The original 1D tensor where zeros will be inserted.
+    :param num_zeros: The number of zeros to insert into the tensor.
+    :returns: A new tensor with zeros inserted at random positions.
+
+    The function creates a new tensor that is longer than the original tensor by `num_zeros` length.
+    Zeros are inserted at random positions throughout the tensor, while the original elements are preserved.
+    """
+    # Length of the original tensor
+    original_length = tensor.size(0)
+    # New length after inserting zeros
+    new_length = original_length + num_zeros
+    # Create an index tensor of size new_length, filled with values that are within the range of original_length
+    # This will be used to scatter the original tensor values into the new tensor, leaving spaces for zeros
+    indices = torch.randperm(new_length)[:original_length]
+    # Create a new tensor of zeros with the new length
+    new_tensor = torch.zeros(new_length, dtype=tensor.dtype)
+    # Scatter the original tensor values into the new tensor
+    new_tensor.scatter_(0, indices, tensor)
+    return new_tensor
+
+
 def prepend_column(tensor: torch.Tensor, column: torch.Tensor) -> torch.Tensor:
     """
     Prepend a column to a 2D tensor.
@@ -139,33 +164,29 @@ def rand_transfer_edge_probs(batch_size: int, max_num_nodes: int, max_incident_e
     of the mixture model parameters.
 
     :param batch_size: The number of batches to generate.
-    :type batch_size: int
     :param max_num_nodes: The maximum number of nodes (distributions) in each batch.
-    :type max_num_nodes: int
     :param max_incident_edges: The maximum number of incident edges (events) in each distribution.
-    :type max_incident_edges: int
     :returns: A 4D tensor of shape (batch_size, max_num_nodes, max_incident_edges, max_incident_edges + 1).
               The first column of each innermost 2D tensor sums to 1, with other specified modifications
               applied to simulate a mixture of Bernoulli distributions with structured sparsity.
-    :rtype: torch.Tensor
     """
     if 1 == batch_size == max_num_nodes == max_incident_edges:
         params = torch.tensor([[[[1., 0.]]]])
-        params[0, 0, 0, 1] = rand_inclusive(torch.Size([]))
+        params[..., 1] = rand_inclusive(torch.Size([1]))
         return params
     # Initialize the parameters tensor with random values from [0, 1]
     params = rand_inclusive(torch.Size([batch_size, max_num_nodes, max_incident_edges, max_incident_edges + 1]))
     for b in range(batch_size):
         for n in range(max_num_nodes):
-            # Sample a random integer y from [1, e_incident - 1] inclusive
             if max_incident_edges == 1:
                 y = 1
             else:
-                y = torch.randint(1, max_incident_edges, (1,)).item()
+                # Sample a random integer y from [1, e_incident] inclusive
+                y = torch.randint(1, max_incident_edges + 1, (1,)).item()
             # Zero rows from y down (including y)
             params[b, n, y:, :] = 0
             # Zero columns from y (not including y)
-            params[b, n, :, y:] = 0
+            params[b, n, :, y+1:] = 0
             # Ensure the mixture parameters sum to 1 for the truncated distributions
             params[b, n, :, 0] /= params[b, n, :, 0].sum()
     return params
