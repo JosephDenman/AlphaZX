@@ -4,45 +4,60 @@ from torch.distributions.categorical import Categorical
 from models.bernoulli_mixture import MultivariateBernoulliMixture
 
 
-def gather_probs(probs_batch: torch.Tensor, sampled_actions_batch: torch.Tensor, column: int) -> torch.Tensor:
+def action_types_log_prob(mixture_dist_params: torch.Tensor, action_types: torch.Tensor) -> torch.Tensor:
+    return torch.gather(mixture_dist_params.log(), 1, action_types)
+
+
+def nodes_log_prob(frz_node_dist_params: torch.Tensor, flz_node_dist_params: torch.Tensor, action_types: torch.Tensor,
+                   nodes: torch.Tensor) -> torch.Tensor:
+    selected_node_dist_params = select_node_dist_params(frz_node_dist_params, flz_node_dist_params,
+                                                        action_types)
+    batch_size, num_nodes = nodes.shape
+    # Generate a tensor of batch indices to pair with each node index
+    batch_indices = torch.arange(batch_size).view(-1, 1).expand_as(nodes)
+    # Use advanced indexing to select the corresponding distribution parameters for each node
+    nodes_log_prob = selected_node_dist_params.log()[batch_indices, torch.arange(num_nodes), nodes]
+    return nodes_log_prob
+
+
+def select_node_dist_params(frz_node_dist_params: torch.Tensor, flz_node_dist_params: torch.Tensor,
+                            action_types: torch.Tensor) -> torch.Tensor:
+    # Reshape action_types for broadcasting over the distributions
+    action_types_expanded = action_types.unsqueeze(-1).expand(-1, -1, frz_node_dist_params.size(-1))
+    # Use torch.where to select between the two parameter sets based on action types
+    selected_node_dist_params = torch.where(action_types_expanded == 0,
+                                            frz_node_dist_params.unsqueeze(1).repeat(1, action_types.size(1), 1),
+                                            flz_node_dist_params.unsqueeze(1).repeat(1, action_types.size(1), 1))
+    return selected_node_dist_params
+
+
+def sample_from_selected_dist_params(selected_dist_params: torch.Tensor) -> torch.Tensor:
+    # Flatten the tensor from [batch_size, num_distributions, num_classes] to [batch_size * num_distributions, num_classes]
+    # This is necessary because Categorical treats the first dimension as the batch dimension
+    flattened_distributions = selected_dist_params.view(-1, selected_dist_params.size(-1))
+    # Create the Categorical distribution
+    dist = Categorical(probs=flattened_distributions)
+    # To sample or compute probabilities, use the distribution as usual
+    # For example, to sample one set of events for each distribution:
+    samples = dist.sample()
+    # Reshape the samples back to the original [batch_size, num_distributions] format
+    reshaped_samples = samples.view(selected_dist_params.size(0), selected_dist_params.size(1))
+    return reshaped_samples
+
+
+def select_feature_dist_params(nodes: torch.Tensor, feature_dist_params: torch.Tensor) -> torch.Tensor:
     """
-    Uses the column'th entry of each sampled action to get the probability of the entry occurring.
-    Works with mini-batching.
+    Selects rows from feature_dist_params based on indices in nodes while respecting batching.
 
-    :param probs_batch: B x X tensor of probabilities, where X = T or X = N.
-    :param sampled_actions_batch: B x K x L tensor of actions.
-    :param column: The row entry in `sampled_actions_batch` to use to index into probabilities.
-    :return: B x X tensor representing the probability of the given row entry.
+    :param nodes: A tensor of indices indicating which rows to select from phase_dist_params.
+    :param feature_dist_params: A tensor containing parameters for different phases or new edge features, with batching.
+    :returns: A tensor with selected distributions based on nodes.
     """
-    return torch.gather(probs_batch, 1, sampled_actions_batch[:, :, column].long())
-
-
-def gather_mixture_probs(mixture_probs_batch: torch.Tensor, sampled_actions_batch: torch.Tensor) -> torch.Tensor:
-    return gather_probs(mixture_probs_batch, sampled_actions_batch, 0)
-
-
-def gather_node_probs(node_probs_batch: torch.Tensor, sampled_actions_batch: torch.Tensor) -> torch.Tensor:
-    return gather_probs(node_probs_batch, sampled_actions_batch, 1)
-
-
-def gather_phase_probs(phase_probs_batch: torch.Tensor, sampled_actions_batch: torch.Tensor) -> torch.Tensor:
-    """
-    Extracts the probability of a particular phase for each action based on the second and third
-    row entries of the sampled actions, using a vectorized approach with torch.gather.
-
-    :param phase_probs_batch: A tensor of shape (batch_size, num_nodes, num_phase_buckets) containing the probabilities.
-    :param sampled_actions_batch: A tensor of shape (batch_size, num_actions, action_length) containing the sampled actions.
-                                  The second row entry corresponds to the node index, and the third row entry corresponds to the phase index.
-    :returns: A tensor of probabilities extracted for each action.
-    """
-    # Extract node and phase indices
-    node_indices = sampled_actions_batch[:, :, 1].long()
-    phase_indices = sampled_actions_batch[:, :, 2].long()
-    # First gather along the num_nodes dimension to get [batch_size, num_actions, num_phase_buckets]
-    gathered_nodes = torch.gather(phase_probs_batch, 1, node_indices.unsqueeze(-1).expand(-1, -1, phase_probs_batch.size(2)))
-    # Then gather along the last dimension to select the specific phase for each action
-    phase_probs_selected = torch.gather(gathered_nodes, 2, phase_indices.unsqueeze(-1)).squeeze(-1)
-    return phase_probs_selected
+    # Obtain batch indices for each element in nodes to use with advanced indexing
+    batch_indices = torch.arange(nodes.size(0)).view(-1, 1).expand_as(nodes)
+    # Use advanced indexing to select the rows from phase_dist_params
+    selected_distributions = feature_dist_params[batch_indices, nodes]
+    return selected_distributions
 
 
 class AlphaZXDistribution:
@@ -54,43 +69,51 @@ class AlphaZXDistribution:
         K = number of samples
         L = length of the longest action (either in the batch or sample set)
         T = number of possible rewrites (frz, flz, frx, flx, etc.)
-        N = max number of nodes (either in batch or sample set)
+        N = max number of nodes across node types across batches, or across samples
         P = number of phase buckets
         E_new = number of new edge buckets
         E_trans = max degree of any node in the batch
 
     For simplicity, T is always fixed to the maximum (two in this case).
     """
+
     def __init__(self,
-                 mixture_dist_parameters: torch.Tensor,
-                 flz_node_dist_parameters: torch.Tensor,
-                 frz_node_dist_parameters: torch.Tensor,
-                 phase_dist_parameters: torch.Tensor,
-                 new_edges_dist_parameters: torch.Tensor,
-                 transfer_edges_dist_parameters: torch.Tensor):
+                 mixture_dist_params: torch.Tensor,
+                 frz_node_dist_params: torch.Tensor,
+                 flz_node_dist_params: torch.Tensor,
+                 phase_dist_params: torch.Tensor,
+                 new_edges_dist_params: torch.Tensor,
+                 transfer_edges_dist_params: torch.Tensor):
         """
-        :param mixture_dist_parameters: B x T tensor of mixture probabilities. mixture_probs_batch[b] is the mixture probabilities
-                                        at some step in a trajectory. It is assumed to be a softmax output of a DNN. When B = 1,
-                                        we are in the MCTS portion of the algorithm.
-        :param flz_node_dist_parameters: B x N tensor of node probabilities. For a node n in batch b, that does not represent an f-left match,
-                                         flz_node_dist_parameters[b, n] = 0.
-        :param frz_node_dist_parameters: B x N tensor of node probabilities. For a node n in batch b, that does not represent an f-right match,
-                                         frz_node_dist_parameters[b, n] = 0.
-        :param phase_dist_parameters: B x N x P tensor of phase probabilities. For a node n in batch b, that does not
-                                      represent an f-right match, phase_prob_parameters[b, n] = torch.zeroes((P, ))
-        :param new_edges_dist_parameters: B x N x E_new tensor of new edge probabilities. For a node n in batch b that does not
-                                          represent an f-right match, new_edges_prob_parameters_batch[b, n] is all zeros.
-        :param transfer_edges_dist_parameters: B x N x E_trans x (E_trans + 1) tensor of probabilities for each node. For a node n in batch b
-                                               that does not represent an f-right match, new_edges_prob_parameters_batch[b, n] has a single 1 entry
-                                               in the top left corner of the innermost 2D tensor. All other entries in the innermost 2D tensor are 0.
-                                               Samples drawn from this distribution are all zeros (no edges are selected to be transferred).
+        :param mixture_dist_params: B x T tensor of mixture probabilities. mixture_dist_params[b] is the mixture probabilities
+                                    at some step in a trajectory. It is assumed to be a softmax output of a DNN. When B = 1,
+                                    we are in the MCTS portion of the algorithm.
+        :param frz_node_dist_params: B x N tensor of frz-node selection probabilities. For a node n in batch b that does
+                                     not represent a frz-node, frz_node_dist_params[b, n] = 0.
+        :param frz_node_dist_params: B x N tensor of flz-node selection probabilities. For a node n in batch b that does
+                                     not represent a flz-node, flz_node_dist_params[b, n] = 0.
+        :param phase_dist_params: B x N x P tensor of phase probabilities. For a node n in batch b that does not
+                                  represent an f-right match, phase_dist_params[b, n] = torch.zeroes((P, ))
+        :param new_edges_dist_params: B x N x E_new tensor of new edge probabilities. For a node n in batch b that does not
+                                      represent an f-right match, new_edges_dist_params[b, n] is all zeros.
+        :param transfer_edges_dist_params: B x N x E_trans x (E_trans + 1) tensor of probabilities for each node. For a node n in batch b
+                                           that does not represent an f-right match, transfer_edges_dist_params[b, n] has a single 1 entry
+                                           in the top left corner of the innermost 2D tensor. All other entries in the innermost 2D tensor are 0.
+                                           Samples drawn from this distribution are all zeros (no edges are selected to be transferred).
         """
-        self.mixture_dist = Categorical(mixture_dist_parameters)
-        self.flz_node_dist = Categorical(flz_node_dist_parameters)
-        self.frz_node_dist = Categorical(frz_node_dist_parameters)
-        self.phase_dist = Categorical(phase_dist_parameters)
-        self.new_edges_dist = Categorical(new_edges_dist_parameters)
-        self.transfer_edges_dist = MultivariateBernoulliMixture(transfer_edges_dist_parameters)
+        self.mixture_dist_params = mixture_dist_params
+        self.frz_node_dist_params = frz_node_dist_params
+        self.flz_node_dist_params = flz_node_dist_params
+        self.phase_dist_params = phase_dist_params
+        self.new_edges_dist_params = new_edges_dist_params
+        self.transfer_edges_dist_params = transfer_edges_dist_params
+        print('mixture_dist_params =', mixture_dist_params)
+        print('frz_node_dist_params =', frz_node_dist_params)
+        print('flz_node_dist_params =', flz_node_dist_params)
+        # print('phase_dist_params =', phase_dist_params)
+        # print('new_edges_dist_params =', new_edges_dist_params)
+        # print('transfer_edges_dist_params =', transfer_edges_dist_params)
+        print('')
 
     def log_prob(self, sampled_actions: torch.Tensor) -> torch.Tensor:
         """
@@ -100,11 +123,62 @@ class AlphaZXDistribution:
                                 sampled_actions_batch[b] is the set of actions sampled at some step in a trajectory.
         :return: The log probability of each sampled action.
         """
-        pass
+        action_types = sampled_actions[:, :, 0]
+        print('action_types =', action_types)
+        action_type_log_probs = action_types_log_prob(self.mixture_dist_params, action_types)
+        print('action_type_log_probs =', action_type_log_probs.exp())
+        nodes = sampled_actions[:, :, 1]
+        print('nodes = ', nodes)
+        node_log_probs = nodes_log_prob(self.frz_node_dist_params, self.flz_node_dist_params, action_types, nodes)
+        print('node_log_probs =', node_log_probs.exp())
+        phases = sampled_actions[:, :, 2]
+        new_edges = sampled_actions[:, :, 3]
+        transfer_edges = sampled_actions[:, :, 4:]
 
     def sample(self, k: int) -> torch.Tensor:
         """
         :param k: The number of samples to produce.
         :return: K x L tensor of actions.
         """
-        rewrite_type_samples = self.mixture_dist.sample(torch.Size([k]))
+        action_types = Categorical(probs=self.mixture_dist_params).sample(torch.Size([k])).T
+        selected_node_dist_params = select_node_dist_params(self.frz_node_dist_params, self.flz_node_dist_params,
+                                                            action_types)
+        nodes = sample_from_selected_dist_params(selected_node_dist_params)
+        selected_phase_dist_params = select_feature_dist_params(nodes, self.phase_dist_params)
+        phases = sample_from_selected_dist_params(selected_phase_dist_params)
+        selected_new_edges_dist_params = select_feature_dist_params(nodes, self.new_edges_dist_params)
+        new_edges = sample_from_selected_dist_params(selected_new_edges_dist_params)
+        selected_transfer_edges_dist_params = select_feature_dist_params(nodes, self.transfer_edges_dist_params)
+        transfer_edges = MultivariateBernoulliMixture(selected_transfer_edges_dist_params).sample()
+        return torch.cat((torch.stack((action_types, nodes, phases, new_edges), dim=-1), transfer_edges), dim=-1).long()
+
+# Define the mixture distribution parameters
+# mixture_dist_params = torch.tensor([[0.3157, 0.6843],
+#                                     [0.3269, 0.6731]])
+#
+# # Define the action types for which you want to compute log probabilities
+# action_types = torch.tensor([[1., 1., 0.],
+#                              [1., 1., 1.]])
+#
+# log_mixture_dist_params = torch.log(mixture_dist_params)
+#
+# # Prepare to gather the log probabilities based on action_types
+# # Convert action_types to long and add extra dimensions for gathering
+# action_types_long = action_types.long()
+#
+# gathered_log_probs = torch.gather(log_mixture_dist_params, 1, action_types_long).exp()
+#
+# print("Gathered log probabilities:")
+# print(gathered_log_probs)
+
+# nodes =  tensor([[3, 2, 0],
+#         [3, 2, 3]])
+# selected_node_dist_params = tensor([[[0.4390, 0.2160, 0.1784, 0.1371, 0.0294, 0.0000],
+#          [0.4390, 0.2160, 0.1784, 0.1371, 0.0294, 0.0000],
+#          [0.4390, 0.2160, 0.1784, 0.1371, 0.0294, 0.0000]],
+#
+#         [[0.0000, 0.0000, 0.0000, 1.0000, 0.0000, 0.0000],
+#          [0.3706, 0.1567, 0.2055, 0.0000, 0.0354, 0.2318],
+#          [0.0000, 0.0000, 0.0000, 1.0000, 0.0000, 0.0000]]])
+#
+# torch.tensor([[0.1371, 0.1784, 0.4390], [1.0000, 0.2055, 1.0000]])
