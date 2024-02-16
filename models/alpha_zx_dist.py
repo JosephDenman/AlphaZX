@@ -16,8 +16,17 @@ def nodes_log_prob(frz_node_dist_params: torch.Tensor, flz_node_dist_params: tor
     # Generate a tensor of batch indices to pair with each node index
     batch_indices = torch.arange(batch_size).view(-1, 1).expand_as(nodes)
     # Use advanced indexing to select the corresponding distribution parameters for each node
-    nodes_log_prob = selected_node_dist_params.log()[batch_indices, torch.arange(num_nodes), nodes]
-    return nodes_log_prob
+    node_log_probs = selected_node_dist_params.log()[batch_indices, torch.arange(num_nodes), nodes]
+    return node_log_probs
+
+
+def feature_log_prob(feature_dist_params: torch.Tensor, nodes: torch.Tensor) -> torch.Tensor:
+    batch_size, num_nodes = nodes.shape
+    # Generate a tensor of batch indices to pair with each node index
+    batch_indices = torch.arange(batch_size).view(-1, 1).expand_as(nodes)
+    # Use advanced indexing to select the corresponding distribution parameters for each node
+    feature_log_probs = feature_dist_params.log()[batch_indices, torch.arange(num_nodes), nodes]
+    return feature_log_probs
 
 
 def select_node_dist_params(frz_node_dist_params: torch.Tensor, flz_node_dist_params: torch.Tensor,
@@ -126,14 +135,34 @@ class AlphaZXDistribution:
         action_types = sampled_actions[:, :, 0]
         print('action_types =', action_types)
         action_type_log_probs = action_types_log_prob(self.mixture_dist_params, action_types)
-        print('action_type_log_probs =', action_type_log_probs.exp())
+        print('action_type_probs =', action_type_log_probs.exp())
         nodes = sampled_actions[:, :, 1]
         print('nodes = ', nodes)
         node_log_probs = nodes_log_prob(self.frz_node_dist_params, self.flz_node_dist_params, action_types, nodes)
-        print('node_log_probs =', node_log_probs.exp())
+        print('node_probs =', node_log_probs.exp())
+        # TODO: All probs of flz-actions for non-flz action components should be 1, since log(x) + log(1) = log(x * 1) = log(x) = log(x) + 0,
+        #       meaning that it doesn't change the original probability.
         phases = sampled_actions[:, :, 2]
+        print('phases = ', phases)
+        selected_phase_dist_params = select_feature_dist_params(nodes, self.phase_dist_params)
+        print('selected_phase_dist_params = ', selected_phase_dist_params)
+        phases_log_probs = feature_log_prob(selected_phase_dist_params, phases)
+        print('phases_probs = ', phases_log_probs.exp())
         new_edges = sampled_actions[:, :, 3]
+        selected_new_edge_params = select_feature_dist_params(nodes, self.new_edges_dist_params)
+        print('selected_new_edge_params = ', selected_new_edge_params)
+        new_edges_log_probs = feature_log_prob(selected_new_edge_params, new_edges)
+        # TODO: Double check 'new_edge_probs' calculation when sober...
+        print('new_edges_probs = ', new_edges_log_probs.exp())
         transfer_edges = sampled_actions[:, :, 4:]
+        selected_transfer_edges_dist_params = select_feature_dist_params(nodes, self.transfer_edges_dist_params)
+        print('selected_transfer_edges_dist_params = ', selected_transfer_edges_dist_params)
+        transfer_edge_log_probs = MultivariateBernoulliMixture(selected_transfer_edges_dist_params).log_prob(transfer_edges.float())
+        print('transfer_edge_log_probs = ', transfer_edge_log_probs.exp())
+        stacked = torch.stack((action_type_log_probs, node_log_probs, phases_log_probs, new_edges_log_probs, transfer_edge_log_probs))
+        # print('stacked = ', stacked.sum(dim=-1, keepdim=True))
+        return stacked.sum(dim=-1)
+
 
     def sample(self, k: int) -> torch.Tensor:
         """
@@ -182,3 +211,14 @@ class AlphaZXDistribution:
 #          [0.0000, 0.0000, 0.0000, 1.0000, 0.0000, 0.0000]]])
 #
 # torch.tensor([[0.1371, 0.1784, 0.4390], [1.0000, 0.2055, 1.0000]])
+
+# selected_phase_dist_params =  torch.tensor([[[0.3750, 0.1718, 0.3854, 0.0678],
+#          [0.3750, 0.1718, 0.3854, 0.0678],
+#          [0.3750, 0.1718, 0.3854, 0.0678]],
+#         [[1.0000, 0.0000, 0.0000, 0.0000],
+#          [1.0000, 0.0000, 0.0000, 0.0000],
+#          [1.0000, 0.0000, 0.0000, 0.0000]]])
+# nodes =  torch.tensor([[3, 3, 3],
+#         [2, 2, 2]])
+#
+# torch.tensor([[0.0678, 0.0678, 0.0678], []])

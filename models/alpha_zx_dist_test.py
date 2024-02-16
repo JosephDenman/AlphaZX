@@ -18,4 +18,5 @@ dist = AlphaZXDistribution(
 
 samples = dist.sample(sample_size)
 print('samples =', samples)
-dist.log_prob(samples)
+probs = dist.log_prob(samples)
+print('probs = ', probs.exp())
