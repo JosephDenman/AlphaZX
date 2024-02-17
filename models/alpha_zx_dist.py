@@ -1,72 +1,9 @@
+from typing import Literal
+
 import torch
 from torch.distributions.categorical import Categorical
 
 from models.bernoulli_mixture import MultivariateBernoulliMixture
-
-
-def action_types_log_prob(mixture_dist_params: torch.Tensor, action_types: torch.Tensor) -> torch.Tensor:
-    return torch.gather(mixture_dist_params.log(), 1, action_types)
-
-
-def nodes_log_prob(frz_node_dist_params: torch.Tensor, flz_node_dist_params: torch.Tensor, action_types: torch.Tensor,
-                   nodes: torch.Tensor) -> torch.Tensor:
-    selected_node_dist_params = select_node_dist_params(frz_node_dist_params, flz_node_dist_params,
-                                                        action_types)
-    batch_size, num_nodes = nodes.shape
-    # Generate a tensor of batch indices to pair with each node index
-    batch_indices = torch.arange(batch_size).view(-1, 1).expand_as(nodes)
-    # Use advanced indexing to select the corresponding distribution parameters for each node
-    node_log_probs = selected_node_dist_params.log()[batch_indices, torch.arange(num_nodes), nodes]
-    return node_log_probs
-
-
-def feature_log_prob(feature_dist_params: torch.Tensor, nodes: torch.Tensor) -> torch.Tensor:
-    batch_size, num_nodes = nodes.shape
-    # Generate a tensor of batch indices to pair with each node index
-    batch_indices = torch.arange(batch_size).view(-1, 1).expand_as(nodes)
-    # Use advanced indexing to select the corresponding distribution parameters for each node
-    feature_log_probs = feature_dist_params.log()[batch_indices, torch.arange(num_nodes), nodes]
-    return feature_log_probs
-
-
-def select_node_dist_params(frz_node_dist_params: torch.Tensor, flz_node_dist_params: torch.Tensor,
-                            action_types: torch.Tensor) -> torch.Tensor:
-    # Reshape action_types for broadcasting over the distributions
-    action_types_expanded = action_types.unsqueeze(-1).expand(-1, -1, frz_node_dist_params.size(-1))
-    # Use torch.where to select between the two parameter sets based on action types
-    selected_node_dist_params = torch.where(action_types_expanded == 0,
-                                            frz_node_dist_params.unsqueeze(1).repeat(1, action_types.size(1), 1),
-                                            flz_node_dist_params.unsqueeze(1).repeat(1, action_types.size(1), 1))
-    return selected_node_dist_params
-
-
-def sample_from_selected_dist_params(selected_dist_params: torch.Tensor) -> torch.Tensor:
-    # Flatten the tensor from [batch_size, num_distributions, num_classes] to [batch_size * num_distributions, num_classes]
-    # This is necessary because Categorical treats the first dimension as the batch dimension
-    flattened_distributions = selected_dist_params.view(-1, selected_dist_params.size(-1))
-    # Create the Categorical distribution
-    dist = Categorical(probs=flattened_distributions)
-    # To sample or compute probabilities, use the distribution as usual
-    # For example, to sample one set of events for each distribution:
-    samples = dist.sample()
-    # Reshape the samples back to the original [batch_size, num_distributions] format
-    reshaped_samples = samples.view(selected_dist_params.size(0), selected_dist_params.size(1))
-    return reshaped_samples
-
-
-def select_feature_dist_params(nodes: torch.Tensor, feature_dist_params: torch.Tensor) -> torch.Tensor:
-    """
-    Selects rows from feature_dist_params based on indices in nodes while respecting batching.
-
-    :param nodes: A tensor of indices indicating which rows to select from phase_dist_params.
-    :param feature_dist_params: A tensor containing parameters for different phases or new edge features, with batching.
-    :returns: A tensor with selected distributions based on nodes.
-    """
-    # Obtain batch indices for each element in nodes to use with advanced indexing
-    batch_indices = torch.arange(nodes.size(0)).view(-1, 1).expand_as(nodes)
-    # Use advanced indexing to select the rows from phase_dist_params
-    selected_distributions = feature_dist_params[batch_indices, nodes]
-    return selected_distributions
 
 
 class AlphaZXDistribution:
@@ -116,13 +53,83 @@ class AlphaZXDistribution:
         self.phase_dist_params = phase_dist_params
         self.new_edges_dist_params = new_edges_dist_params
         self.transfer_edges_dist_params = transfer_edges_dist_params
-        print('mixture_dist_params =', mixture_dist_params)
-        print('frz_node_dist_params =', frz_node_dist_params)
-        print('flz_node_dist_params =', flz_node_dist_params)
-        # print('phase_dist_params =', phase_dist_params)
-        # print('new_edges_dist_params =', new_edges_dist_params)
-        # print('transfer_edges_dist_params =', transfer_edges_dist_params)
-        print('')
+
+    def _sample_action_types(self, k: int) -> torch.Tensor:
+        return Categorical(probs=self.mixture_dist_params).sample(torch.Size([k])).T
+
+    def _action_type_log_probs(self, action_types: torch.Tensor) -> torch.Tensor:
+        return torch.gather(self.mixture_dist_params.log(), 1, action_types)
+
+    def _select_node_dist_params(self, action_types: torch.Tensor) -> torch.Tensor:
+        # Reshape action_types for broadcasting over the distributions
+        action_types_expanded = action_types.unsqueeze(-1).expand(-1, -1, self.frz_node_dist_params.size(-1))
+        selected_node_dist_params = torch.where(action_types_expanded == 0,
+                                                self.frz_node_dist_params.unsqueeze(1).repeat(1, action_types.size(1),
+                                                                                              1),
+                                                self.flz_node_dist_params.unsqueeze(1).repeat(1, action_types.size(1),
+                                                                                              1))
+        return selected_node_dist_params
+
+    @staticmethod
+    def _sample_from_selected_dist_params(selected_dist_params: torch.Tensor) -> torch.Tensor:
+        # Flatten the tensor from [batch_size, num_distributions, num_classes] to [batch_size * num_distributions, num_classes]
+        # because categorical treats the first dimension as the batch dimension
+        flattened_distributions = selected_dist_params.view(-1, selected_dist_params.size(-1))
+        dist = Categorical(probs=flattened_distributions)
+        samples = dist.sample()
+        # Reshape the samples back to the original [batch_size, num_distributions] format
+        reshaped_samples = samples.view(selected_dist_params.size(0), selected_dist_params.size(1))
+        return reshaped_samples
+
+    def _sample_nodes(self, action_types: torch.Tensor) -> torch.Tensor:
+        return self._sample_from_selected_dist_params(self._select_node_dist_params(action_types))
+
+    def _node_log_probs(self, action_types: torch.Tensor, nodes: torch.Tensor) -> torch.Tensor:
+        selected_node_dist_params = self._select_node_dist_params(action_types)
+        batch_size, num_nodes = nodes.shape
+        # Generate a tensor of batch indices to pair with each node index
+        batch_indices = torch.arange(batch_size).view(-1, 1).expand_as(nodes)
+        # Select the distribution parameters for each node
+        node_log_probs = selected_node_dist_params.log()[batch_indices, torch.arange(num_nodes), nodes]
+        return node_log_probs
+
+    def _select_feature_dist_params(self, nodes: torch.Tensor,
+                                    feature_type: Literal['phase'] | Literal['new_edge'] | Literal[
+                                        'transfer_edge']) -> torch.Tensor:
+        """
+        Selects rows from feature distribution parameters based on indices in nodes.
+
+        :param nodes: A tensor of indices indicating which rows to select from phase_dist_params.
+        :param feature_type: Indicates which feature parameters to use.
+        :returns: A tensor with selected distributions based on nodes.
+        """
+        feature_dist_params = self.phase_dist_params if feature_type == 'phase' else self.new_edges_dist_params if feature_type == 'new_edge' else self.transfer_edges_dist_params
+        # Obtain batch indices for each element in nodes
+        batch_indices = torch.arange(nodes.size(0)).view(-1, 1).expand_as(nodes)
+        # Select the rows from phase_dist_params
+        selected_distributions = feature_dist_params[batch_indices, nodes]
+        return selected_distributions
+
+    def _sample_features(self, feature_type: Literal['phase'] | Literal['new_edge'],
+                         nodes: torch.Tensor) -> torch.Tensor:
+        return self._sample_from_selected_dist_params(self._select_feature_dist_params(nodes, feature_type))
+
+    def _feature_log_probs(self, feature_type: Literal['phase'] | Literal['new_edge'], nodes: torch.Tensor,
+                           features: torch.Tensor) -> torch.Tensor:
+        selected_feature_dist_params = self._select_feature_dist_params(nodes, feature_type)
+        batch_size, num_nodes = features.shape
+        # Generate a tensor of batch indices to pair with each node index
+        batch_indices = torch.arange(batch_size).view(-1, 1).expand_as(features)
+        # Select the corresponding distribution parameters for each node
+        feature_log_probs = selected_feature_dist_params.log()[batch_indices, torch.arange(num_nodes), features]
+        return feature_log_probs
+
+    def _sample_transfer_edges(self, nodes: torch.Tensor) -> torch.Tensor:
+        return MultivariateBernoulliMixture(self._select_feature_dist_params(nodes, 'transfer_edge')).sample()
+
+    def _transfer_edge_log_probs(self, nodes: torch.Tensor, transfer_edges: torch.Tensor) -> torch.Tensor:
+        return MultivariateBernoulliMixture(self._select_feature_dist_params(nodes, 'transfer_edge')).log_prob(
+            transfer_edges.float())
 
     def log_prob(self, sampled_actions: torch.Tensor) -> torch.Tensor:
         """
@@ -132,93 +139,28 @@ class AlphaZXDistribution:
                                 sampled_actions_batch[b] is the set of actions sampled at some step in a trajectory.
         :return: The log probability of each sampled action.
         """
-        action_types = sampled_actions[:, :, 0]
-        print('action_types =', action_types)
-        action_type_log_probs = action_types_log_prob(self.mixture_dist_params, action_types)
-        print('action_type_probs =', action_type_log_probs.exp())
+        actions = sampled_actions[:, :, 0]
         nodes = sampled_actions[:, :, 1]
-        print('nodes = ', nodes)
-        node_log_probs = nodes_log_prob(self.frz_node_dist_params, self.flz_node_dist_params, action_types, nodes)
-        print('node_probs =', node_log_probs.exp())
-        # TODO: All probs of flz-actions for non-flz action components should be 1, since log(x) + log(1) = log(x * 1) = log(x) = log(x) + 0,
-        #       meaning that it doesn't change the original probability.
         phases = sampled_actions[:, :, 2]
-        print('phases = ', phases)
-        selected_phase_dist_params = select_feature_dist_params(nodes, self.phase_dist_params)
-        print('selected_phase_dist_params = ', selected_phase_dist_params)
-        phases_log_probs = feature_log_prob(selected_phase_dist_params, phases)
-        print('phases_probs = ', phases_log_probs.exp())
         new_edges = sampled_actions[:, :, 3]
-        selected_new_edge_params = select_feature_dist_params(nodes, self.new_edges_dist_params)
-        print('selected_new_edge_params = ', selected_new_edge_params)
-        new_edges_log_probs = feature_log_prob(selected_new_edge_params, new_edges)
-        # TODO: Double check 'new_edge_probs' calculation when sober...
-        print('new_edges_probs = ', new_edges_log_probs.exp())
         transfer_edges = sampled_actions[:, :, 4:]
-        selected_transfer_edges_dist_params = select_feature_dist_params(nodes, self.transfer_edges_dist_params)
-        print('selected_transfer_edges_dist_params = ', selected_transfer_edges_dist_params)
-        transfer_edge_log_probs = MultivariateBernoulliMixture(selected_transfer_edges_dist_params).log_prob(transfer_edges.float())
-        print('transfer_edge_log_probs = ', transfer_edge_log_probs.exp())
-        stacked = torch.stack((action_type_log_probs, node_log_probs, phases_log_probs, new_edges_log_probs, transfer_edge_log_probs))
-        # print('stacked = ', stacked.sum(dim=-1, keepdim=True))
-        return stacked.sum(dim=-1)
-
+        action_type_log_probs = self._action_type_log_probs(actions)
+        node_log_probs = self._node_log_probs(actions, nodes)
+        phase_log_probs = self._feature_log_probs('phase', nodes, phases)
+        new_edge_log_probs = self._feature_log_probs('new_edge', nodes, new_edges)
+        transfer_edge_log_probs = self._transfer_edge_log_probs(nodes, transfer_edges)
+        return torch.stack(
+            (action_type_log_probs, node_log_probs, phase_log_probs, new_edge_log_probs, transfer_edge_log_probs),
+            dim=-1).sum(dim=-1)
 
     def sample(self, k: int) -> torch.Tensor:
         """
         :param k: The number of samples to produce.
         :return: K x L tensor of actions.
         """
-        action_types = Categorical(probs=self.mixture_dist_params).sample(torch.Size([k])).T
-        selected_node_dist_params = select_node_dist_params(self.frz_node_dist_params, self.flz_node_dist_params,
-                                                            action_types)
-        nodes = sample_from_selected_dist_params(selected_node_dist_params)
-        selected_phase_dist_params = select_feature_dist_params(nodes, self.phase_dist_params)
-        phases = sample_from_selected_dist_params(selected_phase_dist_params)
-        selected_new_edges_dist_params = select_feature_dist_params(nodes, self.new_edges_dist_params)
-        new_edges = sample_from_selected_dist_params(selected_new_edges_dist_params)
-        selected_transfer_edges_dist_params = select_feature_dist_params(nodes, self.transfer_edges_dist_params)
-        transfer_edges = MultivariateBernoulliMixture(selected_transfer_edges_dist_params).sample()
+        action_types = self._sample_action_types(k)
+        nodes = self._sample_nodes(action_types)
+        phases = self._sample_features('phase', nodes)
+        new_edges = self._sample_features('new_edge', nodes)
+        transfer_edges = self._sample_transfer_edges(nodes)
         return torch.cat((torch.stack((action_types, nodes, phases, new_edges), dim=-1), transfer_edges), dim=-1).long()
-
-# Define the mixture distribution parameters
-# mixture_dist_params = torch.tensor([[0.3157, 0.6843],
-#                                     [0.3269, 0.6731]])
-#
-# # Define the action types for which you want to compute log probabilities
-# action_types = torch.tensor([[1., 1., 0.],
-#                              [1., 1., 1.]])
-#
-# log_mixture_dist_params = torch.log(mixture_dist_params)
-#
-# # Prepare to gather the log probabilities based on action_types
-# # Convert action_types to long and add extra dimensions for gathering
-# action_types_long = action_types.long()
-#
-# gathered_log_probs = torch.gather(log_mixture_dist_params, 1, action_types_long).exp()
-#
-# print("Gathered log probabilities:")
-# print(gathered_log_probs)
-
-# nodes =  tensor([[3, 2, 0],
-#         [3, 2, 3]])
-# selected_node_dist_params = tensor([[[0.4390, 0.2160, 0.1784, 0.1371, 0.0294, 0.0000],
-#          [0.4390, 0.2160, 0.1784, 0.1371, 0.0294, 0.0000],
-#          [0.4390, 0.2160, 0.1784, 0.1371, 0.0294, 0.0000]],
-#
-#         [[0.0000, 0.0000, 0.0000, 1.0000, 0.0000, 0.0000],
-#          [0.3706, 0.1567, 0.2055, 0.0000, 0.0354, 0.2318],
-#          [0.0000, 0.0000, 0.0000, 1.0000, 0.0000, 0.0000]]])
-#
-# torch.tensor([[0.1371, 0.1784, 0.4390], [1.0000, 0.2055, 1.0000]])
-
-# selected_phase_dist_params =  torch.tensor([[[0.3750, 0.1718, 0.3854, 0.0678],
-#          [0.3750, 0.1718, 0.3854, 0.0678],
-#          [0.3750, 0.1718, 0.3854, 0.0678]],
-#         [[1.0000, 0.0000, 0.0000, 0.0000],
-#          [1.0000, 0.0000, 0.0000, 0.0000],
-#          [1.0000, 0.0000, 0.0000, 0.0000]]])
-# nodes =  torch.tensor([[3, 3, 3],
-#         [2, 2, 2]])
-#
-# torch.tensor([[0.0678, 0.0678, 0.0678], []])

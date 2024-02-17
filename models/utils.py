@@ -338,10 +338,6 @@ def rand_azx_dist_params(batch_size: int,
     for b in range(batch_size):
         b_flz_num_nodes = torch.randint(0, max_flz_nodes + 1, (1,)).item()
         b_frz_num_nodes = torch.randint(1, max_frz_nodes + 1, (1,)).item()
-
-        print('b_flz_num_nodes = ', b_flz_num_nodes)
-        print('b_frz_num_nodes = ', b_frz_num_nodes)
-
         b_mixture_dist_params = torch.tensor([1.0, 0.0]) if b_flz_num_nodes == 0 else rand_mixture_probs(1, 2,
                                                                                                          zero_prob).squeeze(
             0)
@@ -349,9 +345,7 @@ def rand_azx_dist_params(batch_size: int,
         b_frz_node_dist_params = insert_random_integers(rand_node_probs(1, b_frz_num_nodes, 0.05).squeeze(0),
                                                         b_flz_num_nodes, -1)
         b_flz_node_indices = b_frz_node_dist_params == -1
-        print('b_flz_nodes = ', b_flz_node_indices)
         b_frz_node_indices = b_frz_node_dist_params != -1
-        print('b_frz_nodes = ', b_frz_node_indices)
         if b_flz_num_nodes == 0:
             # If there are no flz nodes, the flz node distribution is a point distribution. Since the mixture
             # distribution is [1, 0], the flz node distribution is not used.
@@ -364,24 +358,17 @@ def rand_azx_dist_params(batch_size: int,
         # Remove the -1 entries.
         b_frz_node_dist_params[b_flz_node_indices] = 0.
 
-        # print('b_frz_node_dist_params = ', b_frz_node_dist_params)
-        # print('b_flz_node_dist_params = ', b_flz_node_dist_params)
-
         b_phase_dist_params = torch.zeros([b_flz_num_nodes + b_frz_num_nodes, num_phases])
         b_phase_dist_params[b_frz_node_indices] = rand_phase_probs(1, b_frz_num_nodes, num_phases, zero_prob).squeeze(0)
-
         b_phase_dist_params = adjust_all_zero_rows(b_phase_dist_params.unsqueeze(0)).squeeze(0)
-        # print('b_phase_dist_params = ', b_phase_dist_params)
 
         b_new_edges_dist_params = torch.zeros([b_flz_num_nodes + b_frz_num_nodes, num_new_edges])
         b_new_edges_dist_params[b_frz_node_indices] = rand_new_edge_probs(1, b_frz_num_nodes, num_new_edges, zero_prob).squeeze(0)
         b_new_edges_dist_params = adjust_all_zero_rows(b_new_edges_dist_params.unsqueeze(0)).squeeze(0)
-        # print('b_new_edges_dist_params = ', b_new_edges_dist_params)
 
         b_transfer_edges_dist_params = torch.zeros([b_flz_num_nodes + b_frz_num_nodes, max_incident_edges, max_incident_edges + 1])
         b_transfer_edges_dist_params[b_frz_node_indices] = rand_transfer_edge_probs(1, b_frz_num_nodes, max_incident_edges).squeeze(0)
         b_transfer_edges_dist_params = adjust_all_zero_matrices(b_transfer_edges_dist_params.unsqueeze(0)).squeeze(0)
-        # print('b_transfer_edges_dist_params = ', b_transfer_edges_dist_params)
 
         mixture_dist_params.append(b_mixture_dist_params)
         frz_node_dist_params.append(b_frz_node_dist_params)
