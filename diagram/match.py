@@ -178,7 +178,6 @@ class BRightMatch(CompoundMatch):
 
     @property
     def sub_matches(self) -> Iterator[Match]:
-        # TODO: Calculate sub-graphs involving boundary vertices
         yield FRightXMatch(self.nodes[0])
         yield FRightZMatch(self.nodes[1])
 

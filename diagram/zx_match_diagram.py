@@ -1,7 +1,6 @@
 from typing import Any, Iterator
 
 import networkx as nx
-from torch_geometric.data import HeteroData
 
 from diagram.pyzx_nx_conv import ETYPE, nx_to_pyg_hetero
 from diagram.zx_diagram import ZXDiagram
@@ -24,6 +23,7 @@ class ZXMatchDiagram(nx.Graph):
         self.node_attrs = self.zx_diagram.node_attrs
         self.edge_attrs = self.zx_diagram.edge_attrs
         super().__init__(nx.Graph(), **attr)
+
 
 
 def sub_match_zx_match_diagram(diagram: ZXDiagram) -> ZXMatchDiagram:
@@ -78,7 +78,7 @@ def f_right_match_from_ndata(diagram: ZXDiagram, n: int) -> FRightMatch:
         raise Exception(f'Unexpected node type {diagram.type(n)}')
 
 
-def is_inclusion_edge(etype: str) -> bool:
+def is_i_edge(etype: str) -> bool:
     if isinstance(etype, str):
         return etype == I_ETYPE_NAME
     else:
@@ -88,7 +88,7 @@ def is_inclusion_edge(etype: str) -> bool:
 def has_i_edge(match_diagram: ZXMatchDiagram, u_match: Match, v_match: Match) -> bool:
     edata = match_diagram.get_edge_data(u_match, v_match)
     if edata is not None:
-        return is_inclusion_edge(edata[ETYPE])
+        return is_i_edge(edata[ETYPE])
     return False
 
 
@@ -98,7 +98,7 @@ def inclusion_neighbors(match_diagram: ZXMatchDiagram, u_match: Match) -> Iterat
             yield u_neighbor
 
 
-def is_bridge_edge(etype: str) -> bool:
+def is_b_edge(etype: str) -> bool:
     if isinstance(etype, str):
         return etype == B_ETYPE_NAME
     else:
@@ -108,7 +108,7 @@ def is_bridge_edge(etype: str) -> bool:
 def has_b_edge(match_diagram: ZXMatchDiagram, u_match: Match, v_match: Match) -> bool:
     edata = match_diagram.get_edge_data(u_match, v_match)
     if edata is not None:
-        return is_bridge_edge(edata[ETYPE])
+        return is_b_edge(edata[ETYPE])
     return False
 
 
