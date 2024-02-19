@@ -1,9 +1,10 @@
 from torch import Tensor
 from torch_geometric.data import HeteroData
 
-from diagram.pyzx_graph_generator import nx_clifford_graph
-from diagram.zx_diagram import ZXDiagram
 from diagram.match import Match
+from diagram.pyzx_graph_generator import clifford_nx_graph, clifford_pyg_hetero_zx_match_diagram, clifford_zx_diagram
+from diagram.zx_diagram import ZXDiagram
+from diagram.zx_match_diagram import ZXMatchDiagram, to_zx_match_diagram
 from models.model import MatchType
 from rewriting.util import rewrite, FRightParameters
 
@@ -17,6 +18,8 @@ IDEA: Rather than a composition data distribution, allow the probability of an f
 How to match the tensor representation of the attributes of a pyg.HeteroData match diagram node with the node from
 the ZXMatchDiagram graph? Node identifiers are lost.
 """
+
+STEP_PENALTY = 1
 
 
 def tensor_to_match(action: Tensor) -> tuple[Match, FRightParameters | None]:
@@ -46,6 +49,7 @@ def remap_matches(match_dict: dict[MatchType, list[Match]]):
 class ZXGame:
     def __init__(self, num_qubits: int, depth: int, t_gates: bool = True, one_hot_phases: bool = False,
                  one_hot_types: bool = False,
+                 step_penalty: int = 1,
                  simplified_reward: int = 1):
         self.zx_diagram = None
         self.zx_match_diagram = None
@@ -56,20 +60,21 @@ class ZXGame:
         self.one_hot_phases = one_hot_phases
         self.one_hot_types = one_hot_types
         self.simplified_reward = simplified_reward
+        self.step_penalty = step_penalty
 
     def step(self, action: Tensor) -> tuple[HeteroData, int, bool]:
         match, params = tensor_to_match(action)
         rewrite(match, self.zx_diagram, params)
         current_value = diagram_value(self.zx_diagram)
         done = is_simplified(self.zx_diagram)  # TODO: What if a graph is repeated? Is there a step limit?
-        reward = self.previous_value - current_value + (self.simplified_reward if done else 0)
+        reward = self.previous_value - current_value + (self.simplified_reward if done else -self.step_penalty)
         self.previous_value = current_value
-        # self.zx_match_diagram = ZXMatchDiagram(self.zx_diagram)
+        self.zx_match_diagram = ZXMatchDiagram(self.zx_diagram)
         return self.zx_diagram.to_pyg_hetero_data(self.one_hot_types,
                                                   self.one_hot_phases), reward, done
 
     def reset(self) -> HeteroData:
-        self.zx_diagram = ZXDiagram(nx_clifford_graph(self.num_qubits, self.depth, t_gates=self.t_gates))
-        # self.zx_match_diagram = ZXMatchDiagram(self.zx_diagram)
+        self.zx_diagram = clifford_zx_diagram(self.num_qubits, self.depth, self.t_gates)
+        self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram, self.one_hot_types)
         self.previous_value = diagram_value(self.zx_diagram)
         return self.zx_diagram.to_pyg_hetero_data(self.one_hot_types, self.one_hot_phases)

@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Optional, Iterable, Union, List, Any
+from typing import Optional, Iterable, Union, List
 
 import networkx as nx
 import torch
@@ -167,21 +167,47 @@ def nx_to_pyg_heterograph_post_process(hdata: pyg.data.HeteroData) -> None:
     edge_type_to_one_hot(hdata)
 
 
-def nx_to_pyg_hetero(
-    G: Any,
-    node_type_attribute: str,
-    edge_type_attribute: Optional[str] = None,
-    graph_attrs: Optional[Iterable[str]] = None, nodes: Optional[List] = None,
-    group_node_attrs: Optional[Union[List[str], all]] = None,
-    group_edge_attrs: Optional[Union[List[str], all]] = None
+def nx_graph_to_pyg_hetero(
+        g: nx.Graph, node_type_attribute: str,
+        edge_type_attribute: Optional[str] = None,
+        graph_attrs: Optional[Iterable[str]] = None, nodes: Optional[List] = None,
+        group_node_attrs: Optional[Union[List[str], all]] = None,
+        group_edge_attrs: Optional[Union[List[str], all]] = None
 ) -> pyg.data.HeteroData:
+    r"""Converts a :obj:`networkx.Graph` or :obj:`networkx.DiGraph` to a
+    :class:`torch_geometric.data.HeteroData` instance.
 
-    def get_edge_attributes(G, edge_indexes: list,
-                            edge_attrs: list = None) -> dict:
+    Args:
+        G (networkx.Graph or networkx.DiGraph): A networkx graph.
+        node_type_attribute (str): The attribute containing the type of a
+            node. For the resulting structure to be valid, this attribute
+            must be set for every node in the graph. Values contained in
+            this attribute will be casted as :obj:`string` if possible. If
+            not, the function will raise an error.
+        edge_type_attribute (str, optional): The attribute containing the
+            type of an edge. If set to :obj:`None`, the value :obj:`"to"`
+            will be used in the final structure. Otherwise, this attribute
+            must be set for every edge in the graph. (default: :obj:`None`)
+        graph_attrs (iterable of str, optional): The graph attributes to be
+            copied. (default: :obj:`None`)
+        nodes (list, optional): The list of nodes whose attributes are to
+            be collected. If set to :obj:`None`, all nodes of the graph
+            will be included. (default: :obj:`None`)
+        group_node_attrs (List[str] or all, optional): The node attributes to
+            be concatenated and added to :obj:`data.x`. They must be present
+            for all nodes of each type. (default: :obj:`None`)
+        group_edge_attrs (List[str] or all, optional): The edge attributes to
+            be concatenated and added to :obj:`data.edge_attr`. They must be
+            present for all edge of each type. (default: :obj:`None`)
+
+    :rtype: :class:`torch_geometric.data.HeteroData`
+    """
+
+    def get_edge_attributes(g: nx.Graph, edge_indexes: list, edge_attrs: list = None) -> dict:
         r"""Collects the attributes of a list of graph edges in a dictionary.
 
         Args:
-            G (networkx.Graph or networkx.DiGraph): A networkx graph.
+            g (networkx.Graph or networkx.DiGraph): A networkx graph.
             edge_indexes (list, optional): The list of edge indexes whose
                 attributes are to be collected. If set to :obj:`None`, all
                 edges of the graph will be included. (default: :obj:`None`)
@@ -191,11 +217,11 @@ def nx_to_pyg_hetero(
                 process. (default: :obj:`None`)
 
         Raises:
-            ValueError: If some of the edges do not share the same list
+            ValueError: If some edges do not share the same list
             of attributes as the rest, an error will be raised.
         """
         data = defaultdict(list)
-        edge_to_data = list(G.edges(data=True))
+        edge_to_data = list(g.edges(data=True))
 
         for edge_index in edge_indexes:
             _, _, feat_dict = edge_to_data[edge_index]
@@ -208,12 +234,11 @@ def nx_to_pyg_hetero(
 
         return data
 
-    def get_node_attributes(G, nodes: list,
-                            expected_node_attrs: list = None) -> dict:
+    def get_node_attributes(g: nx.Graph, nodes: list, expected_node_attrs: list = None) -> dict:
         r"""Collects the attributes of a list of graph nodes in a dictionary.
 
         Args:
-            G (networkx.Graph or networkx.DiGraph): A networkx graph.
+            g (networkx.Graph or networkx.DiGraph): A networkx graph.
             nodes (list, optional): The list of nodes whose attributes are to
                 be collected. If set to :obj:`None`, all nodes of the graph
                 will be included. (default: :obj:`None`)
@@ -229,7 +254,7 @@ def nx_to_pyg_hetero(
 
         data = defaultdict(list)
 
-        node_to_data = G.nodes(data=True)
+        node_to_data = g.nodes(data=True)
 
         for node in nodes:
             feat_dict = node_to_data[node]
@@ -242,10 +267,10 @@ def nx_to_pyg_hetero(
 
         return data
 
-    G = G.to_directed() if not nx.is_directed(G) else G
+    g = g.to_directed() if not nx.is_directed(g) else g
 
     if nodes is not None:
-        G = nx.subgraph(G, nodes)
+        g = nx.subgraph(g, nodes)
 
     hetero_data_dict = {}
 
@@ -254,7 +279,7 @@ def nx_to_pyg_hetero(
     group_to_nodes = defaultdict(list)
     group_to_edges = defaultdict(list)
 
-    for node, node_data in G.nodes(data=True):
+    for node, node_data in g.nodes(data=True):
         if node_type_attribute not in node_data:
             raise KeyError(f"Given node_type_attribute: {node_type_attribute} \
                 missing from node {node}.")
@@ -263,21 +288,19 @@ def nx_to_pyg_hetero(
         node_to_group_id[node] = len(group_to_nodes[node_type]) - 1
         node_to_group[node] = node_type
 
-    for i, (node_a, node_b, edge_data) in enumerate(G.edges(data=True)):
+    for i, (node_a, node_b, edge_data) in enumerate(g.edges(data=True)):
         if edge_type_attribute is not None:
             if edge_type_attribute not in edge_data:
                 raise KeyError(
                     f"Given edge_type_attribute: {edge_type_attribute} \
                     missing from edge {(node_a, node_b)}.")
-            print('edata = ', edge_data[
-                edge_type_attribute])
             node_type_a, edge_type, node_type_b = edge_data[
                 edge_type_attribute]
             if node_to_group[node_a] != node_type_a or node_to_group[
-                    node_b] != node_type_b:
+                node_b] != node_type_b:
                 raise ValueError(f'Edge {node_a}-{node_b} of type\
                          {edge_data[edge_type_attribute]} joins nodes of types\
-                         {node_to_group[node_a]} and { node_to_group[node_b]}.'
+                         {node_to_group[node_a]} and {node_to_group[node_b]}.'
                                  )
         else:
             edge_type = "to"
@@ -287,7 +310,7 @@ def nx_to_pyg_hetero(
     for group, group_nodes in group_to_nodes.items():
         hetero_data_dict[str(group)] = {
             k: v
-            for k, v in get_node_attributes(G, nodes=group_nodes).items()
+            for k, v in get_node_attributes(g, nodes=group_nodes).items()
             if k != node_type_attribute
         }
 
@@ -295,18 +318,19 @@ def nx_to_pyg_hetero(
         group_name = '__'.join(group)
         hetero_data_dict[group_name] = {
             k: v
-            for k, v in get_edge_attributes(G, edge_indexes=group_edges).items()
+            for k, v in get_edge_attributes(g,
+                                            edge_indexes=group_edges).items()
             if k != edge_type_attribute
         }
-        edge_list = list(G.edges(data=False))
+        edge_list = list(g.edges(data=False))
         global_edge_index = [edge_list[edge] for edge in group_edges]
         group_edge_index = [(node_to_group_id[node_a],
                              node_to_group_id[node_b])
                             for node_a, node_b in global_edge_index]
-        hetero_data_dict[group_name]['edge_index'] = torch.tensor(
+        hetero_data_dict[group_name]["edge_index"] = torch.tensor(
             group_edge_index, dtype=torch.long).t().contiguous().view(2, -1)
 
-    graph_items = G.graph
+    graph_items = g.graph
     if graph_attrs is not None:
         graph_items = {
             k: v

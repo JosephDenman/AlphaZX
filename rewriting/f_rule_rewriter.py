@@ -34,7 +34,7 @@ def f_right_rewrite(f_right_match: FRightMatch, phase: float, new_edges: int,
     :param diagram:
     """
     assert -2 < phase < 2, f'Expected {phase} to be in [0, 2)'
-    center = f_right_match.nodes[0]
+    center = f_right_match._nodes[0]
     assert diagram.is_basis(center), f'Node {center} is not a basis node'
     center_phase = diagram.phase(center)
     assert -2 < center_phase < 2, f'Expected {center_phase} to be in [0, 2)'
@@ -44,4 +44,4 @@ def f_right_rewrite(f_right_match: FRightMatch, phase: float, new_edges: int,
     for _, neighbor, k in diagram.incident_edges(center):
         diagram.add_s_edge(right if (neighbor, k) in transfer_edges else left, neighbor)
     diagram.remove_incident_edges(center)
-    diagram.remove_nodes_from(f_right_match.nodes)
+    diagram.remove_nodes_from(f_right_match._nodes)

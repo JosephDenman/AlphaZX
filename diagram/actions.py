@@ -88,3 +88,6 @@ post-conditions (step):
     4.
 
 """
+
+# 32 phases plus one bucket (0) indicating no phase
+PHASE_BUCKETS = 33

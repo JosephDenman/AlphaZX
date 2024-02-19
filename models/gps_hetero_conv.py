@@ -67,6 +67,5 @@ node_types = [FRZ, FLZ, FRX, FLX]
 edge_types = [(FLZ, I, FRZ), (FRZ, I, FLZ), (FLX, I, FRX), (FRX, I, FLX), (FRZ, B, FRX), (FRX, B, FRZ)]
 meta_data = (node_types, edge_types)
 
-match_diagram = 
 gps = GPS(64, 4, 2)
 hetero_gps = to_hetero(gps, meta_data, aggr='sum')

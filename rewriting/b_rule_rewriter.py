@@ -16,7 +16,7 @@ def assert_neighbors(n: int, m: int, diagram: ZXDiagram) -> None:
 
 
 def non_match_neighbors(a: int, match: Match, diagram: ZXDiagram) -> list[int]:
-    return [b for b in diagram.neighbors(a) if b not in match.nodes]
+    return [b for b in diagram.neighbors(a) if b not in match._nodes]
 
 
 def b_left_rewrite(b_left_match: BLeftMatch, diagram: ZXDiagram) -> None:

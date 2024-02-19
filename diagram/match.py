@@ -32,22 +32,22 @@ class Match(abc.ABC):
         assert len(
             self.original_match) == self.expected_size, \
             f'Expected {self.expected_size} nodes but received {len(self.original_match)}'
-        self.match = dict(sorted(self.original_match.items(), key=lambda item: item[1]))
-        self.nodes = tuple(self.match.keys())
+        self._match = dict(sorted(self.original_match.items(), key=lambda item: item[1]))
+        self._nodes = tuple(self._match.keys())
 
     @property
     @abc.abstractmethod
-    def index(self):
+    def index(self) -> int:
         pass
 
     @property
     @abc.abstractmethod
-    def name(self):
+    def name(self) -> str:
         pass
 
     @property
     @abc.abstractmethod
-    def expected_size(self):
+    def expected_size(self) -> int:
         pass
 
     @property
@@ -58,20 +58,28 @@ class Match(abc.ABC):
     def is_compound_match(self) -> bool:
         return not self.is_base_match
 
+    @property
+    def nodes(self) -> list[int]:
+        return list(self._nodes)
+
+    @property
+    def match(self) -> dict[int, int]:
+        return self._match
+
     def __getitem__(self, item):
-        return self.nodes[item]
+        return self._nodes[item]
 
     def __hash__(self):
-        return hash((self.name, *self.nodes))
+        return hash((self.name, *self._nodes))
 
     def __eq__(self, other):
-        return isinstance(other, Match) and self.name == other.name and self.nodes == other.nodes
+        return isinstance(other, Match) and self.name == other.name and self._nodes == other._nodes
 
     def __repr__(self):
-        return self.name + str(list(self.nodes))
+        return self.name + str(list(self._nodes))
 
     def __iter__(self):
-        yield from self.nodes
+        yield from self._nodes
 
 
 class BaseMatch(Match, abc.ABC):
@@ -138,7 +146,7 @@ class FLeftZMatch(FLeftMatch):
 
     @property
     def sub_matches(self) -> Iterator[Match]:
-        for node in self.nodes:
+        for node in self._nodes:
             yield FRightZMatch(node)
 
 
@@ -149,7 +157,7 @@ class FLeftXMatch(FLeftMatch):
 
     @property
     def sub_matches(self) -> Iterator[Match]:
-        for node in self.nodes:
+        for node in self._nodes:
             yield FRightXMatch(node)
 
 
@@ -160,7 +168,7 @@ class BLeftMatch(CompoundMatch):
 
     @property
     def sub_matches(self) -> Iterator[Match]:
-        z, x, m, n = self.nodes
+        z, x, m, n = self._nodes
         yield BRightMatch(z, x)
         yield BRightMatch(z, n)
         yield BRightMatch(m, x)
@@ -178,8 +186,8 @@ class BRightMatch(CompoundMatch):
 
     @property
     def sub_matches(self) -> Iterator[Match]:
-        yield FRightXMatch(self.nodes[0])
-        yield FRightZMatch(self.nodes[1])
+        yield FRightXMatch(self._nodes[0])
+        yield FRightZMatch(self._nodes[1])
 
 
 class YLeftMatch(CompoundMatch):
@@ -198,7 +206,7 @@ class YLeftZMatch(YLeftMatch):
 
     @property
     def sub_matches(self) -> Iterator[Match]:
-        for node in self.nodes:
+        for node in self._nodes:
             if node == 1:
                 yield FRightXMatch(node)
             else:
@@ -212,7 +220,7 @@ class YLeftXMatch(YLeftMatch):
 
     @property
     def sub_matches(self) -> Iterator[Match]:
-        for node in self.nodes:
+        for node in self._nodes:
             if node == 1:
                 yield FRightZMatch(node)
             else:
@@ -235,7 +243,7 @@ class YRightZMatch(YRightMatch):
 
     @property
     def sub_matches(self) -> Iterator[Match]:
-        for node in self.nodes:
+        for node in self._nodes:
             if node == 1:
                 yield FRightXMatch(node)
             else:
@@ -249,11 +257,14 @@ class YRightXMatch(YRightMatch):
 
     @property
     def sub_matches(self) -> Iterator[Match]:
-        for node in self.nodes:
+        for node in self._nodes:
             if node == 1:
                 yield FRightZMatch(node)
             else:
                 yield FRightXMatch(node)
+
+
+MATCH_TYPE_COUNT = 10
 
 
 """
