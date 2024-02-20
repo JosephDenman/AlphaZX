@@ -334,10 +334,10 @@ class ZXDiagram(nx.MultiGraph):
         yield from self.y_left_matches()
         yield from self.y_right_matches()
 
-    def to_pyg_data(self, one_hot_types=True, one_hot_phases=True) -> pyg.data.Data:
+    def to_pyg_data(self, one_hot_types=True) -> pyg.data.Data:
         pass
 
-    def to_pyg_hetero_data(self, one_hot_types=True, one_hot_phases=True) -> pyg.data.HeteroData:
+    def to_pyg_hetero_data(self, one_hot_types=True) -> pyg.data.HeteroData:
         pass
         #
         # current_z = 0

@@ -18,7 +18,7 @@ def f_left_rewrite(f_left_match: FLeftMatch, diagram: ZXDiagram) -> None:
         diagram.add_s_edge(node, neighbor)
     diagram.remove_incident_edges(left)
     diagram.remove_incident_edges(right)
-    diagram.remove_nodes_from(f_left_match)
+    diagram.remove_nodes_from(f_left_match.nodes)
 
 
 def f_right_rewrite(f_right_match: FRightMatch, phase: float, new_edges: int,

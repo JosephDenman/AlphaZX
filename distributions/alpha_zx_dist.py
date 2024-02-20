@@ -3,7 +3,7 @@ from typing import Literal
 import torch
 from torch.distributions.categorical import Categorical
 
-from models.bernoulli_mixture import MultivariateBernoulliMixture
+from distributions.bernoulli_mixture import MultivariateBernoulliMixture
 
 
 class AlphaZXDistribution:

@@ -1,5 +1,6 @@
 import abc
 from collections.abc import Iterator
+from typing import Type
 
 from typing_extensions import Literal
 
@@ -110,18 +111,6 @@ class FRightMatch(BaseMatch):
         return not self.is_z_basis
 
 
-class FRightZMatch(FRightMatch):
-    name = 'f_right_z'
-    index = 0
-    rule_mode = 'z'
-
-
-class FRightXMatch(FRightMatch):
-    name = 'f_right_x'
-    index = 1
-    rule_mode = 'x'
-
-
 class FLeftMatch(CompoundMatch):
     expected_size = 2
 
@@ -129,102 +118,6 @@ class FLeftMatch(CompoundMatch):
     @abc.abstractmethod
     def rule_mode(self) -> Basis:
         pass
-
-    @property
-    def is_z_basis(self) -> bool:
-        return self.rule_mode == 'z'
-
-    @property
-    def is_x_basis(self) -> bool:
-        return not self.is_z_basis
-
-
-class FLeftZMatch(FLeftMatch):
-    name = 'f_left_z'
-    index = 2
-    rule_mode = 'z'
-
-    @property
-    def sub_matches(self) -> Iterator[Match]:
-        for node in self._nodes:
-            yield FRightZMatch(node)
-
-
-class FLeftXMatch(FLeftMatch):
-    name = 'f_left_x'
-    index = 3
-    rule_mode = 'x'
-
-    @property
-    def sub_matches(self) -> Iterator[Match]:
-        for node in self._nodes:
-            yield FRightXMatch(node)
-
-
-class BLeftMatch(CompoundMatch):
-    name = 'b_left'
-    index = 4
-    expected_size = 4
-
-    @property
-    def sub_matches(self) -> Iterator[Match]:
-        z, x, m, n = self._nodes
-        yield BRightMatch(z, x)
-        yield BRightMatch(z, n)
-        yield BRightMatch(m, x)
-        yield BRightMatch(m, n)
-        yield FRightZMatch(z)
-        yield FRightXMatch(x)
-        yield FRightZMatch(m)
-        yield FRightXMatch(n)
-
-
-class BRightMatch(CompoundMatch):
-    name = 'b_right'
-    index = 5
-    expected_size = 2
-
-    @property
-    def sub_matches(self) -> Iterator[Match]:
-        yield FRightXMatch(self._nodes[0])
-        yield FRightZMatch(self._nodes[1])
-
-
-class YLeftMatch(CompoundMatch):
-    expected_size = 4
-
-    @property
-    @abc.abstractmethod
-    def rule_mode(self) -> Basis:
-        pass
-
-
-class YLeftZMatch(YLeftMatch):
-    name = 'y_left_z'
-    index = 6
-    rule_mode = 'z'
-
-    @property
-    def sub_matches(self) -> Iterator[Match]:
-        for node in self._nodes:
-            if node == 1:
-                yield FRightXMatch(node)
-            else:
-                yield FRightZMatch(node)
-
-
-class YLeftXMatch(YLeftMatch):
-    name = 'y_left_x'
-    index = 7
-    rule_mode = 'x'
-
-    @property
-    def sub_matches(self) -> Iterator[Match]:
-        for node in self._nodes:
-            if node == 1:
-                yield FRightZMatch(node)
-            else:
-                yield FRightXMatch(node)
 
 
 class YRightMatch(CompoundMatch):
@@ -236,14 +129,100 @@ class YRightMatch(CompoundMatch):
         pass
 
 
-class YRightZMatch(YRightMatch):
-    name = 'y_right_z'
-    index = 8
+class YLeftMatch(CompoundMatch):
+    expected_size = 4
+
+    @property
+    @abc.abstractmethod
+    def rule_mode(self) -> Basis:
+        pass
+
+
+class FRightZMatch(FRightMatch):
+    name = 'f_right_z'
+    index = 0
+    rule_mode = 'z'
+
+
+class FLeftZMatch(FLeftMatch):
+    name = 'f_left_z'
+    index = 1
     rule_mode = 'z'
 
     @property
     def sub_matches(self) -> Iterator[Match]:
-        for node in self._nodes:
+        for node in self.nodes:
+            yield FRightZMatch(node)
+
+
+class FRightXMatch(FRightMatch):
+    name = 'f_right_x'
+    index = 2
+    rule_mode = 'x'
+
+
+class FLeftXMatch(FLeftMatch):
+    name = 'f_left_x'
+    index = 3
+    rule_mode = 'x'
+
+    @property
+    def sub_matches(self) -> Iterator[Match]:
+        for node in self.nodes:
+            yield FRightXMatch(node)
+
+
+class BRightMatch(CompoundMatch):
+    name = 'b_right'
+    index = 4
+    expected_size = 2
+
+    @property
+    def sub_matches(self) -> Iterator[Match]:
+        yield FRightXMatch(self.nodes[0])
+        yield FRightZMatch(self.nodes[1])
+
+
+class BLeftMatch(CompoundMatch):
+    name = 'b_left'
+    index = 5
+    expected_size = 4
+
+    @property
+    def sub_matches(self) -> Iterator[Match]:
+        z, x, m, n = self.nodes
+        yield BRightMatch(z, x)
+        yield BRightMatch(z, n)
+        yield BRightMatch(m, x)
+        yield BRightMatch(m, n)
+        yield FRightZMatch(z)
+        yield FRightXMatch(x)
+        yield FRightZMatch(m)
+        yield FRightXMatch(n)
+
+
+class YRightZMatch(YRightMatch):
+    name = 'y_right_z'
+    index = 6
+    rule_mode = 'z'
+
+    @property
+    def sub_matches(self) -> Iterator[Match]:
+        for node in self.nodes:
+            if node == 1:
+                yield FRightXMatch(node)
+            else:
+                yield FRightZMatch(node)
+
+
+class YLeftZMatch(YLeftMatch):
+    name = 'y_left_z'
+    index = 7
+    rule_mode = 'z'
+
+    @property
+    def sub_matches(self) -> Iterator[Match]:
+        for node in self.nodes:
             if node == 1:
                 yield FRightXMatch(node)
             else:
@@ -252,6 +231,20 @@ class YRightZMatch(YRightMatch):
 
 class YRightXMatch(YRightMatch):
     name = 'y_right_x'
+    index = 8
+    rule_mode = 'x'
+
+    @property
+    def sub_matches(self) -> Iterator[Match]:
+        for node in self._nodes:
+            if node == 1:
+                yield FRightZMatch(node)
+            else:
+                yield FRightXMatch(node)
+
+
+class YLeftXMatch(YLeftMatch):
+    name = 'y_left_x'
     index = 9
     rule_mode = 'x'
 
@@ -264,40 +257,23 @@ class YRightXMatch(YRightMatch):
                 yield FRightXMatch(node)
 
 
-MATCH_TYPE_COUNT = 10
+def count_leaf_subclasses(cls: Type[Match]) -> int:
+    """
+    Recursively count all leaf subclasses of a given class.
+
+    A leaf subclass is defined as a class that has no further subclasses within its inheritance tree. This function
+    traverses the inheritance tree of the specified class, counting only those classes that do not serve as base classes
+    for other classes.
+
+    :param cls: The class to count leaf subclasses for. This should be Match or a subclass of Match.
+    :return: The total number of leaf subclasses of the given class.
+    :rtype: int
+    """
+    # If there are no subclasses, this is a leaf
+    if not cls.__subclasses__():
+        return 1
+    # Recursively count in subclasses
+    return sum(count_leaf_subclasses(sub_cls) for sub_cls in cls.__subclasses__())
 
 
-"""
-P = TypeVar('P', bound=nx.Graph)
-G = TypeVar('G', bound=nx.Graph)
-M = TypeVar('M', bound=Match)
-
-
-class Matcher(abc.ABC, Generic[P, G, M]):
-
-    @property
-    @abc.abstractmethod
-    def pattern(self) -> P:
-        pass
-
-    @abc.abstractmethod
-    def matches(self, diagram: G) -> Iterator[M]:
-        pass
-
-class Rewriter(abc.ABC, Generic[P, G, M]):
-    @abc.abstractmethod
-    def rewrite(self, diagram: G, match: M) -> None:
-        pass
-
-class Rule(abc.ABC, Generic[P, G, M]):
-
-    @property
-    @abc.abstractmethod
-    def matcher(self) -> Matcher[M]:
-        pass
-
-    @property
-    @abc.abstractmethod
-    def rewriter(self) -> Rewriter[P, G, M]:
-        pass
-"""
+MATCH_TYPE_COUNT = count_leaf_subclasses(Match)

@@ -4,7 +4,7 @@ import networkx as nx
 import pyzx
 from torch_geometric.data import HeteroData, Data
 
-from diagram.pyzx_nx_conv import nx_graph_to_pyg_hetero, ETYPE, NTYPE, PHASE, Z_NTYPE_NAME, \
+from diagram.pyzx_nx_conv import ETYPE, NTYPE, PHASE, Z_NTYPE_NAME, \
     X_NTYPE_INDEX, X_NTYPE_NAME, Z_NTYPE_INDEX, B_NTYPE_INDEX, B_NTYPE_NAME
 from diagram.zx_diagram import ZXDiagram
 from diagram.zx_match_diagram import to_zx_match_diagram, ZXMatchDiagram
@@ -75,34 +75,32 @@ def post_process(nx_graph: nx.MultiGraph) -> None:
     remove_edge_types(nx_graph)
 
 
-def calculate_phase_denominator(t_gates: bool) -> int:
+def phase_denominator(t_gates: bool) -> int:
     return 4 if t_gates else 2
 
 
 def clifford_nx_graph(num_qubits: int, depth: int, t_gates: bool) -> nx.MultiGraph:
-    nx_graph = graph_to_nx_graph(pyzx.generate.cliffords(num_qubits, depth, False, t_gates))
+    # TODO: Add support for H gates
+    nx_graph = graph_to_nx_graph(pyzx.generate.cliffords(num_qubits, depth, True, t_gates))
     post_process(nx_graph)
     return nx_graph
 
 
 def clifford_zx_diagram(num_qubits: int, depth: int, t_gates: bool) -> ZXDiagram:
-    return ZXDiagram(calculate_phase_denominator(t_gates), clifford_nx_graph(num_qubits, depth, t_gates))
+    return ZXDiagram(phase_denominator(t_gates), clifford_nx_graph(num_qubits, depth, t_gates))
 
 
-def clifford_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool, one_hot_types: bool, phase_denominator: int) -> ZXMatchDiagram:
-    return to_zx_match_diagram(clifford_zx_diagram(num_qubits, depth, t_gates), one_hot_types, phase_denominator)
+def clifford_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool, one_hot_types: bool) -> ZXMatchDiagram:
+    return to_zx_match_diagram(clifford_zx_diagram(num_qubits, depth, t_gates), one_hot_types)
 
 
 def clifford_pyg_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool, one_hot_types: bool) -> Data:
-    return clifford_zx_match_diagram(num_qubits, depth, t_gates, one_hot_types, calculate_phase_denominator(t_gates)).to_pyg_data()
+    return clifford_zx_match_diagram(num_qubits, depth, t_gates, one_hot_types).to_pyg_data()
 
 
 def clifford_pyg_hetero_zx_diagram(num_qubits: int, depth: int, t_gates: bool) -> HeteroData:
-    # TODO: Replace with call to 'to_pyg_hetero'
-    return nx_graph_to_pyg_hetero(clifford_nx_graph(num_qubits, depth, t_gates), node_type_attribute='type',
-                                  edge_type_attribute='type')
+    return clifford_zx_diagram(num_qubits, depth, t_gates).to_pyg_hetero_data()
 
 
 def clifford_pyg_hetero_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool, one_hot_types: bool) -> HeteroData:
-    # TODO: Replace with call to 'to_pyg_hetero'
-    return to_zx_match_diagram(clifford_zx_diagram(num_qubits, depth, t_gates), one_hot_types, calculate_phase_denominator(t_gates)).to_pyg_hetero_data()
+    return clifford_zx_match_diagram(num_qubits, depth, t_gates, one_hot_types).to_pyg_hetero_data()

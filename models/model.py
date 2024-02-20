@@ -3,7 +3,7 @@ from typing import Literal
 
 import torch
 import torch.nn.functional as F
-from torch_geometric.data import HeteroData, DataLoader, InMemoryDataset
+from torch_geometric.data import HeteroData
 from torch_geometric.nn import HeteroDictLinear, HGTConv
 
 MetaData = tuple[list[str], list[tuple[str, str, str]]]

@@ -2,7 +2,8 @@ from typing import Iterator
 
 import networkx as nx
 import torch
-from torch_geometric.data import Data, HeteroData
+import torch_geometric.data as pyg_data
+import torch_geometric.utils as pyg_utils
 
 from diagram.match import Match, CompoundMatch, FRightMatch, FRightZMatch, FRightXMatch, MATCH_TYPE_COUNT
 from diagram.pyzx_nx_conv import ETYPE
@@ -21,14 +22,15 @@ class ZXMatchDiagram(nx.Graph):
     NTYPE = 'type'
     ETYPE = 'type'
 
-    def __init__(self, diagram: ZXDiagram, one_hot_types: bool):
-        self.zx_diagram = diagram
-        self.one_hot_types = one_hot_types
+    def __init__(self, zx_diagram: ZXDiagram, one_hot_types: bool):
+        self.zx_diagram = zx_diagram
+        self.phase_denominator = self.zx_diagram.phase_denominator
         self.node_attrs = self.zx_diagram.node_attrs
         self.edge_attrs = self.zx_diagram.edge_attrs
+        self.one_hot_types = one_hot_types
         super().__init__(nx.Graph())
 
-    def to_pyg_hetero_data(self) -> HeteroData:
+    def to_pyg_hetero_data(self) -> pyg_data.HeteroData:
         pass
 
     @staticmethod
@@ -39,7 +41,7 @@ class ZXMatchDiagram(nx.Graph):
         concatenated_tensor = torch.cat(flattened_tensors)
         return concatenated_tensor
 
-    def to_pyg_data(self) -> Data:
+    def to_pyg_data(self) -> pyg_data.Data:
         # Node indices
         node_index = dict()
         # Node features
@@ -64,24 +66,25 @@ class ZXMatchDiagram(nx.Graph):
                 edge_data[self.ETYPE] if self.one_hot_types else torch.tensor([edge_data[self.ETYPE]],
                                                                               dtype=torch.int64))
             indexed_edge_types[(source_index, target_index)] = edge_type
-
-        # TODO: Verify that edges can be supplied to 'Data' unordered.
         edge_types = []
         for source_index, target_index in zip(edge_sources, edge_targets):
             edge_types.append(indexed_edge_types[(source_index, target_index)])
         edge_index = torch.tensor([edge_sources, edge_targets], dtype=torch.long)
         edge_attr = torch.stack(edge_types)
-
-        # Create the PyTorch Geometric Data object including edge attributes
-        data = Data(x=node_features_tensor, edge_index=edge_index, edge_attr=edge_attr)
+        edge_index, edge_attr = pyg_utils.to_undirected(edge_index, edge_attr, num_nodes=node_features_tensor.size(0))
+        data = pyg_data.Data(x=node_features_tensor, edge_index=edge_index, edge_attr=edge_attr)
+        assert data.is_undirected(), 'PyG graph is not undirected'
+        data.sort()
+        data.coalesce()
+        data.validate()
         return data
 
 
-def to_zx_match_diagram(zx_diagram: ZXDiagram, one_hot_types: bool, phase_denominator: int) -> ZXMatchDiagram:
+def to_zx_match_diagram(zx_diagram: ZXDiagram, one_hot_types: bool) -> ZXMatchDiagram:
     zx_match_diagram = ZXMatchDiagram(zx_diagram, one_hot_types)
     matches = list(zx_diagram.compute_matches())
     for match in matches:
-        add_match(zx_match_diagram, zx_diagram, match, one_hot_types, phase_denominator)
+        add_match(zx_match_diagram, zx_diagram, match, one_hot_types)
     add_b_edges(zx_match_diagram, zx_diagram, one_hot_types)
     num_nodes = zx_match_diagram.number_of_nodes()
     num_matches = len(matches)
@@ -94,44 +97,9 @@ def compute_node_type_attr(match: Match, one_hot_types: bool) -> torch.Tensor:
     return torch.nn.functional.one_hot(torch.tensor([match.index]), MATCH_TYPE_COUNT) if one_hot_types else match.index
 
 
-def int_to_phase(phase_bucket: int, phase_denominator: int) -> float:
-    """
-    Converts an integer representation back into a float value based on the unit circle position,
-    ensuring compatibility with the wrap-around behavior of the U(1) group.
-
-    :param phase_bucket: The integer representing the discrete position on the unit circle.
-    :param phase_denominator: The number of discrete positions (buckets) on the unit circle.
-    :return: The float value representing the position on the unit circle.
-    """
-    if phase_denominator <= 0:
-        raise ValueError(f"The phase denominator {phase_denominator} is not positive.")
-    # Ensure position wraps around using modulus to handle negative and overflow positions
-    normalized_position = phase_bucket % phase_denominator
-    return normalized_position / phase_denominator
-
-
-def phase_to_int(phase: float, phase_denominator: int) -> int:
-    """
-    Converts a float in a fixed subset of the unit circle into an integer representation,
-    accounting for the wrap-around behavior characteristic of the U(1) group.
-
-    :param phase: The float representing the position on the unit circle.
-    :param phase_denominator: The number of discrete positions (buckets) on the unit circle.
-    :return: The integer representation of the position on the unit circle.
-    :raises ValueError: If the input value isn't exactly a multiple of 1/denominator.
-    """
-    if phase_denominator <= 0:
-        raise ValueError(f"The phase denominator {phase_denominator} is not positive.")
-    # Normalize the position to ensure positive and wrap-around behavior
-    normalized_position = (phase * phase_denominator) % phase_denominator
-    if not normalized_position.is_integer():
-        raise ValueError(f"The input value {phase} is not a multiple of 1/{phase_denominator}.")
-    return int(normalized_position)
-
-
-def compute_node_phase_attr(zx_diagram: ZXDiagram, match: Match, phase_denominator: int) -> torch.Tensor:
+def compute_node_phase_attr(zx_diagram: ZXDiagram, match: Match) -> torch.Tensor:
     if isinstance(match, FRightMatch):
-        return torch.tensor([phase_to_int(zx_diagram.phase(match.nodes[0]), phase_denominator)])
+        return torch.tensor([zx_diagram.phase(match.nodes[0])], dtype=torch.float)
     else:
         # TODO: How to handle rewrites without phases?
         return torch.tensor([0])
@@ -141,15 +109,14 @@ def compute_edge_type_attr(etype_index: int, one_hot_types: bool) -> torch.Tenso
     return torch.nn.functional.one_hot(torch.tensor([etype_index]), ETYPE_COUNT) if one_hot_types else etype_index
 
 
-def add_match(zx_match_diagram: ZXMatchDiagram, zx_diagram: ZXDiagram, match: Match, one_hot_types: bool,
-              phase_denominator: int) -> None:
+def add_match(zx_match_diagram: ZXMatchDiagram, zx_diagram: ZXDiagram, match: Match, one_hot_types: bool) -> None:
     if not zx_match_diagram.has_node(match):
         zx_match_diagram.add_node(match, type=compute_node_type_attr(match, one_hot_types),
-                                  phase=compute_node_phase_attr(zx_diagram, match, phase_denominator))
+                                  phase=compute_node_phase_attr(zx_diagram, match))
     if isinstance(match, CompoundMatch):
         for sub_match in match.sub_matches:
             if not zx_match_diagram.has_node(sub_match):
-                add_match(zx_match_diagram, zx_diagram, sub_match, one_hot_types, phase_denominator)
+                add_match(zx_match_diagram, zx_diagram, sub_match, one_hot_types)
             if not zx_match_diagram.has_edge(sub_match, match):
                 zx_match_diagram.add_edge(match, sub_match, type=compute_edge_type_attr(I_ETYPE_INDEX, one_hot_types))
     return

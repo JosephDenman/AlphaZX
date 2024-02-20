@@ -8,8 +8,8 @@ class PostZXMatchDiagram(ZXMatchDiagram):
     """
     `ZXMatchDiagram` instance that has been processed and is ready to be converted to `Data`.
     """
-    def __init__(self, diagram: ZXDiagram, **attr):
-        super().__init__(diagram, **attr)
+    def __init__(self, zx_diagram: ZXDiagram, **attr):
+        super().__init__(zx_diagram, **attr)
         self.connected_components = sorted(nx.connected_components(self.zx_diagram), key=len, reverse=True)
         component_nodes = []
         for component in self.connected_components:

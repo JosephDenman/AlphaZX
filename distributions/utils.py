@@ -195,8 +195,6 @@ def rand_inclusive(size: torch.Size) -> torch.Tensor:
     return values
 
 
-# TODO: Have this function generate realistic samples, i.e., samples where batches have different node counts and are
-#       padded to a uniform dimension.
 def rand_sampled_actions_batch(batch_size: int, num_actions: int, action_length: int, num_action_types: int,
                                num_nodes: int, num_phase_buckets: int, num_new_edge_buckets: int,
                                non_parametric_action_types: list[int]) -> torch.Tensor:

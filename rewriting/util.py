@@ -7,13 +7,13 @@ from rewriting.y_rule_rewriter import y_left_rewrite, y_right_rewrite
 FRightParameters = tuple[float, int, set[tuple[int, int]]]
 
 
-def rewrite(match: Match, diagram: ZXDiagram, f_right_parameters: FRightParameters | None = None) -> None:
+def rewrite(diagram: ZXDiagram, match: Match, f_right_params: FRightParameters | None = None) -> None:
     if isinstance(match, FLeftMatch):
         f_left_rewrite(match, diagram)
     elif isinstance(match, FRightMatch):
-        if f_right_parameters is None:
+        if f_right_params is None:
             raise Exception(f'Expected parameters for {match}')
-        phase, new_edges, transfer_edges = f_right_parameters
+        phase, new_edges, transfer_edges = f_right_params
         f_right_rewrite(match, phase, new_edges, transfer_edges, diagram)
     elif isinstance(match, BLeftMatch):
         b_left_rewrite(match, diagram)
