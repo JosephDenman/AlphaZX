@@ -83,9 +83,9 @@ def is_simplified(diagram: ZXDiagram) -> bool:
 class ZXGame:
     def __init__(self, num_qubits: int, depth: int, t_gates: bool = True, one_hot_types: bool = False,
                  step_penalty: int = 1, simplified_reward: int = 1):
-        self.zx_diagram: ZXDiagram | None = None
-        self.zx_match_diagram: ZXMatchDiagram | None = None
-        self.previous_value: int | None = None
+        self.zx_diagram = None
+        self.zx_match_diagram = None
+        self.previous_value = None
         self.num_qubits = num_qubits
         self.depth = depth
         self.t_gates = t_gates
@@ -110,6 +110,7 @@ class ZXGame:
         current_value = diagram_value(self.zx_diagram)
         self._remove_isolated_nodes()
         self._remove_self_loop_edges()
+        self._remove_isolated_components()
         done = is_simplified(self.zx_diagram)
         reward = self.previous_value - current_value + (self.simplified_reward if done else -self.step_penalty)
         self.previous_value = current_value
