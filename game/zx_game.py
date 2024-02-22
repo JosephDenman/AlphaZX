@@ -76,9 +76,12 @@ def diagram_value(diagram: ZXDiagram) -> int:
         [1 if p % 0.5 != 0 else 0 for p in diagram.phases().values()]) - len(diagram.edges())
 
 
-def is_simplified(diagram: ZXDiagram) -> bool:
-    # TODO - Maybe not this simple...
-    return diagram.number_of_nodes() == diagram.num_b_nodes()
+def is_simplified(zx_diagram: ZXDiagram) -> bool:
+    num_non_zero_phases = 0
+    for n, phase in zx_diagram.phases():
+        if phase != 0.:
+            num_non_zero_phases += 1
+    return num_non_zero_phases == 0
 
 
 class ZXGame:
@@ -117,11 +120,10 @@ class ZXGame:
         self._remove_self_loop_edges()
         self._remove_isolated_components()
         done = is_simplified(self.zx_diagram)
-
         reward = self.previous_value - current_value + (self.simplified_reward if done else -self.step_penalty)
         self.previous_value = current_value
-        self.zx_match_diagram = ZXMatchDiagram(self.zx_diagram, self.one_hot_types)
-        return self.zx_diagram.to_pyg_data(self.one_hot_types), reward, done
+        self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram, self.one_hot_types)
+        return self.zx_match_diagram.to_pyg_data(), reward, done
 
     def reset(self) -> Data:
         self.zx_diagram = clifford_zx_diagram(self.num_qubits, self.depth, self.t_gates)

@@ -10,6 +10,7 @@ from diagram.match import Match, FRightMatch, FRightZMatch, FRightXMatch, FLeftZ
     BLeftMatch, BRightMatch, YLeftMatch, YRightMatch, YLeftXMatch, YLeftZMatch, YRightZMatch, YRightXMatch
 from diagram.pyzx_nx_conv import is_basis, is_boundary, is_z_basis, is_x_basis, \
     Z_NTYPE_NAME, B_NTYPE_NAME, X_NTYPE_NAME
+from diagram.zx_match_diagram import ZXMatchDiagram
 
 
 class ZXDiagram(nx.MultiGraph):
@@ -70,11 +71,11 @@ class ZXDiagram(nx.MultiGraph):
         return {n: ndata[self.NTYPE] for n, ndata in self.nodes(data=True)}
 
     def phase(self, n: int) -> float:
-        assert self.has_node(n), f'Node {n} does not exist'
+        assert self.is_basis(n), f'Node {n} is a boundary node'
         return self.nodes[n][self.PHASE]
 
     def phases(self) -> dict[int, float]:
-        return {n: ndata[self.PHASE] for n, ndata in self.nodes(data=True)}
+        return {n: self.nodes[n][self.PHASE] for n in self.basis_nodes()}
 
     def set_phase(self, n: int, phase: float) -> None:
         assert self.is_basis(n), f'Attempted to set phase of non-basis node {n}'
@@ -334,6 +335,9 @@ class ZXDiagram(nx.MultiGraph):
         yield from self.b_right_matches()
         yield from self.y_left_matches()
         yield from self.y_right_matches()
+
+    def to_zx_match_diagram(self) -> ZXMatchDiagram:
+        pass
 
     def to_pyg_data(self, one_hot_types=True) -> pyg.data.Data:
         pass

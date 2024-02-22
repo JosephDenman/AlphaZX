@@ -25,10 +25,9 @@ for c in nx.connected_components(d_copy):
     if b_nodes.isdisjoint(c):
         d.remove_nodes_from(c)
 
-print(d.node_attrs)
-plt.figure('There')
+plt.figure()
 draw_nx_zx_diagram(d_copy)
 
-plt.figure('Hello')
+plt.figure()
 draw_nx_zx_diagram(d)
 plt.show()
