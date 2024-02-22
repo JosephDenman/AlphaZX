@@ -1,4 +1,4 @@
-from typing import Type
+from typing import Type, Optional
 
 import networkx as nx
 from torch import Tensor
@@ -7,7 +7,7 @@ from torch_geometric.data import Data
 from diagram.feature_conversions import cat_phase_to_float, cat_new_edges_to_int, bernoulli_transfer_edges_to_tuple
 from diagram.match import Match, FRightZMatch, FLeftZMatch, FRightXMatch, FLeftXMatch, \
     BRightMatch, BLeftMatch, YRightZMatch, YLeftZMatch, YRightXMatch, YLeftXMatch
-from diagram.pyzx_graph_generator import clifford_zx_diagram
+from diagram.diagram_generators import clifford_zx_diagram
 from diagram.zx_diagram import ZXDiagram
 from diagram.zx_match_diagram import ZXMatchDiagram, to_zx_match_diagram
 from rewriting.util import rewrite, FRightParameters
@@ -23,6 +23,7 @@ def assert_correct_match_instance(expected_class: Type[Match], match: Match) -> 
 
 
 def tensor_to_match(zx_match_diagram: ZXMatchDiagram, action: Tensor) -> tuple[Match, FRightParameters | None]:
+    # In this function, the batch dimension of 'action' is always one.
     action_type = action[0]
     node = action[1]
     match = node_index_to_match(node, zx_match_diagram)
@@ -83,15 +84,15 @@ def is_simplified(diagram: ZXDiagram) -> bool:
 class ZXGame:
     def __init__(self, num_qubits: int, depth: int, t_gates: bool = True, one_hot_types: bool = False,
                  step_penalty: int = 1, simplified_reward: int = 1):
-        self.zx_diagram = None
-        self.zx_match_diagram = None
-        self.previous_value = None
         self.num_qubits = num_qubits
         self.depth = depth
         self.t_gates = t_gates
         self.one_hot_types = one_hot_types
         self.simplified_reward = simplified_reward
         self.step_penalty = step_penalty
+        self.zx_diagram = clifford_zx_diagram(self.num_qubits, self.depth, self.t_gates)
+        self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram, self.one_hot_types)
+        self.previous_value = diagram_value(self.zx_diagram)
 
     def _remove_isolated_nodes(self) -> None:
         self.zx_diagram.remove_nodes_from(list(nx.isolates(self.zx_diagram)))
@@ -100,11 +101,15 @@ class ZXGame:
         self.zx_diagram.remove_edges_from(list(nx.selfloop_edges(self.zx_diagram, keys=True)))
 
     def _remove_isolated_components(self) -> None:
-        # TODO: Any isolated connected components (subgraphs representing scalars) should be removed, since scalars can
-        #       be recovered for any scalar free diagram.
-        pass
+        if self.zx_diagram.num_b_nodes() == 0 or self.zx_diagram.num_b_nodes() == 1:
+            raise ValueError('Valid diagrams always have at least two boundary nodes')
+        b_nodes = self.zx_diagram.b_nodes()
+        for c in nx.connected_components(self.zx_diagram.copy()):
+            if b_nodes.isdisjoint(c):
+                self.zx_diagram.remove_nodes_from(c)
 
     def step(self, action: Tensor) -> tuple[Data, int, bool]:
+        action = action.squeeze(0)
         match, params = tensor_to_match(self.zx_match_diagram, action)
         rewrite(self.zx_diagram, match, params)
         current_value = diagram_value(self.zx_diagram)
@@ -112,6 +117,7 @@ class ZXGame:
         self._remove_self_loop_edges()
         self._remove_isolated_components()
         done = is_simplified(self.zx_diagram)
+
         reward = self.previous_value - current_value + (self.simplified_reward if done else -self.step_penalty)
         self.previous_value = current_value
         self.zx_match_diagram = ZXMatchDiagram(self.zx_diagram, self.one_hot_types)

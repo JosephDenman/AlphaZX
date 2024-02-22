@@ -1,3 +1,6 @@
+import torch
+
+
 def cat_phase_to_float(cat_phase: torch.Tensor, phase_denominator: int) -> float:
     """
     Converts a tensor phase representation back into a float value based on the unit circle position,

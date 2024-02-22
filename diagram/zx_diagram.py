@@ -29,18 +29,19 @@ class ZXDiagram(nx.MultiGraph):
         if nx_graph is not None:
             for n in nx_graph.nodes:
                 self._validate_and_add_phase(n, nx_graph.nodes[n][self.PHASE])
-        self.z_nodes_set = set()
-        self.x_nodes_set = set()
-        self.b_nodes_set = set()
-        for n in nx_graph.nodes:
-            if self.is_x_basis(n):
-                self.x_nodes_set.add(n)
-            elif self.is_z_basis(n):
-                self.z_nodes_set.add(n)
-            elif self.is_boundary(n):
-                self.b_nodes_set.add(n)
-            else:
-                raise Exception(f'Node {n} has undefined type')
+                print(nx_graph.nodes[n])
+            self._z_nodes_set = set()
+            self._x_nodes_set = set()
+            self._b_nodes_set = set()
+            for n in nx_graph.nodes:
+                if self.is_x_basis(n):
+                    self._x_nodes_set.add(n)
+                elif self.is_z_basis(n):
+                    self._z_nodes_set.add(n)
+                elif self.is_boundary(n):
+                    self._b_nodes_set.add(n)
+                else:
+                    raise Exception(f'Node {n} has undefined type')
 
     def _validate_and_add_phase(self, n: int, phase: float):
         # Validate phase
@@ -100,15 +101,15 @@ class ZXDiagram(nx.MultiGraph):
 
     def flip_basis(self, n: int) -> None:
         assert self.is_basis(n), f'Attempted to basis flip non-basis node {n}'
-        (self.x_nodes_set.remove if self.is_x_basis(n) else self.z_nodes_set.remove)(n)
+        (self._x_nodes_set.remove if self.is_x_basis(n) else self._z_nodes_set.remove)(n)
         self.nodes[n][self.NTYPE] = (X_NTYPE_NAME if self.is_z_basis(n) else Z_NTYPE_NAME)
-        (self.x_nodes_set.add if self.is_x_basis(n) else self.z_nodes_set.add)(n)
+        (self._x_nodes_set.add if self.is_x_basis(n) else self._z_nodes_set.add)(n)
 
     def add_x_node(self, phase: float) -> int:
         assert self.is_valid_phase(phase), f'Attempted to add X-basis node with invalid phase {phase}'
         new_x = self.__next_node()
         self.add_node(new_x, type=X_NTYPE_NAME, phase=phase)
-        self.x_nodes_set.add(new_x)
+        self._x_nodes_set.add(new_x)
         return new_x
 
     def add_x_nodes(self, phases: list[float]) -> list[int]:
@@ -126,7 +127,7 @@ class ZXDiagram(nx.MultiGraph):
                 raise Exception(f'Node {n} has undefined type')
 
     def x_nodes(self) -> set[int]:
-        return self.x_nodes_set
+        return self._x_nodes_set
 
     def num_x_nodes(self) -> int:
         return len(self.x_nodes())
@@ -134,20 +135,20 @@ class ZXDiagram(nx.MultiGraph):
     def remove_x_node(self, n: int) -> None:
         assert self.is_x_basis(n), f'Attempted to remove non-X-basis node {n}'
         self.remove_node(n)
-        self.x_nodes_set.remove(n)
+        self._x_nodes_set.remove(n)
 
     def add_z_node(self, phase: float) -> int:
         assert self.is_valid_phase(phase), f'Attempted to add Z-basis node with invalid phase {phase}'
         new_z = self.__next_node()
         self.add_node(new_z, type=Z_NTYPE_NAME, phase=phase)
-        self.z_nodes_set.add(new_z)
+        self._z_nodes_set.add(new_z)
         return new_z
 
     def add_z_nodes(self, phases: list[float]) -> list[int]:
         return [self.add_z_node(phase) for phase in phases]
 
     def z_nodes(self) -> set[int]:
-        return self.z_nodes_set
+        return self._z_nodes_set
 
     def num_z_nodes(self) -> int:
         return len(self.z_nodes())
@@ -155,19 +156,19 @@ class ZXDiagram(nx.MultiGraph):
     def remove_z_node(self, n: int) -> None:
         assert self.is_z_basis(n), f'Attempted to remove non-Z-basis node {n}'
         self.remove_node(n)
-        self.z_nodes_set.remove(n)
+        self._z_nodes_set.remove(n)
 
     def add_b_node(self) -> int:
         new_b = self.__next_node()
         self.add_node(new_b, type=B_NTYPE_NAME, phase=0)
-        self.b_nodes_set.add(new_b)
+        self._b_nodes_set.add(new_b)
         return new_b
 
     def add_b_nodes(self, count: int) -> list[int]:
         return [self.add_b_node() for _ in range(count)]
 
     def b_nodes(self) -> set[int]:
-        return self.b_nodes_set
+        return self._b_nodes_set.copy()
 
     def num_b_nodes(self) -> int:
         return len(self.b_nodes())
@@ -175,7 +176,7 @@ class ZXDiagram(nx.MultiGraph):
     def remove_b_node(self, n: int) -> None:
         assert self.is_boundary(n), f'Attempted to remove non-boundary node {n}'
         self.remove_node(n)
-        self.b_nodes_set.remove(n)
+        self._b_nodes_set.remove(n)
 
     def add_s_edge(self, s: int, t: int) -> int:
         assert self.has_node(s), f'Node {s} does not exist'
@@ -375,3 +376,9 @@ class ZXDiagram(nx.MultiGraph):
         #     })
         #
         # return hdata
+
+    def copy(self, as_view=False):
+        diagram_copy = self.__class__(self.phase_denominator, self)
+        diagram_copy.add_nodes_from(self.nodes)
+        diagram_copy.add_edges_from(self.edges)
+        return diagram_copy

@@ -2,6 +2,7 @@ from typing import Iterator
 
 import networkx as nx
 import torch
+import torch.nn.functional as torch_func
 import torch_geometric.data as pyg_data
 import torch_geometric.utils as pyg_utils
 
@@ -12,10 +13,10 @@ from diagram.zx_diagram import ZXDiagram
 ETYPE_COUNT = 2
 I_ETYPE_INDEX = 0
 I_ETYPE_NAME = 'inclusion'
-I_ETYPE_ONE_HOT = torch.nn.functional.one_hot(torch.tensor([I_ETYPE_INDEX]), ETYPE_COUNT)
+I_ETYPE_ONE_HOT = torch_func.one_hot(torch.tensor([I_ETYPE_INDEX]), ETYPE_COUNT)
 B_ETYPE_INDEX = 1
 B_ETYPE_NAME = 'bridge'
-B_ETYPE_ONE_HOT = torch.nn.functional.one_hot(torch.tensor([B_ETYPE_INDEX]), ETYPE_COUNT)
+B_ETYPE_ONE_HOT = torch_func.one_hot(torch.tensor([B_ETYPE_INDEX]), ETYPE_COUNT)
 
 
 class ZXMatchDiagram(nx.Graph):
@@ -52,7 +53,6 @@ class ZXMatchDiagram(nx.Graph):
                 self._flatten_and_concatenate_tensors([node_data[attr] for attr in self.node_attrs]))
             node_index[node] = i
         node_features_tensor = torch.stack(node_features_list)
-
         # Edge indices and edge attributes
         edge_sources = []
         edge_targets = []
@@ -94,7 +94,7 @@ def to_zx_match_diagram(zx_diagram: ZXDiagram, one_hot_types: bool) -> ZXMatchDi
 
 
 def compute_node_type_attr(match: Match, one_hot_types: bool) -> torch.Tensor:
-    return torch.nn.functional.one_hot(torch.tensor([match.index]), MATCH_TYPE_COUNT) if one_hot_types else match.index
+    return torch_func.one_hot(torch.tensor([match.index]), MATCH_TYPE_COUNT) if one_hot_types else match.index
 
 
 def compute_node_phase_attr(zx_diagram: ZXDiagram, match: Match) -> torch.Tensor:
@@ -106,11 +106,13 @@ def compute_node_phase_attr(zx_diagram: ZXDiagram, match: Match) -> torch.Tensor
 
 
 def compute_edge_type_attr(etype_index: int, one_hot_types: bool) -> torch.Tensor:
-    return torch.nn.functional.one_hot(torch.tensor([etype_index]), ETYPE_COUNT) if one_hot_types else etype_index
+    return torch_func.one_hot(torch.tensor([etype_index]), ETYPE_COUNT) if one_hot_types else etype_index
 
 
 def add_match(zx_match_diagram: ZXMatchDiagram, zx_diagram: ZXDiagram, match: Match, one_hot_types: bool) -> None:
     if not zx_match_diagram.has_node(match):
+        # TODO: How to incorporate the incident edges of an f-right match into the NN so that bernoulli parameters
+        #       can be computed?
         zx_match_diagram.add_node(match, type=compute_node_type_attr(match, one_hot_types),
                                   phase=compute_node_phase_attr(zx_diagram, match))
     if isinstance(match, CompoundMatch):
