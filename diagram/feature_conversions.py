@@ -1,5 +1,26 @@
 import torch
 
+from diagram.zx_match_diagram import ZXMatchDiagram
+
+
+def is_integer_tensor(tensor: torch.Tensor) -> bool:
+    """
+    Checks if a 0D PyTorch tensor represents an integer.
+
+    :param tensor: A 0D PyTorch tensor to be checked.
+    :return: A boolean indicating if the tensor represents an integer. True if the tensor is of an integer type or is
+             a floating-point number that represents an integer value (e.g., 2.0), and False otherwise.
+    :raises ValueError: If the input is not a 0D PyTorch tensor representing an integer.
+    """
+    # Check if tensor is already of integer type
+    if tensor.dim() == 0:
+        if tensor.dtype in (torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8):
+            return True
+        # Check if it's a floating point but represents an integer
+        return float(tensor) == float(tensor.floor())
+    else:
+        raise ValueError("Input must be a 0D PyTorch tensor")
+
 
 def cat_phase_to_float(cat_phase: torch.Tensor, phase_denominator: int) -> float:
     """
@@ -12,6 +33,8 @@ def cat_phase_to_float(cat_phase: torch.Tensor, phase_denominator: int) -> float
     """
     if len(cat_phase.shape) != 0:
         raise ValueError(f"The input tensor {cat_phase} is not a scalar.")
+    if is_integer_tensor(cat_phase):
+        raise ValueError(f"The input tensor {cat_phase} is not an integer.")
     if phase_denominator <= 0:
         raise ValueError(f"The phase denominator {phase_denominator} is not positive.")
     # Ensure position wraps around using modulus to handle negative and overflow positions
@@ -46,5 +69,5 @@ def cat_new_edges_to_int(cat_new_edges: torch.Tensor) -> int:
     return int(cat_new_edges) + 1
 
 
-def bernoulli_transfer_edges_to_tuple(bernoulli_transfer_edges: torch.Tensor) -> tuple[int, int]:
+def bernoulli_transfer_edges_to_set(zx_match_diagram: ZXMatchDiagram, transfer_edges_tensor: torch.Tensor) -> set[tuple[int, int]]:
     pass

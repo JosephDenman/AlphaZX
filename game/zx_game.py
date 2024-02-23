@@ -1,13 +1,13 @@
-from typing import Type, Optional
+from typing import Type
 
 import networkx as nx
 from torch import Tensor
 from torch_geometric.data import Data
 
-from diagram.feature_conversions import cat_phase_to_float, cat_new_edges_to_int, bernoulli_transfer_edges_to_tuple
+from diagram.diagram_generators import clifford_zx_diagram
+from diagram.feature_conversions import cat_phase_to_float, cat_new_edges_to_int, bernoulli_transfer_edges_to_set
 from diagram.match import Match, FRightZMatch, FLeftZMatch, FRightXMatch, FLeftXMatch, \
     BRightMatch, BLeftMatch, YRightZMatch, YLeftZMatch, YRightXMatch, YLeftXMatch
-from diagram.diagram_generators import clifford_zx_diagram
 from diagram.zx_diagram import ZXDiagram
 from diagram.zx_match_diagram import ZXMatchDiagram, to_zx_match_diagram
 from rewriting.util import rewrite, FRightParameters
@@ -32,8 +32,7 @@ def tensor_to_match(zx_match_diagram: ZXMatchDiagram, action: Tensor) -> tuple[M
         assert_correct_match_instance(FRightZMatch, match)
         phase = cat_phase_to_float(action[2], zx_match_diagram.phase_denominator)
         new_edges = cat_new_edges_to_int(action[3])
-        transfer_edges = bernoulli_transfer_edges_to_tuple(action[4:])
-        # TODO: BIG - How to convert the transfer_edges to the correct representation?
+        transfer_edges = bernoulli_transfer_edges_to_set(zx_match_diagram, action[4:])
         return match, FRightParameters(phase, new_edges, transfer_edges)
     elif action_type == FLeftZMatch.index:
         assert_correct_match_instance(FLeftZMatch, match)
@@ -98,13 +97,13 @@ class ZXGame:
         self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram, self.one_hot_types)
         self.previous_value = diagram_value(self.zx_diagram)
 
-    def _remove_isolated_nodes(self) -> None:
+    def __remove_isolated_nodes(self) -> None:
         self.zx_diagram.remove_nodes_from(list(nx.isolates(self.zx_diagram)))
 
-    def _remove_self_loop_edges(self) -> None:
+    def __remove_self_loop_edges(self) -> None:
         self.zx_diagram.remove_edges_from(list(nx.selfloop_edges(self.zx_diagram, keys=True)))
 
-    def _remove_isolated_components(self) -> None:
+    def __remove_isolated_components(self) -> None:
         if self.zx_diagram.num_b_nodes() == 0 or self.zx_diagram.num_b_nodes() == 1:
             raise ValueError('Valid diagrams always have at least two boundary nodes')
         b_nodes = self.zx_diagram.b_nodes()
@@ -116,9 +115,9 @@ class ZXGame:
         match, params = tensor_to_match(self.zx_match_diagram, action)
         rewrite(self.zx_diagram, match, params)
         current_value = diagram_value(self.zx_diagram)
-        self._remove_isolated_nodes()
-        self._remove_self_loop_edges()
-        self._remove_isolated_components()
+        self.__remove_isolated_nodes()
+        self.__remove_self_loop_edges()
+        self.__remove_isolated_components()
         done = is_simplified(self.zx_diagram)
         reward = self.previous_value - current_value + (self.simplified_reward if done else -self.step_penalty)
         self.previous_value = current_value

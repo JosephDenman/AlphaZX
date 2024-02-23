@@ -19,23 +19,29 @@ B_ETYPE_NAME = 'bridge'
 B_ETYPE_ONE_HOT = torch_func.one_hot(torch.tensor([B_ETYPE_INDEX]), ETYPE_COUNT)
 
 
+# TODO: In the future, post-processed versions of ZXMatchDiagram, e.g., adding certain features should be done by
+#       defining methods that return new 'ZXMatchDiagram' instances with the desired properties. This way, post-processing
+#       steps can be easily chained.
 class ZXMatchDiagram(nx.Graph):
     NTYPE = 'type'
     ETYPE = 'type'
+    INCIDENT_EDGES = 'incident_edges'
 
     def __init__(self, zx_diagram: ZXDiagram, one_hot_types: bool):
         self.zx_diagram = zx_diagram
-        self.phase_denominator = self.zx_diagram.phase_denominator
-        self.node_attrs = self.zx_diagram.node_attrs
-        self.edge_attrs = self.zx_diagram.edge_attrs
         self.one_hot_types = one_hot_types
+        self.phase_denominator = self.zx_diagram.phase_denominator
+        self.node_attrs = self.zx_diagram.node_attrs + [self.INCIDENT_EDGES]
+        self.edge_attrs = self.zx_diagram.edge_attrs
+        self.max_degree = max(self.zx_diagram.degree, key=lambda x: x[1])[1]
         super().__init__(nx.Graph())
 
     def to_pyg_hetero_data(self) -> pyg_data.HeteroData:
         pass
 
     @staticmethod
-    def _flatten_and_concatenate_tensors(tensors: list[torch.Tensor]) -> torch.Tensor:
+    def __flatten_and_concatenate_tensors(tensors: list[torch.Tensor]) -> torch.Tensor:
+        # TODO: Ensure incident edges attribute is properly concatenated
         # Flatten each tensor in the list to ensure it's 1D
         flattened_tensors = [torch.flatten(tensor) for tensor in tensors]
         # Concatenate all the flattened tensors into a single 1D tensor
@@ -50,7 +56,7 @@ class ZXMatchDiagram(nx.Graph):
         for i, (node, node_data) in enumerate(self.nodes(data=True)):
             # Flatten, concatenate, and append node features
             node_features_list.append(
-                self._flatten_and_concatenate_tensors([node_data[attr] for attr in self.node_attrs]))
+                self.__flatten_and_concatenate_tensors([node_data[attr] for attr in self.node_attrs]))
             node_index[node] = i
         node_features_tensor = torch.stack(node_features_list)
         # Edge indices and edge attributes
@@ -99,10 +105,17 @@ def compute_node_type_attr(match: Match, one_hot_types: bool) -> torch.Tensor:
 
 def compute_node_phase_attr(zx_diagram: ZXDiagram, match: Match) -> torch.Tensor:
     if isinstance(match, FRightMatch):
+        # Although the phase outputs of the DNN are categorical, we represent the input features as floats.
         return torch.tensor([zx_diagram.phase(match.nodes[0])], dtype=torch.float)
     else:
         # TODO: How to handle rewrites without phases?
         return torch.tensor([0])
+
+
+def compute_incident_edges(zx_match_diagram: ZXMatchDiagram, match: Match) -> torch.Tensor:
+    # TODO: Must validate that the order of incident edges to a f-right node is the tensor is the same as the order of
+    #       nodes in the nx.neighbors function
+    pass
 
 
 def compute_edge_type_attr(etype_index: int, one_hot_types: bool) -> torch.Tensor:
@@ -111,10 +124,10 @@ def compute_edge_type_attr(etype_index: int, one_hot_types: bool) -> torch.Tenso
 
 def add_match(zx_match_diagram: ZXMatchDiagram, zx_diagram: ZXDiagram, match: Match, one_hot_types: bool) -> None:
     if not zx_match_diagram.has_node(match):
-        # TODO: How to incorporate the incident edges of an f-right match into the NN so that bernoulli parameters
-        #       can be computed?
-        zx_match_diagram.add_node(match, type=compute_node_type_attr(match, one_hot_types),
-                                  phase=compute_node_phase_attr(zx_diagram, match))
+        zx_match_diagram.add_node(match,
+                                  type=compute_node_type_attr(match, one_hot_types),
+                                  phase=compute_node_phase_attr(zx_diagram, match),
+                                  incident_edges=compute_incident_edges(zx_match_diagram, match))
     if isinstance(match, CompoundMatch):
         for sub_match in match.sub_matches:
             if not zx_match_diagram.has_node(sub_match):

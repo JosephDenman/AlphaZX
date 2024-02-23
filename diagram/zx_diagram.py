@@ -1,9 +1,7 @@
-from collections import defaultdict
 from collections.abc import Iterable
 from typing import Iterator
 
 import networkx as nx
-import torch
 import torch_geometric as pyg
 
 from diagram.match import Match, FRightMatch, FRightZMatch, FRightXMatch, FLeftZMatch, FLeftMatch, FLeftXMatch, \
@@ -14,7 +12,6 @@ from diagram.zx_match_diagram import ZXMatchDiagram
 
 
 class ZXDiagram(nx.MultiGraph):
-
     NTYPE = 'type'
     PHASE = 'phase'
 
@@ -24,12 +21,12 @@ class ZXDiagram(nx.MultiGraph):
         self.phase_denominator = phase_denominator
         super().__init__(incoming_graph_data=nx_graph, multigraph_input=True)
         self.next_node_index = max(nx_graph.nodes(data=False)) + 1 if self.number_of_nodes() > 0 else 0
-        self._initialize_graph_from_nx_graph(nx_graph)
+        self.__initialize_graph_from_nx_graph(nx_graph)
 
-    def _initialize_graph_from_nx_graph(self, nx_graph: nx.MultiGraph = None):
+    def __initialize_graph_from_nx_graph(self, nx_graph: nx.MultiGraph = None):
         if nx_graph is not None:
             for n in nx_graph.nodes:
-                self._validate_and_add_phase(n, nx_graph.nodes[n][self.PHASE])
+                self.__validate_and_add_phase(n, nx_graph.nodes[n][self.PHASE])
                 print(nx_graph.nodes[n])
             self._z_nodes_set = set()
             self._x_nodes_set = set()
@@ -42,12 +39,13 @@ class ZXDiagram(nx.MultiGraph):
                 elif self.is_boundary(n):
                     self._b_nodes_set.add(n)
                 else:
-                    raise Exception(f'Node {n} has undefined type')
+                    raise Exception(f'Node {n} has unexpected type')
 
-    def _validate_and_add_phase(self, n: int, phase: float):
+    def __validate_and_add_phase(self, n: int, phase: float):
         # Validate phase
         if not self.is_valid_phase(phase):
-            raise ValueError(f"Phase {phase} is not a multiple of 1/{self.phase_denominator}.")
+            raise ValueError(
+                f'Phase {phase} for node {n} is invalid for diagram with phase denominator {self.phase_denominator}')
         # Set phase
         self.nodes[n][self.PHASE] = phase
 
@@ -79,6 +77,8 @@ class ZXDiagram(nx.MultiGraph):
 
     def set_phase(self, n: int, phase: float) -> None:
         assert self.is_basis(n), f'Attempted to set phase of non-basis node {n}'
+        assert self.is_valid_phase(
+            phase), f'Phase {phase} is invalid for diagram with phase denominator {self.phase_denominator}'
         self.nodes[n][self.PHASE] = phase
 
     def is_boundary(self, n: int) -> bool:
@@ -107,7 +107,8 @@ class ZXDiagram(nx.MultiGraph):
         (self._x_nodes_set.add if self.is_x_basis(n) else self._z_nodes_set.add)(n)
 
     def add_x_node(self, phase: float) -> int:
-        assert self.is_valid_phase(phase), f'Attempted to add X-basis node with invalid phase {phase}'
+        assert self.is_valid_phase(
+            phase), f'Phase {phase} for X-basis node is invalid for diagram with phase denominator {self.phase_denominator}'
         new_x = self.__next_node()
         self.add_node(new_x, type=X_NTYPE_NAME, phase=phase)
         self._x_nodes_set.add(new_x)
@@ -128,7 +129,7 @@ class ZXDiagram(nx.MultiGraph):
                 raise Exception(f'Node {n} has undefined type')
 
     def x_nodes(self) -> set[int]:
-        return self._x_nodes_set
+        return self._x_nodes_set.copy()
 
     def num_x_nodes(self) -> int:
         return len(self.x_nodes())
@@ -139,7 +140,8 @@ class ZXDiagram(nx.MultiGraph):
         self._x_nodes_set.remove(n)
 
     def add_z_node(self, phase: float) -> int:
-        assert self.is_valid_phase(phase), f'Attempted to add Z-basis node with invalid phase {phase}'
+        assert self.is_valid_phase(
+            phase), f'Phase {phase} for Z-basis node is invalid for diagram with phase denominator {self.phase_denominator}'
         new_z = self.__next_node()
         self.add_node(new_z, type=Z_NTYPE_NAME, phase=phase)
         self._z_nodes_set.add(new_z)
@@ -149,7 +151,7 @@ class ZXDiagram(nx.MultiGraph):
         return [self.add_z_node(phase) for phase in phases]
 
     def z_nodes(self) -> set[int]:
-        return self._z_nodes_set
+        return self._z_nodes_set.copy()
 
     def num_z_nodes(self) -> int:
         return len(self.z_nodes())
@@ -344,42 +346,6 @@ class ZXDiagram(nx.MultiGraph):
 
     def to_pyg_hetero_data(self, one_hot_types=True) -> pyg.data.HeteroData:
         pass
-        #
-        # current_z = 0
-        # current_x = 0
-        # current_b = 0
-        # node_to_tensor_index = defaultdict()  # Maps NetworkX nodes to their tensor indices
-        # for node, ndata in self.nodes(data=True):
-        #     ntype = self.type(node)
-        #     if is_z_basis(ntype):
-        #         node_to_tensor_index[node] = current_z
-        #         current_z = current_z + 1
-        #     elif is_x_basis(ntype):
-        #         node_to_tensor_index[node] = current_x
-        #         current_x = current_x + 1
-        #     elif is_boundary(ntype):
-        #         node_to_tensor_index[node] = current_b
-        #         current_b = current_b + 1
-        #     else:
-        #         raise Exception(f'Node {node} has unexpected type {ntype}')
-        #
-        # del self.graph['node_default']
-        # del self.graph['edge_default']
-        #
-        # hdata = nx_to_pyg_hetero(self, node_type_attribute='type', group_node_attrs=['phase'])
-        #
-        # hdata['matches'] = defaultdict(list)
-        # for match in self.compute_matches():
-        #     hdata['matches'][match.name].append({
-        #         Z_NTYPE_NAME: torch.tensor([node_to_tensor_index[node] for node in match if self.is_z_basis(node)],
-        #                                    dtype=torch.long),
-        #         X_NTYPE_NAME: torch.tensor([node_to_tensor_index[node] for node in match if self.is_x_basis(node)],
-        #                                    dtype=torch.long),
-        #         B_NTYPE_NAME: torch.tensor([node_to_tensor_index[node] for node in match if self.is_boundary(node)],
-        #                                    dtype=torch.long)
-        #     })
-        #
-        # return hdata
 
     def copy(self, as_view=False):
         diagram_copy = self.__class__(self.phase_denominator, self)

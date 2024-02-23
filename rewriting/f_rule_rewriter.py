@@ -9,39 +9,36 @@ def add_node(f_match: FRightMatch | FLeftMatch, phase: float, diagram: ZXDiagram
         return diagram.add_x_node(phase)
 
 
-def f_left_rewrite(f_left_match: FLeftMatch, diagram: ZXDiagram) -> None:
+def assert_is_basis_node(zx_diagram: ZXDiagram, n: int) -> None:
+    assert zx_diagram.is_basis(n), f'Node {n} is not a basis node'
+
+
+def f_left_rewrite(f_left_match: FLeftMatch, zx_diagram: ZXDiagram) -> None:
     left, right = f_left_match
-    assert diagram.is_basis(left), f'Node {left} is not a basis node'
-    assert diagram.is_basis(right), f'Node {right} is not a basis node'
-    node = add_node(f_left_match, (diagram.phase(left) + diagram.phase(right)) % 2, diagram)
-    for neighbor in diagram.neighbors_from(f_left_match):
-        diagram.add_s_edge(node, neighbor)
-    diagram.remove_incident_edges(left)
-    diagram.remove_incident_edges(right)
-    diagram.remove_nodes_from(f_left_match.nodes)
+    assert_is_basis_node(zx_diagram, left)
+    assert_is_basis_node(zx_diagram, right)
+    node = add_node(f_left_match, zx_diagram.phase(left) + zx_diagram.phase(right), zx_diagram)
+    for neighbor in zx_diagram.neighbors_from(f_left_match):
+        zx_diagram.add_s_edge(node, neighbor)
+    zx_diagram.remove_incident_edges(left)
+    zx_diagram.remove_incident_edges(right)
+    zx_diagram.remove_nodes_from(f_left_match.nodes)
+
+
+def assert_is_valid_phase(zx_diagram: ZXDiagram, phase: float) -> None:
+    assert zx_diagram.is_valid_phase(
+        phase), f'Phase {phase} is invalid for diagram with phase denominator {zx_diagram.phase_denominator}'
 
 
 def f_right_rewrite(f_right_match: FRightMatch, phase: float, new_edges: int,
                     transfer_edges: set[tuple[int, int]],
-                    diagram: ZXDiagram) -> None:
-    """
-    :param f_right_match:
-    :param phase:
-    :param new_edges:
-    :param transfer_edges: Set of tuples where the first component is a neighbor of the center node in the match
-                           and the second number is the key of an edge between the neighbor and the center node in
-                           the match.
-    :param diagram:
-    """
-    assert -2 < phase < 2, f'Expected {phase} to be in [0, 2)'
-    center = f_right_match._nodes[0]
-    assert diagram.is_basis(center), f'Node {center} is not a basis node'
-    center_phase = diagram.phase(center)
-    assert -2 < center_phase < 2, f'Expected {center_phase} to be in [0, 2)'
-    left = add_node(f_right_match, phase, diagram)
-    right = add_node(f_right_match, (center_phase - phase) % 2, diagram)
-    diagram.add_s_edges_from([(left, right)] * new_edges)
-    for _, neighbor, k in diagram.incident_edges(center):
-        diagram.add_s_edge(right if (neighbor, k) in transfer_edges else left, neighbor)
-    diagram.remove_incident_edges(center)
-    diagram.remove_nodes_from(f_right_match._nodes)
+                    zx_diagram: ZXDiagram) -> None:
+    assert_is_valid_phase(zx_diagram, phase)
+    center = f_right_match.nodes[0]
+    left = add_node(f_right_match, phase, zx_diagram)
+    right = add_node(f_right_match, zx_diagram.phase(center) - phase, zx_diagram)
+    zx_diagram.add_s_edges_from([(left, right)] * new_edges)
+    for _, neighbor, k in zx_diagram.incident_edges(center):
+        zx_diagram.add_s_edge(right if (neighbor, k) in transfer_edges else left, neighbor)
+    zx_diagram.remove_incident_edges(center)
+    zx_diagram.remove_nodes_from(f_right_match.nodes)
