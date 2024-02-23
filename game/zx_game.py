@@ -24,6 +24,7 @@ def assert_correct_match_instance(expected_class: Type[Match], match: Match) -> 
 
 def tensor_to_match(zx_match_diagram: ZXMatchDiagram, action: Tensor) -> tuple[Match, FRightParameters | None]:
     # In this function, the batch dimension of 'action' is always one.
+    action = action.squeeze(0)
     action_type = action[0]
     node = action[1]
     match = node_index_to_match(node, zx_match_diagram)
@@ -112,7 +113,6 @@ class ZXGame:
                 self.zx_diagram.remove_nodes_from(c)
 
     def step(self, action: Tensor) -> tuple[Data, int, bool]:
-        action = action.squeeze(0)
         match, params = tensor_to_match(self.zx_match_diagram, action)
         rewrite(self.zx_diagram, match, params)
         current_value = diagram_value(self.zx_diagram)
