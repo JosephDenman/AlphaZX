@@ -8,29 +8,27 @@ from diagram.match import Match, FRightMatch, FRightZMatch, FRightXMatch, FLeftZ
     BLeftMatch, BRightMatch, YLeftMatch, YRightMatch, YLeftXMatch, YLeftZMatch, YRightZMatch, YRightXMatch
 from diagram.pyzx_nx_conv import is_basis, is_boundary, is_z_basis, is_x_basis, \
     Z_NTYPE_NAME, B_NTYPE_NAME, X_NTYPE_NAME
-from diagram.zx_match_diagram import ZXMatchDiagram
 
 
 class ZXDiagram(nx.MultiGraph):
     NTYPE = 'type'
     PHASE = 'phase'
 
-    def __init__(self, phase_denominator: int = 2, nx_graph: nx.MultiGraph = None):
+    def __init__(self, phase_denominator: int, nx_graph: nx.MultiGraph = None):
         if phase_denominator <= 0:
             raise ValueError(f"The phase denominator {phase_denominator} must be positive.")
         self.phase_denominator = phase_denominator
         super().__init__(incoming_graph_data=nx_graph, multigraph_input=True)
         self.next_node_index = max(nx_graph.nodes(data=False)) + 1 if self.number_of_nodes() > 0 else 0
+        self._z_nodes_set = set()
+        self._x_nodes_set = set()
+        self._b_nodes_set = set()
         self.__initialize_graph_from_nx_graph(nx_graph)
 
     def __initialize_graph_from_nx_graph(self, nx_graph: nx.MultiGraph = None):
         if nx_graph is not None:
             for n in nx_graph.nodes:
                 self.__validate_and_add_phase(n, nx_graph.nodes[n][self.PHASE])
-                print(nx_graph.nodes[n])
-            self._z_nodes_set = set()
-            self._x_nodes_set = set()
-            self._b_nodes_set = set()
             for n in nx_graph.nodes:
                 if self.is_x_basis(n):
                     self._x_nodes_set.add(n)
@@ -50,7 +48,7 @@ class ZXDiagram(nx.MultiGraph):
         self.nodes[n][self.PHASE] = phase
 
     def is_valid_phase(self, phase: float) -> bool:
-        normalized_position = (phase * self.phase_denominator) % self.phase_denominator
+        normalized_position = (float(phase) * self.phase_denominator) % self.phase_denominator
         return normalized_position.is_integer()
 
     @property
@@ -338,8 +336,8 @@ class ZXDiagram(nx.MultiGraph):
         yield from self.y_left_matches()
         yield from self.y_right_matches()
 
-    def to_zx_match_diagram(self) -> ZXMatchDiagram:
-        pass
+    # def to_zx_match_diagram(self) -> ZXMatchDiagram:
+    #     pass
 
     def to_pyg_data(self, one_hot_types=True) -> pyg.data.Data:
         pass
@@ -352,3 +350,28 @@ class ZXDiagram(nx.MultiGraph):
         diagram_copy.add_nodes_from(self.nodes)
         diagram_copy.add_edges_from(self.edges)
         return diagram_copy
+
+
+def zx_compose(f: ZXDiagram, g: ZXDiagram) -> ZXDiagram:
+    return zx_compose_all([f, g])
+
+
+def zx_compose_all(zx_diagrams: Iterable[ZXDiagram]) -> ZXDiagram:
+    # Extract phase_denominators and convert to a set to identify unique values
+    phase_denominators = {diagram.phase_denominator for diagram in zx_diagrams}
+    # If the set has more than one element, not all phase_denominators are equal
+    if len(phase_denominators) != 1:
+        raise ValueError(
+            f"Cannot compose diagrams with different phase denominators: {phase_denominators}")
+    phase_denominator = list(phase_denominators)[0]
+    composed_diagram = None
+    for i, d in enumerate(zx_diagrams):
+        if i == 0:
+            # create new graph
+            composed_diagram = ZXDiagram(phase_denominator)
+        composed_diagram.graph.update(d.graph)
+        composed_diagram.add_nodes_from(d.nodes(data=True))
+        composed_diagram.add_edges_from(d.edges(keys=True, data=True))
+    if composed_diagram is None:
+        raise ValueError("cannot apply zx_compose_all to an empty list")
+    return composed_diagram

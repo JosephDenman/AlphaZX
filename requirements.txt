@@ -3,3 +3,4 @@ networkx==3.1
 pyzx==0.7.3
 hypothesis~=6.80.1
 matplotlib~=3.8.0
+pytest~=7.4.0
