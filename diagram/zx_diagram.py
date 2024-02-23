@@ -15,7 +15,7 @@ class ZXDiagram(nx.MultiGraph):
     NTYPE = 'type'
     PHASE = 'phase'
 
-    def __init__(self, phase_denominator: int, nx_graph: nx.MultiGraph = None):
+    def __init__(self, phase_denominator: int = 2, nx_graph: nx.MultiGraph = None):
         if phase_denominator <= 0:
             raise ValueError(f"The phase denominator {phase_denominator} must be positive.")
         self.phase_denominator = phase_denominator

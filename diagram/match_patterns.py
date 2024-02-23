@@ -1,8 +1,8 @@
 import networkx as nx
 
+from diagram.match import Basis
 from diagram.pyzx_nx_conv import Z_NTYPE_NAME, X_NTYPE_NAME
 from diagram.zx_diagram import ZXDiagram
-from diagram.match import Basis
 
 
 def f_left_pattern(basis: Basis) -> ZXDiagram:

@@ -3,10 +3,10 @@ from typing import Tuple, List, Dict, Optional
 
 import networkx as nx
 
-from diagram.pyzx_nx_conv import Z_NTYPE_INDEX, X_NTYPE_INDEX, H_ETYPE_INDEX, B_NTYPE_NAME, B_NTYPE_INDEX, \
-    is_boundary, H_NTYPE_INDEX, is_basis, is_simple_edge, PHASE, NTYPE, ETYPE, ROW, COLUMN, X_NTYPE_NAME, Z_NTYPE_NAME, \
-    H_NTYPE_NAME
 from diagram.match import Match
+from diagram.pyzx_nx_conv import Z_NTYPE_INDEX, X_NTYPE_INDEX, B_NTYPE_NAME, B_NTYPE_INDEX, \
+    H_NTYPE_INDEX, PHASE, NTYPE, ROW, COLUMN, X_NTYPE_NAME, Z_NTYPE_NAME, \
+    H_NTYPE_NAME
 
 Z_NTYPE_COLOR = '#d8f8d8'
 X_NTYPE_COLOR = '#e8a5b0'

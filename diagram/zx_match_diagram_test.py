@@ -1,8 +1,8 @@
-import networkx as nx
 import matplotlib.pyplot as plt
-from diagram.diagram_generators import clifford_zx_match_diagram, clifford_zx_diagram
-from diagram.nx_drawing import draw_nx_zx_diagram
+import networkx as nx
 
+from diagram.diagram_generators import clifford_zx_diagram
+from diagram.nx_drawing import draw_nx_zx_diagram
 
 num_qubits = 10
 depth = 10

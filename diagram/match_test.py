@@ -4,9 +4,10 @@ import networkx as nx
 
 from diagram.match import Basis, FLeftZMatch, FLeftXMatch, FRightZMatch, FRightXMatch, BLeftMatch, BRightMatch, \
     YLeftZMatch, YLeftXMatch, YRightZMatch, YRightXMatch
-from diagram.match_patterns import f_left_z_pattern, f_left_x_pattern, f_right_z_pattern, f_right_x_pattern, y_left_z_pattern, y_left_x_pattern, y_left_pattern, y_right_z_pattern, y_right_x_pattern, \
+from diagram.match_patterns import f_left_z_pattern, f_left_x_pattern, f_right_z_pattern, f_right_x_pattern, \
+    y_left_z_pattern, y_left_x_pattern, y_left_pattern, y_right_z_pattern, y_right_x_pattern, \
     b_left_pattern, b_right_pattern
-from diagram.pyzx_nx_conv import H_ETYPE_INDEX, Z_NTYPE_NAME, X_NTYPE_NAME, H_ETYPE_NAME
+from diagram.pyzx_nx_conv import Z_NTYPE_NAME, X_NTYPE_NAME
 from diagram.zx_diagram import ZXDiagram
 
 
@@ -532,7 +533,8 @@ class BRuleRightTest(unittest.TestCase):
         b2, b3, b4, b5 = diagram.add_b_nodes(4)
         diagram.add_s_edges_from([(b2, 0), (b3, 1), (2, b4), (3, b5)])
         self.assertListEqual(list(diagram.b_left_matches()), [BLeftMatch(0, 2, 1, 3)])
-        self.assertListEqual(list(diagram.b_right_matches()), [BRightMatch(2, 1), BRightMatch(3, 0), BRightMatch(2, 0), BRightMatch(3, 1)])
+        self.assertListEqual(list(diagram.b_right_matches()),
+                             [BRightMatch(2, 1), BRightMatch(3, 0), BRightMatch(2, 0), BRightMatch(3, 1)])
 
 
 def parallel_edge_no_match_test_graph(basis: Basis, first: bool = False, second: bool = False,
@@ -631,4 +633,3 @@ class YRightMatchTest(unittest.TestCase):
         b4, b5, b6 = diagram.add_b_nodes(3)
         diagram.add_s_edges_from([(b4, 0), (2, b5), (3, b6)])
         self.assertListEqual(list(diagram.y_right_x_matches()), [YRightXMatch(0, 1, 2, 3)])
-
