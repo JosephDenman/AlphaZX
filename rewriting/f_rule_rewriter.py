@@ -17,7 +17,7 @@ def f_left_rewrite(f_left_match: FLeftMatch, zx_diagram: ZXDiagram) -> None:
     left, right = f_left_match
     assert_is_basis_node(zx_diagram, left)
     assert_is_basis_node(zx_diagram, right)
-    node = add_node(f_left_match, zx_diagram.phase(left) + zx_diagram.phase(right), zx_diagram)
+    node = add_node(f_left_match, (zx_diagram.phase(left) + zx_diagram.phase(right)) % 2, zx_diagram)
     for neighbor in zx_diagram.neighbors_from(f_left_match):
         zx_diagram.add_s_edge(node, neighbor)
     zx_diagram.remove_incident_edges(left)
@@ -36,7 +36,7 @@ def f_right_rewrite(f_right_match: FRightMatch, phase: float, new_edges: int,
     assert_is_valid_phase(zx_diagram, phase)
     center = f_right_match.nodes[0]
     left = add_node(f_right_match, phase, zx_diagram)
-    right = add_node(f_right_match, zx_diagram.phase(center) - phase, zx_diagram)
+    right = add_node(f_right_match, (zx_diagram.phase(center) - phase) % 2, zx_diagram)
     zx_diagram.add_s_edges_from([(left, right)] * new_edges)
     for _, neighbor, k in zx_diagram.incident_edges(center):
         zx_diagram.add_s_edge(right if (neighbor, k) in transfer_edges else left, neighbor)

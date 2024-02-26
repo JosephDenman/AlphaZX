@@ -49,23 +49,25 @@ class ZXMatchDiagram(nx.Graph):
         return concatenated_tensor
 
     def to_pyg_data(self) -> pyg_data.Data:
-        # Node indices
-        node_index = dict()
+        # Maps nodes to their positions in the node features tensor.
+        node_position = dict()
+        # Maps positions to their nodes in the original graph.
+        position_node = dict()
         # Node features
         node_features_list = []
         for i, (node, node_data) in enumerate(self.nodes(data=True)):
             # Flatten, concatenate, and append node features
             node_features_list.append(
                 self.__flatten_and_concatenate_tensors([node_data[attr] for attr in self.node_attrs]))
-            node_index[node] = i
+            node_position[node] = i
         node_features_tensor = torch.stack(node_features_list)
         # Edge indices and edge attributes
         edge_sources = []
         edge_targets = []
         indexed_edge_types = dict()
         for source, target, edge_data in self.edges(data=True):
-            source_index = node_index[source]
-            target_index = node_index[target]
+            source_index = node_position[source]
+            target_index = node_position[target]
             edge_sources.append(source_index)
             edge_targets.append(target_index)
             edge_type = torch.flatten(
@@ -108,8 +110,9 @@ def compute_node_phase_attr(zx_diagram: ZXDiagram, match: Match) -> torch.Tensor
         # Although the phase outputs of the DNN are categorical, we represent the input features as floats.
         return torch.tensor([zx_diagram.phase(match.nodes[0])], dtype=torch.float)
     else:
-        # TODO: How to handle rewrites without phases?
-        return torch.tensor([0])
+        # Because phases of f-right matches are always mod 2, giving non-f-right matches a phase of -1 differentiates
+        # them from f-right matches.
+        return torch.tensor([-1])
 
 
 def compute_incident_edges(zx_match_diagram: ZXMatchDiagram, match: Match) -> torch.Tensor:

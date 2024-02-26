@@ -69,3 +69,4 @@ meta_data = (node_types, edge_types)
 
 gps = GPS(64, 4, 2)
 hetero_gps = to_hetero(gps, meta_data, aggr='sum')
+print(hetero_gps.meta)
