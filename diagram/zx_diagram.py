@@ -179,6 +179,9 @@ class ZXDiagram(nx.MultiGraph):
         self.remove_node(n)
         self._b_nodes_set.remove(n)
 
+    def num_basis_nodes(self) -> int:
+        return len(self.basis_nodes())
+
     def add_s_edge(self, s: int, t: int) -> int:
         assert self.has_node(s), f'Node {s} does not exist'
         assert self.has_node(s), f'Node {t} does not exist'

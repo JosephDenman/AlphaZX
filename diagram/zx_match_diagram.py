@@ -1,5 +1,3 @@
-from typing import Iterator
-
 import networkx as nx
 import torch
 import torch.nn.functional as torch_func
@@ -7,34 +5,43 @@ import torch_geometric.data as pyg_data
 import torch_geometric.utils as pyg_utils
 
 from diagram.match import Match, CompoundMatch, FRightMatch, FRightZMatch, FRightXMatch, MATCH_TYPE_COUNT
-from diagram.pyzx_nx_conv import ETYPE
 from diagram.zx_diagram import ZXDiagram
 
 ETYPE_COUNT = 2
-I_ETYPE_INDEX = 0
+
+B_ETYPE_INDEX = 0
+B_ETYPE_NAME = 'base'
+B_ETYPE_ONE_HOT = torch_func.one_hot(torch.tensor([B_ETYPE_INDEX]), ETYPE_COUNT)
+
+I_ETYPE_INDEX = 1
 I_ETYPE_NAME = 'inclusion'
 I_ETYPE_ONE_HOT = torch_func.one_hot(torch.tensor([I_ETYPE_INDEX]), ETYPE_COUNT)
-B_ETYPE_INDEX = 1
-B_ETYPE_NAME = 'bridge'
-B_ETYPE_ONE_HOT = torch_func.one_hot(torch.tensor([B_ETYPE_INDEX]), ETYPE_COUNT)
 
 
 # TODO: In the future, post-processed versions of ZXMatchDiagram, e.g., adding certain features should be done by
 #       defining methods that return new 'ZXMatchDiagram' instances with the desired properties. This way, post-processing
 #       steps can be easily chained.
-class ZXMatchDiagram(nx.Graph):
+class ZXMatchDiagram(nx.MultiGraph):
     NTYPE = 'type'
     ETYPE = 'type'
-    INCIDENT_EDGES = 'incident_edges'
 
     def __init__(self, zx_diagram: ZXDiagram, one_hot_types: bool):
         self.zx_diagram = zx_diagram
         self.one_hot_types = one_hot_types
         self.phase_denominator = self.zx_diagram.phase_denominator
-        self.node_attrs = self.zx_diagram.node_attrs + [self.INCIDENT_EDGES]
+        self.node_attrs = self.zx_diagram.node_attrs
         self.edge_attrs = self.zx_diagram.edge_attrs
         self.max_degree = max(self.zx_diagram.degree, key=lambda x: x[1])[1]
-        super().__init__(nx.Graph())
+        super().__init__(nx.MultiGraph())
+        for n, ndata in zx_diagram.nodes(data=True):
+            if zx_diagram.is_basis(n):
+                f_right_match_node = f_right_match_from_node(zx_diagram, n)
+                self.add_node(f_right_match_node, type=compute_node_type_attr(f_right_match_node, one_hot_types),
+                              phase=compute_node_phase_attr(zx_diagram, f_right_match_node))
+        for n, m, edata in zx_diagram.edges(data=True):
+            if zx_diagram.is_basis(n) and zx_diagram.is_basis(m):
+                self.add_edge(f_right_match_from_node(zx_diagram, n), f_right_match_from_node(zx_diagram, m),
+                              type=compute_edge_type_attr(B_ETYPE_INDEX, one_hot_types))
 
     def to_pyg_hetero_data(self) -> pyg_data.HeteroData:
         pass
@@ -93,16 +100,17 @@ def to_zx_match_diagram(zx_diagram: ZXDiagram, one_hot_types: bool) -> ZXMatchDi
     matches = list(zx_diagram.compute_matches())
     for match in matches:
         add_match(zx_match_diagram, zx_diagram, match, one_hot_types)
-    add_b_edges(zx_match_diagram, zx_diagram, one_hot_types)
     num_nodes = zx_match_diagram.number_of_nodes()
     num_matches = len(matches)
     assert num_nodes == num_matches, f'Number of nodes {num_nodes} in match diagram != number of matches ' \
                                      f'{num_matches}'
+    assert zx_diagram.num_basis_nodes() == len([m for m in zx_match_diagram.nodes() if isinstance(m, FRightMatch)]), \
+        'Each basis node in the base diagram should have a corresponding node in the match diagram'
     return zx_match_diagram
 
 
 def compute_node_type_attr(match: Match, one_hot_types: bool) -> torch.Tensor:
-    return torch_func.one_hot(torch.tensor([match.index]), MATCH_TYPE_COUNT) if one_hot_types else match.index
+    return torch_func.one_hot(torch.tensor(match.index), MATCH_TYPE_COUNT) if one_hot_types else match.index
 
 
 def compute_node_phase_attr(zx_diagram: ZXDiagram, match: Match) -> torch.Tensor:
@@ -115,101 +123,27 @@ def compute_node_phase_attr(zx_diagram: ZXDiagram, match: Match) -> torch.Tensor
         return torch.tensor([-1])
 
 
-def compute_incident_edges(zx_match_diagram: ZXMatchDiagram, match: Match) -> torch.Tensor:
-    # TODO: Must validate that the order of incident edges to a f-right node is the tensor is the same as the order of
-    #       nodes in the nx.neighbors function
-    pass
-
-
 def compute_edge_type_attr(etype_index: int, one_hot_types: bool) -> torch.Tensor:
-    return torch_func.one_hot(torch.tensor([etype_index]), ETYPE_COUNT) if one_hot_types else etype_index
+    return torch_func.one_hot(torch.tensor(etype_index), ETYPE_COUNT) if one_hot_types else etype_index
 
 
 def add_match(zx_match_diagram: ZXMatchDiagram, zx_diagram: ZXDiagram, match: Match, one_hot_types: bool) -> None:
     if not zx_match_diagram.has_node(match):
         zx_match_diagram.add_node(match,
                                   type=compute_node_type_attr(match, one_hot_types),
-                                  phase=compute_node_phase_attr(zx_diagram, match),
-                                  incident_edges=compute_incident_edges(zx_match_diagram, match))
+                                  phase=compute_node_phase_attr(zx_diagram, match))
     if isinstance(match, CompoundMatch):
         for sub_match in match.sub_matches:
             if not zx_match_diagram.has_node(sub_match):
                 add_match(zx_match_diagram, zx_diagram, sub_match, one_hot_types)
             if not zx_match_diagram.has_edge(sub_match, match):
                 zx_match_diagram.add_edge(match, sub_match, type=compute_edge_type_attr(I_ETYPE_INDEX, one_hot_types))
-    return
 
 
-def add_b_edges(zx_match_diagram: ZXMatchDiagram, diagram: ZXDiagram, one_hot_types: bool) -> None:
-    for u in diagram.basis_nodes():
-        for v in basis_neighbors(diagram, u):
-            u_match = f_right_match_from_ndata(diagram, u)
-            v_match = f_right_match_from_ndata(diagram, v)
-            if not connected(zx_match_diagram, u_match, v_match):
-                zx_match_diagram.add_edge(u_match, v_match, type=compute_edge_type_attr(B_ETYPE_INDEX, one_hot_types))
-
-
-def basis_neighbors(diagram: ZXDiagram, n: int) -> set[int]:
-    return {m for m in diagram.neighbors(n) if diagram.is_basis(m)}
-
-
-def f_right_match_from_ndata(diagram: ZXDiagram, node: int) -> FRightMatch:
+def f_right_match_from_node(diagram: ZXDiagram, node: int) -> FRightMatch:
     if diagram.is_z_basis(node):
         return FRightZMatch(node)
     elif diagram.is_x_basis(node):
         return FRightXMatch(node)
     else:
         raise Exception(f'Unexpected node type {diagram.type(node)}')
-
-
-def is_i_edge(etype: str | int | torch.Tensor) -> bool:
-    if isinstance(etype, str):
-        return etype == I_ETYPE_NAME
-    elif isinstance(etype, int):
-        return etype == I_ETYPE_INDEX
-    elif isinstance(etype, torch.Tensor):
-        return torch.equal(etype, I_ETYPE_ONE_HOT)
-    else:
-        raise Exception('Unexpected node type representation ' + str(etype))
-
-
-def has_i_edge(zx_match_diagram: ZXMatchDiagram, u_match: Match, v_match: Match) -> bool:
-    edata = zx_match_diagram.get_edge_data(u_match, v_match)
-    if edata is not None:
-        return is_i_edge(edata[ETYPE])
-    return False
-
-
-def i_neighbors(zx_match_diagram: ZXMatchDiagram, u_match: Match) -> Iterator[Match]:
-    for u_neighbor in zx_match_diagram.neighbors(u_match):
-        if has_i_edge(zx_match_diagram, u_match, u_neighbor):
-            yield u_neighbor
-
-
-def is_b_edge(etype: str | int | torch.Tensor) -> bool:
-    if isinstance(etype, str):
-        return etype == B_ETYPE_NAME
-    elif isinstance(etype, int):
-        return etype == B_ETYPE_INDEX
-    elif isinstance(etype, torch.Tensor):
-        return torch.equal(etype, B_ETYPE_ONE_HOT)
-    else:
-        raise Exception('Unexpected node type representation ' + str(etype))
-
-
-def has_b_edge(zx_match_diagram: ZXMatchDiagram, u_match: Match, v_match: Match) -> bool:
-    edata = zx_match_diagram.get_edge_data(u_match, v_match)
-    if edata is not None:
-        return is_b_edge(edata[ETYPE])
-    return False
-
-
-def is_match_neighbor(zx_match_diagram: ZXMatchDiagram, u_match: Match, v_match: Match) -> bool:
-    for u_neighbor in i_neighbors(zx_match_diagram, u_match):
-        if v_match in i_neighbors(zx_match_diagram, u_neighbor):
-            return True
-    return False
-
-
-def connected(zx_match_diagram: ZXMatchDiagram, u_match: Match, v_match: Match) -> bool:
-    return is_match_neighbor(zx_match_diagram, u_match, v_match) or has_b_edge(zx_match_diagram, u_match, v_match)

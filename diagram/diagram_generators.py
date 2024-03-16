@@ -5,7 +5,7 @@ import pyzx
 from torch_geometric.data import HeteroData, Data
 
 from diagram.pyzx_nx_conv import ETYPE, NTYPE, PHASE, Z_NTYPE_NAME, \
-    X_NTYPE_INDEX, X_NTYPE_NAME, Z_NTYPE_INDEX, B_NTYPE_INDEX, B_NTYPE_NAME
+    X_NTYPE_INDEX, X_NTYPE_NAME, Z_NTYPE_INDEX, B_NTYPE_INDEX, B_NTYPE_NAME, nx_remove_position_attributes
 from diagram.zx_diagram import ZXDiagram
 from diagram.zx_match_diagram import to_zx_match_diagram, ZXMatchDiagram
 
@@ -71,7 +71,7 @@ def post_process(nx_graph: nx.MultiGraph) -> None:
     node_types_to_strings(nx_graph)
     node_phases_to_floats(nx_graph)
     remove_boundary_zero_z_spiders(nx_graph)
-    # nx_remove_position_attributes(nx_graph)
+    nx_remove_position_attributes(nx_graph)
     remove_edge_types(nx_graph)
 
 

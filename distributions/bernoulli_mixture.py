@@ -1,8 +1,8 @@
 import torch
-from torch.distributions import Distribution, Categorical, Independent, Bernoulli, MixtureSameFamily
+from torch.distributions import Categorical, Independent, Bernoulli, MixtureSameFamily
 
 
-class MultivariateBernoulliMixture(Distribution):
+class MultivariateBernoulliMixture:
     def __init__(self, params: torch.Tensor):
         """
         A multivariate Bernoulli mixture distribution.
