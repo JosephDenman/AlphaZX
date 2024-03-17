@@ -86,7 +86,7 @@ EdgeList = List[Tuple[int, int]]
 # TODO: Fix to work with updated Match structure
 
 def edge_styling(nx_graph: nx.MultiGraph, match: Optional[Match] = None) -> Tuple[
-        EdgeList, EdgeList, EdgeList]:
+    EdgeList, EdgeList, EdgeList]:
     matched_subgraph = subgraph_from_match(nx_graph, match) if match is not None else None
     h_edge_list = []
     simple_edge_list = []

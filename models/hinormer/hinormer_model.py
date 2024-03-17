@@ -1,20 +1,10 @@
-import math
-
-import dgl
-import dgl.function as fn
 import torch
+import torch as th
 import torch.nn as nn
 import torch.nn.functional as F
-from dgl.nn.pytorch import GraphConv
-from sklearn.metrics import precision_score
-from torch.nn import init
-
-import torch as th
 from dgl import function as fn
 from dgl._ffi.base import DGLError
-from dgl.nn.pytorch import edge_softmax
-from dgl.nn.pytorch.utils import Identity
-from dgl.utils import expand_as_pair
+from dgl.nn.pytorch import GraphConv
 from torch.nn import init
 
 
@@ -101,7 +91,8 @@ class REConv(nn.Module):
 
 
 class AGTLayer(nn.Module):
-    def __init__(self, embeddings_dimension, num_heads=2, att_dropout=0.5, emb_dropout=0.5, temper=1.0, rl=False, rl_dim=4,
+    def __init__(self, embeddings_dimension, num_heads=2, att_dropout=0.5, emb_dropout=0.5, temper=1.0, rl=False,
+                 rl_dim=4,
                  beta=1):
 
         super(AGTLayer, self).__init__()

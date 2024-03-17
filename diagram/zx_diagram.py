@@ -226,7 +226,7 @@ class ZXDiagram(nx.MultiGraph):
         return next_node_index
 
     def edges_between(self, n: int, m: int, data=False) -> list[
-            tuple[int, int, int] | tuple[int, int, int, dict[str, any]]]:
+        tuple[int, int, int] | tuple[int, int, int, dict[str, any]]]:
         assert self.has_node(n), f'Node {n} does not exist'
         assert self.has_node(n), f'Node {m} does not exist'
         if data:

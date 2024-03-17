@@ -146,4 +146,4 @@ class TestYRightRewrite:
         b4, b5, b6 = diagram.add_b_nodes(3)
         diagram.add_s_edges_from([(b4, 0), (2, b5), (3, b6)])
         y_right_rewrite(list(diagram.y_right_matches())[0], diagram)
-        assert list(diagram.y_left_matches())[0]  == YLeftZMatch(0, 1, 2, 3)
+        assert list(diagram.y_left_matches())[0] == YLeftZMatch(0, 1, 2, 3)

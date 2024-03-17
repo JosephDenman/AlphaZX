@@ -332,4 +332,3 @@ def _compute_metadata() -> Metadata:
 
 MATCH_TYPE_COUNT = _count_match_types()
 METADATA = _compute_metadata()
-

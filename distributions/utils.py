@@ -326,7 +326,7 @@ def rand_azx_dist_params(batch_size: int,
                          num_new_edges: int,
                          max_incident_edges: int,
                          zero_prob: float = 0.05) -> tuple[
-        torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     mixture_dist_params = []
     frz_node_dist_params = []
     flz_node_dist_params = []
@@ -361,11 +361,14 @@ def rand_azx_dist_params(batch_size: int,
         b_phase_dist_params = adjust_all_zero_rows(b_phase_dist_params.unsqueeze(0)).squeeze(0)
 
         b_new_edges_dist_params = torch.zeros([b_flz_num_nodes + b_frz_num_nodes, num_new_edges])
-        b_new_edges_dist_params[b_frz_node_indices] = rand_new_edge_probs(1, b_frz_num_nodes, num_new_edges, zero_prob).squeeze(0)
+        b_new_edges_dist_params[b_frz_node_indices] = rand_new_edge_probs(1, b_frz_num_nodes, num_new_edges,
+                                                                          zero_prob).squeeze(0)
         b_new_edges_dist_params = adjust_all_zero_rows(b_new_edges_dist_params.unsqueeze(0)).squeeze(0)
 
-        b_transfer_edges_dist_params = torch.zeros([b_flz_num_nodes + b_frz_num_nodes, max_incident_edges, max_incident_edges + 1])
-        b_transfer_edges_dist_params[b_frz_node_indices] = rand_transfer_edge_probs(1, b_frz_num_nodes, max_incident_edges).squeeze(0)
+        b_transfer_edges_dist_params = torch.zeros(
+            [b_flz_num_nodes + b_frz_num_nodes, max_incident_edges, max_incident_edges + 1])
+        b_transfer_edges_dist_params[b_frz_node_indices] = rand_transfer_edge_probs(1, b_frz_num_nodes,
+                                                                                    max_incident_edges).squeeze(0)
         b_transfer_edges_dist_params = adjust_all_zero_matrices(b_transfer_edges_dist_params.unsqueeze(0)).squeeze(0)
 
         mixture_dist_params.append(b_mixture_dist_params)

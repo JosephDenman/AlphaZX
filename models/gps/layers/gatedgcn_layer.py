@@ -14,6 +14,7 @@ class GatedGCNLayer(pyg_nn.conv.MessagePassing):
         Residual Gated Graph ConvNets
         https://arxiv.org/pdf/1711.07553.pdf
     """
+
     def __init__(self, in_dim, out_dim, dropout, residual, act='relu',
                  equivstable_pe=False, **kwargs):
         super().__init__(**kwargs)
@@ -142,12 +143,14 @@ class GatedGCNGraphGymLayer(nn.Module):
     Residual Gated Graph ConvNets
     https://arxiv.org/pdf/1711.07553.pdf
     """
+
     def __init__(self, layer_config: LayerConfig, **kwargs):
         super().__init__()
         self.model = GatedGCNLayer(in_dim=layer_config.dim_in,
                                    out_dim=layer_config.dim_out,
                                    dropout=0.,  # Dropout is handled by GraphGym's `GeneralLayer` wrapper
-                                   residual=False,  # Residual connections are handled by GraphGym's `GNNStackStage` wrapper
+                                   residual=False,
+                                   # Residual connections are handled by GraphGym's `GNNStackStage` wrapper
                                    act=layer_config.act,
                                    **kwargs)
 

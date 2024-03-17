@@ -70,5 +70,5 @@ def cat_new_edges_to_int(cat_new_edges: torch.Tensor) -> int:
 
 
 def bernoulli_transfer_edges_to_set(zx_match_diagram: ZXMatchDiagram, transfer_edges_tensor: torch.Tensor) -> set[
-        tuple[int, int]]:
+    tuple[int, int]]:
     pass

@@ -18,16 +18,15 @@ Source code adapted from HuggingFace: https://huggingface.co/transformers/v4.9.2
 # limitations under the License.
 
 
-import torch
-import math
-import numpy as np
 import inspect
+import math
+from copy import deepcopy
+from typing import Callable
 
+import numpy as np
+import torch
 from torch import nn
 from torch_geometric.utils import to_dense_batch
-from typing import Callable
-from copy import deepcopy
-
 
 ACT2FN = {
     "relu": nn.ReLU(),
@@ -47,7 +46,7 @@ ACT2FN = {
 
 
 def apply_chunking_to_forward(
-    forward_fn: Callable[..., torch.Tensor], chunk_size: int, chunk_dim: int, *input_tensors
+        forward_fn: Callable[..., torch.Tensor], chunk_size: int, chunk_dim: int, *input_tensors
 ) -> torch.Tensor:
     """
     This function chunks the `input_tensors` into smaller input tensor parts of size `chunk_size` over the dimension
@@ -112,6 +111,7 @@ def apply_chunking_to_forward(
 
     return forward_fn(*input_tensors)
 
+
 class BigBirdSelfAttention(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -138,14 +138,14 @@ class BigBirdSelfAttention(nn.Module):
         return x.permute(0, 2, 1, 3)
 
     def forward(
-        self,
-        hidden_states,
-        attention_mask=None,
-        head_mask=None,
-        encoder_hidden_states=None,
-        encoder_attention_mask=None,
-        past_key_value=None,
-        output_attentions=False,
+            self,
+            hidden_states,
+            attention_mask=None,
+            head_mask=None,
+            encoder_hidden_states=None,
+            encoder_attention_mask=None,
+            past_key_value=None,
+            output_attentions=False,
     ):
         mixed_query_layer = self.query(hidden_states)
 
@@ -246,14 +246,14 @@ class BigBirdBlockSparseAttention(nn.Module):
         return x.permute(0, 2, 1, 3)
 
     def forward(
-        self,
-        hidden_states,
-        band_mask=None,
-        from_mask=None,
-        to_mask=None,
-        from_blocked_mask=None,
-        to_blocked_mask=None,
-        output_attentions=None,
+            self,
+            hidden_states,
+            band_mask=None,
+            from_mask=None,
+            to_mask=None,
+            from_blocked_mask=None,
+            to_blocked_mask=None,
+            output_attentions=None,
     ):
         # Currently this `class` can't be used in decoder.
 
@@ -314,27 +314,27 @@ class BigBirdBlockSparseAttention(nn.Module):
         ).view(inp_1.shape[: ndim - 2] + (inp_1.shape[ndim - 2], inp_2.shape[ndim - 2]))
 
     def bigbird_block_sparse_attention(
-        self,
-        query_layer,
-        key_layer,
-        value_layer,
-        band_mask,
-        from_mask,
-        to_mask,
-        from_blocked_mask,
-        to_blocked_mask,
-        n_heads,
-        n_rand_blocks,
-        attention_head_size,
-        from_block_size,
-        to_block_size,
-        batch_size,
-        from_seq_len,
-        to_seq_len,
-        seed,
-        plan_from_length,
-        plan_num_rand_blocks,
-        output_attentions,
+            self,
+            query_layer,
+            key_layer,
+            value_layer,
+            band_mask,
+            from_mask,
+            to_mask,
+            from_blocked_mask,
+            to_blocked_mask,
+            n_heads,
+            n_rand_blocks,
+            attention_head_size,
+            from_block_size,
+            to_block_size,
+            batch_size,
+            from_seq_len,
+            to_seq_len,
+            seed,
+            plan_from_length,
+            plan_num_rand_blocks,
+            output_attentions,
     ):
 
         # BigBird block-sparse attention as suggested in paper
@@ -545,14 +545,14 @@ class BigBirdBlockSparseAttention(nn.Module):
         # contribution of sliding keys
         # [bsz, n_heads, m//from_block_size-4, from_block_size, 3*to_block_size] x [bsz, n_heads, from_seq_len//from_block_size-4, 3*to_block_size, -1]
         context_layer = self.torch_bmm_nd(
-            attn_weights[:, :, :, :, to_block_size : 4 * to_block_size], exp_blocked_value_matrix, ndim=5
+            attn_weights[:, :, :, :, to_block_size: 4 * to_block_size], exp_blocked_value_matrix, ndim=5
         )
         #     ==> [bsz, n_heads, from_seq_len//from_block_size-4, from_block_size, -1]
 
         # adding contribution of random keys
         # [bsz, n_heads, from_seq_len//from_block_size-4, from_block_size, n_rand_blocks*to_block_size] x [bsz, n_heads, from_seq_len//from_block_size-4, n_rand_blocks*to_block_size, -1]
         context_layer += self.torch_bmm_nd(
-            attn_weights[:, :, :, :, 4 * to_block_size : -to_block_size], gathered_value[:, :, 1:-1], ndim=5
+            attn_weights[:, :, :, :, 4 * to_block_size: -to_block_size], gathered_value[:, :, 1:-1], ndim=5
         )
         #     ==> [bsz, n_heads, from_seq_len//from_block_size-4, from_block_size, -1]
 
@@ -597,7 +597,7 @@ class BigBirdBlockSparseAttention(nn.Module):
         second_last_seq_pad = torch.cat(
             [
                 to_mask[:, :, :, :to_block_size],
-                to_mask[:, :, :, -3 * to_block_size :],
+                to_mask[:, :, :, -3 * to_block_size:],
                 to_mask.new_ones([bsz, 1, 1, n_rand_blocks * to_block_size]),
             ],
             dim=3,
@@ -654,12 +654,14 @@ class BigBirdBlockSparseAttention(nn.Module):
 
             # 2nd query block
             # corresponding to `second_context_layer`
-            attention_probs[:, :, from_block_size : 2 * from_block_size, : 3 * to_block_size] = second_attn_weights[
-                :, :, :, : 3 * to_block_size
-            ]  # 1st three key blocks (global + sliding)
-            attention_probs[:, :, from_block_size : 2 * from_block_size, -to_block_size:] = second_attn_weights[
-                :, :, :, 3 * to_block_size : 4 * to_block_size
-            ]  # last key block (global)
+            attention_probs[:, :, from_block_size: 2 * from_block_size, : 3 * to_block_size] = second_attn_weights[
+                                                                                               :, :, :,
+                                                                                               : 3 * to_block_size
+                                                                                               ]  # 1st three key blocks (global + sliding)
+            attention_probs[:, :, from_block_size: 2 * from_block_size, -to_block_size:] = second_attn_weights[
+                                                                                           :, :, :,
+                                                                                           3 * to_block_size: 4 * to_block_size
+                                                                                           ]  # last key block (global)
             # random keys
             for p1, i1, w1 in zip(range(bsz), rand_attn, second_attn_weights):
                 # p1, i1, w1 corresponds to batch_dim i.e. following operation is done for each sequence in batch
@@ -673,7 +675,7 @@ class BigBirdBlockSparseAttention(nn.Module):
                         to_seq_len // to_block_size,
                         to_block_size,
                     )
-                    right_slice = w2[:, 4 * to_block_size :]
+                    right_slice = w2[:, 4 * to_block_size:]
                     attn_probs_view[p1, p2, 1, :, i2[0]] = right_slice.view(
                         from_block_size, n_rand_blocks, to_block_size
                     )
@@ -690,20 +692,22 @@ class BigBirdBlockSparseAttention(nn.Module):
                     to_seq_len // to_block_size,
                     to_block_size,
                 )[:, :, 2:-2, :, 1:-1, :]
-                right_slice = attn_weights[:, :, q_idx, :, to_block_size : 4 * to_block_size]
-                attn_probs_view[:, :, q_idx, :, q_idx : q_idx + 3, :] = right_slice.view(
+                right_slice = attn_weights[:, :, q_idx, :, to_block_size: 4 * to_block_size]
+                attn_probs_view[:, :, q_idx, :, q_idx: q_idx + 3, :] = right_slice.view(
                     bsz, n_heads, from_block_size, 3, to_block_size
                 )  # inner_band_product
             # global keys (corresponding to 1st key block)
-            attention_probs[:, :, 2 * from_block_size : -2 * from_block_size, :to_block_size] = attn_weights[
-                :, :, :, :, :to_block_size
-            ].view(
+            attention_probs[:, :, 2 * from_block_size: -2 * from_block_size, :to_block_size] = attn_weights[
+                                                                                               :, :, :, :,
+                                                                                               :to_block_size
+                                                                                               ].view(
                 bsz, n_heads, -1, to_block_size
             )  # first_band_product
             # global keys (corresponding to last key block)
-            attention_probs[:, :, 2 * from_block_size : -2 * from_block_size, -to_block_size:] = attn_weights[
-                :, :, :, :, -to_block_size:
-            ].view(
+            attention_probs[:, :, 2 * from_block_size: -2 * from_block_size, -to_block_size:] = attn_weights[
+                                                                                                :, :, :, :,
+                                                                                                -to_block_size:
+                                                                                                ].view(
                 bsz, n_heads, -1, to_block_size
             )  # last_band_product
             # random keys
@@ -720,21 +724,21 @@ class BigBirdBlockSparseAttention(nn.Module):
                             to_seq_len // to_block_size,
                             to_block_size,
                         )
-                        right_slice = w2[q_idx - 1, :, 4 * to_block_size : -to_block_size]
+                        right_slice = w2[q_idx - 1, :, 4 * to_block_size: -to_block_size]
                         attn_probs_view[p1, p2, q_idx + 1, :, i2[q_idx]] = right_slice.view(
                             from_block_size, n_rand_blocks, to_block_size
                         )
 
             # Second-last query block
             # corresponding to `second_last_context_layer`
-            attention_probs[:, :, -2 * from_block_size : -from_block_size, :to_block_size] = second_last_attn_weights[
-                :, :, :, :to_block_size
-            ]  # 1st key block (global)
+            attention_probs[:, :, -2 * from_block_size: -from_block_size, :to_block_size] = second_last_attn_weights[
+                                                                                            :, :, :, :to_block_size
+                                                                                            ]  # 1st key block (global)
             attention_probs[
-                :, :, -2 * from_block_size : -from_block_size, -3 * to_block_size :
+            :, :, -2 * from_block_size: -from_block_size, -3 * to_block_size:
             ] = second_last_attn_weights[
-                :, :, :, to_block_size : 4 * to_block_size
-            ]  # last three blocks (global + sliding)
+                :, :, :, to_block_size: 4 * to_block_size
+                ]  # last three blocks (global + sliding)
             # random keys
             for p1, i1, w1 in zip(range(bsz), rand_attn, second_last_attn_weights):
                 # p1, i1, w1 corresponds to batch_dim i.e. following operation is done for each sequence in batch
@@ -748,7 +752,7 @@ class BigBirdBlockSparseAttention(nn.Module):
                         to_seq_len // to_block_size,
                         to_block_size,
                     )
-                    right_slice = w2[:, 4 * to_block_size :]
+                    right_slice = w2[:, 4 * to_block_size:]
                     attn_probs_view[p1, p2, -2, :, i2[-1]] = right_slice.view(
                         from_block_size, n_rand_blocks, to_block_size
                     )
@@ -796,14 +800,14 @@ class BigBirdBlockSparseAttention(nn.Module):
 
     @staticmethod
     def _create_rand_mask_from_inputs(
-        from_blocked_mask,
-        to_blocked_mask,
-        rand_attn,
-        num_attention_heads,
-        num_rand_blocks,
-        batch_size,
-        from_seq_length,
-        from_block_size,
+            from_blocked_mask,
+            to_blocked_mask,
+            rand_attn,
+            num_attention_heads,
+            num_rand_blocks,
+            batch_size,
+            from_seq_length,
+            from_block_size,
     ):
         """
         Create 3D attention mask from a 2D tensor mask.
@@ -866,7 +870,7 @@ class BigBirdBlockSparseAttention(nn.Module):
 
     @staticmethod
     def _bigbird_block_rand_mask(
-        from_seq_length, to_seq_length, from_block_size, to_block_size, num_rand_blocks, last_idx=-1
+            from_seq_length, to_seq_length, from_block_size, to_block_size, num_rand_blocks, last_idx=-1
     ):
         """
         Create adjacency list of random attention.
@@ -886,7 +890,7 @@ class BigBirdBlockSparseAttention(nn.Module):
         # using this method when from_seq_length in [1024, 3072, 4096]
 
         assert (
-            from_seq_length // from_block_size == to_seq_length // to_block_size
+                from_seq_length // from_block_size == to_seq_length // to_block_size
         ), "Error the number of blocks needs to be same!"
 
         rand_attn = np.zeros((from_seq_length // from_block_size - 2, num_rand_blocks), dtype=np.int32)
@@ -917,25 +921,25 @@ class BigBirdBlockSparseAttention(nn.Module):
                     rand_attn[i - 1, :] = np.random.permutation(middle_seq[:start])[:r]
                 else:
                     rand_attn[i - 1, :] = np.random.permutation(
-                        np.concatenate((middle_seq[:start], middle_seq[end + 1 : last]))
+                        np.concatenate((middle_seq[:start], middle_seq[end + 1: last]))
                     )[:r]
         return rand_attn
 
     def _bigbird_block_rand_mask_with_head(
-        self,
-        from_seq_length,
-        to_seq_length,
-        from_block_size,
-        to_block_size,
-        num_heads,
-        plan_from_length,
-        plan_num_rand_blocks,
-        window_block_left=1,
-        window_block_right=1,
-        global_block_top=1,
-        global_block_bottom=1,
-        global_block_left=1,
-        global_block_right=1,
+            self,
+            from_seq_length,
+            to_seq_length,
+            from_block_size,
+            to_block_size,
+            num_heads,
+            plan_from_length,
+            plan_num_rand_blocks,
+            window_block_left=1,
+            window_block_right=1,
+            global_block_top=1,
+            global_block_bottom=1,
+            global_block_left=1,
+            global_block_right=1,
     ):
         """
         Create adjacency list of random attention.
@@ -962,7 +966,7 @@ class BigBirdBlockSparseAttention(nn.Module):
         # using this method when from_seq_length not in [1024, 3072, 4096]
 
         assert (
-            from_seq_length // from_block_size == to_seq_length // to_block_size
+                from_seq_length // from_block_size == to_seq_length // to_block_size
         ), "Error the number of blocks needs to be same!"
 
         assert from_seq_length in plan_from_length, "Error from sequence length not in plan!"
@@ -1050,20 +1054,20 @@ class BigBirdBlockSparseAttention(nn.Module):
                     )
 
         for nh in range(num_heads):
-            rand_attn[nh] = rand_attn[nh][global_block_top : num_blocks - global_block_bottom, :]
+            rand_attn[nh] = rand_attn[nh][global_block_top: num_blocks - global_block_bottom, :]
 
         return rand_attn
 
     @staticmethod
     def _get_single_block_row_attention(
-        block_id,
-        to_start_block_id,
-        to_end_block_id,
-        num_rand_blocks,
-        window_block_left=1,
-        window_block_right=1,
-        global_block_left=1,
-        global_block_right=1,
+            block_id,
+            to_start_block_id,
+            to_end_block_id,
+            num_rand_blocks,
+            window_block_left=1,
+            window_block_right=1,
+            global_block_left=1,
+            global_block_right=1,
     ):
         """
         For a single row block get random row attention.
@@ -1172,20 +1176,20 @@ class BigBirdAttention(nn.Module):
             self.self.eval()
 
     def forward(
-        self,
-        hidden_states,
-        attention_mask=None,
-        head_mask=None,
-        encoder_hidden_states=None,
-        encoder_attention_mask=None,
-        past_key_value=None,
-        output_attentions=False,
-        # block_sparse config
-        band_mask=None,
-        from_mask=None,
-        to_mask=None,
-        from_blocked_mask=None,
-        to_blocked_mask=None,
+            self,
+            hidden_states,
+            attention_mask=None,
+            head_mask=None,
+            encoder_hidden_states=None,
+            encoder_attention_mask=None,
+            past_key_value=None,
+            output_attentions=False,
+            # block_sparse config
+            band_mask=None,
+            from_mask=None,
+            to_mask=None,
+            from_blocked_mask=None,
+            to_blocked_mask=None,
     ):
 
         if self.attention_type == "original_full":
@@ -1200,7 +1204,7 @@ class BigBirdAttention(nn.Module):
             )
         else:
             assert (
-                encoder_hidden_states is None
+                    encoder_hidden_states is None
             ), "BigBird cannot be used as a decoder when config.attention_type != 'original_full'"
             self_outputs = self.self(
                 hidden_states, band_mask, from_mask, to_mask, from_blocked_mask, to_blocked_mask, output_attentions
@@ -1273,18 +1277,18 @@ class BigBirdLayer(nn.Module):
             self.crossattention.set_attention_type(value)
 
     def forward(
-        self,
-        hidden_states,
-        attention_mask=None,
-        head_mask=None,
-        encoder_hidden_states=None,
-        encoder_attention_mask=None,
-        band_mask=None,
-        from_mask=None,
-        to_mask=None,
-        blocked_encoder_mask=None,
-        past_key_value=None,
-        output_attentions=False,
+            self,
+            hidden_states,
+            attention_mask=None,
+            head_mask=None,
+            encoder_hidden_states=None,
+            encoder_attention_mask=None,
+            band_mask=None,
+            from_mask=None,
+            to_mask=None,
+            blocked_encoder_mask=None,
+            past_key_value=None,
+            output_attentions=False,
     ):
         # decoder uni-directional self-attention cached key/values tuple is at positions 1,2
         self_attn_past_key_value = past_key_value[:2] if past_key_value is not None else None
@@ -1377,23 +1381,22 @@ class BigBirdEncoder(nn.Module):
         for layer in self.layer:
             layer.set_attention_type(value)
 
-
     def forward(
-        self,
-        hidden_states,
-        attention_mask=None,
-        head_mask=None,
-        encoder_hidden_states=None,
-        encoder_attention_mask=None,
-        past_key_values=None,
-        use_cache=None,
-        output_attentions=False,
-        output_hidden_states=False,
-        band_mask=None,
-        from_mask=None,
-        to_mask=None,
-        blocked_encoder_mask=None,
-        return_dict=False,
+            self,
+            hidden_states,
+            attention_mask=None,
+            head_mask=None,
+            encoder_hidden_states=None,
+            encoder_attention_mask=None,
+            past_key_values=None,
+            use_cache=None,
+            output_attentions=False,
+            output_hidden_states=False,
+            band_mask=None,
+            from_mask=None,
+            to_mask=None,
+            blocked_encoder_mask=None,
+            return_dict=False,
     ):
         all_hidden_states = () if output_hidden_states else None
         all_self_attentions = () if output_attentions else None
@@ -1495,7 +1498,6 @@ class BigBirdModel(nn.Module):
         # Initialize weights and apply final processing
         # self.post_init()
 
-
     def set_attention_type(self, value: str):
         if value not in ["original_full", "block_sparse"]:
             raise ValueError(
@@ -1509,12 +1511,12 @@ class BigBirdModel(nn.Module):
 
     def forward(self, batch, **kwargs):
 
-        output_attentions = False #output_attentions if output_attentions is not None else self.config.output_attentions
+        output_attentions = False  # output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = False
         # (
         #     output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
         # )
-        return_dict = False #return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = False  # return_dict if return_dict is not None else self.config.use_return_dict
         use_cache = False
 
         x, attention_mask = to_dense_batch(batch.x, batch.batch)
@@ -1531,8 +1533,8 @@ class BigBirdModel(nn.Module):
         # + random tokens: 2 * num_random_blocks * block_size
         # The attention pattern of BigBird favors graphs with virtual nodes (index 0 for the virtual node akin to [CLS])
         # Ideally, input graphs should have virtual nodes
-        max_tokens_to_attend = (5 + 2 * self.config.num_random_blocks) * self.config.block_size  # returned +5 in parentheses
-
+        max_tokens_to_attend = (
+                                           5 + 2 * self.config.num_random_blocks) * self.config.block_size  # returned +5 in parentheses
 
         if self.attention_type == "block_sparse":
             padding_len, x, attention_mask = self._pad_to_block_size(
@@ -1583,7 +1585,6 @@ class BigBirdModel(nn.Module):
         # head_mask = self.get_head_mask(head_mask, self.config.num_hidden_layers)
         head_mask = None
 
-
         encoder_outputs = self.encoder(
             x,
             attention_mask=extended_attention_mask,
@@ -1609,7 +1610,7 @@ class BigBirdModel(nn.Module):
 
         batch_size, seq_length = attention_mask.size()
         assert (
-            seq_length % block_size == 0
+                seq_length % block_size == 0
         ), f"Sequence length must be multiple of block size, but sequence length is {seq_length}, while block size is {block_size}."
 
         def create_band_mask_from_inputs(from_blocked_mask, to_blocked_mask):
@@ -1640,9 +1641,9 @@ class BigBirdModel(nn.Module):
         return blocked_encoder_mask, band_mask, from_mask, to_mask
 
     def _pad_to_block_size(
-        self,
-        attention_mask: torch.Tensor,
-        inputs_embeds: torch.Tensor,
+            self,
+            attention_mask: torch.Tensor,
+            inputs_embeds: torch.Tensor,
     ):
         """A helper function to pad tokens and mask to work with implementation of BigBird block-sparse attention."""
         # padding
@@ -1653,8 +1654,8 @@ class BigBirdModel(nn.Module):
 
         padding_len = (block_size - seq_len % block_size) % block_size
         if padding_len > 0:
-
-            inputs_embeds_padding = torch.zeros((batch_size, padding_len, emb_dim), dtype=torch.float, device=inputs_embeds.device)
+            inputs_embeds_padding = torch.zeros((batch_size, padding_len, emb_dim), dtype=torch.float,
+                                                device=inputs_embeds.device)
             inputs_embeds = torch.cat([inputs_embeds, inputs_embeds_padding], dim=-2)
 
             attention_mask = nn.functional.pad(
@@ -1676,7 +1677,6 @@ class SingleBigBirdLayer(BigBirdModel):
         super().__init__(config)
 
     def forward(self, x, attention_mask):
-
         padding_len, x, attention_mask = self._pad_to_block_size(
             attention_mask=attention_mask,
             inputs_embeds=x,

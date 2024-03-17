@@ -1,6 +1,6 @@
 from diagram.diagram_generators import clifford_zx_diagram
-from diagram.zx_diagram import ZXDiagram
 from diagram.match import Match, FLeftMatch, FRightMatch, BLeftMatch, BRightMatch, YLeftMatch, YRightMatch
+from diagram.zx_diagram import ZXDiagram
 from diagram.zx_match_diagram import to_zx_match_diagram
 from rewriting.b_rule_rewriter import b_left_rewrite, b_right_rewrite
 from rewriting.f_rule_rewriter import f_left_rewrite, f_right_rewrite
@@ -36,4 +36,4 @@ for i in range(1000):
     md = to_zx_match_diagram(d, False)
     nodes.append(d.number_of_nodes() + md.number_of_nodes())
 
-print(sum(nodes)/len(nodes))
+print(sum(nodes) / len(nodes))

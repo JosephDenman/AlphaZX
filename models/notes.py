@@ -1,4 +1,3 @@
-
 """
 
 There are three obvious possible representations for the state graph. Each has implications for the input to the 

@@ -37,5 +37,6 @@ class MultivariateBernoulliMixture:
     def sample(self, sample_shape: torch.Size = torch.Size()) -> torch.Tensor:
         samples = self.dist.sample(sample_shape)
         if samples.shape[-1] != self.params.shape[-1] - 1:
-            raise ValueError(f'The last dimension of the sample {samples} must be one less than the last dimension of the parameters.')
+            raise ValueError(
+                f'The last dimension of the sample {samples} must be one less than the last dimension of the parameters.')
         return samples
