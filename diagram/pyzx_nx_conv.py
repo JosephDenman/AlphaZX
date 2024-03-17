@@ -67,57 +67,6 @@ def is_boundary(ntype: str | int) -> bool:
         raise Exception('Unexpected node type representation ' + str(ntype))
 
 
-def is_hadamard_edge(etype: str | int) -> bool:
-    if isinstance(etype, str):
-        return etype == H_ETYPE_NAME
-    elif isinstance(etype, int):
-        return etype == H_ETYPE_INDEX
-    else:
-        raise Exception('Unexpected edge type representation ' + str(etype))
-
-
-def is_simple_edge(etype: str | int) -> bool:
-    return not is_hadamard_edge(etype)
-
-
-PYG_ETYPE_NAMES = [
-    (Z_NTYPE_NAME, H_ETYPE_NAME, Z_NTYPE_NAME),
-    (Z_NTYPE_NAME, S_ETYPE_NAME, Z_NTYPE_NAME),
-    (Z_NTYPE_NAME, H_ETYPE_NAME, X_NTYPE_NAME),
-    (Z_NTYPE_NAME, S_ETYPE_NAME, X_NTYPE_NAME),
-    (Z_NTYPE_NAME, H_ETYPE_NAME, B_NTYPE_NAME),
-    (Z_NTYPE_NAME, S_ETYPE_NAME, B_NTYPE_NAME),
-    (X_NTYPE_NAME, H_ETYPE_NAME, X_NTYPE_NAME),
-    (X_NTYPE_NAME, S_ETYPE_NAME, X_NTYPE_NAME),
-    (X_NTYPE_NAME, H_ETYPE_NAME, B_NTYPE_NAME),
-    (X_NTYPE_NAME, S_ETYPE_NAME, B_NTYPE_NAME),
-    (X_NTYPE_NAME, H_ETYPE_NAME, Z_NTYPE_NAME),
-    (X_NTYPE_NAME, S_ETYPE_NAME, Z_NTYPE_NAME),
-    (B_NTYPE_NAME, H_ETYPE_NAME, B_NTYPE_NAME),
-    (B_NTYPE_NAME, S_ETYPE_NAME, B_NTYPE_NAME),
-    (B_NTYPE_NAME, H_ETYPE_NAME, Z_NTYPE_NAME),
-    (B_NTYPE_NAME, S_ETYPE_NAME, Z_NTYPE_NAME),
-    (B_NTYPE_NAME, H_ETYPE_NAME, X_NTYPE_NAME),
-    (B_NTYPE_NAME, S_ETYPE_NAME, X_NTYPE_NAME)
-]
-
-PYG_ETYPE_NAMES_TO_INDICES = {name: i for i, name in enumerate(PYG_ETYPE_NAMES)}
-
-
-def edge_type_index(nx_graph: nx.Graph, u: int, v: int, etype: int) -> int:
-    return PYG_ETYPE_NAMES_TO_INDICES[
-        (NTYPE_NAMES[nx_graph.nodes[u][NTYPE]], ETYPE_NAMES[etype],
-         NTYPE_NAMES[nx_graph.nodes[v][NTYPE]])]
-
-
-def node_types(nx_graph: nx.Graph) -> torch.Tensor:
-    return torch.tensor([t for _, t in nx_graph.nodes(data=NTYPE)])
-
-
-def edge_types(nx_graph: nx.Graph) -> torch.Tensor:
-    return torch.tensor([edge_type_index(nx_graph, u, v, t) for u, v, t in nx_graph.edges(data=NTYPE)])
-
-
 def nx_remove_position_attributes(nx_graph: nx.MultiGraph) -> None:
     for _, ndata in nx_graph.nodes(data=True):
         del ndata[ROW]
@@ -152,19 +101,6 @@ def nx_to_pyg_heterograph_pre_process(nx_graph: nx.MultiGraph) -> None:
     nx_add_boundary_connected_to(nx_graph)
     nx_add_degree(nx_graph)
     nx_remove_boundary_phase(nx_graph)
-
-
-def node_type_to_one_hot(hdata: pyg.data.HeteroData) -> None:
-    pass
-
-
-def edge_type_to_one_hot(hdata: pyg.data.HeteroData) -> None:
-    pass
-
-
-def nx_to_pyg_heterograph_post_process(hdata: pyg.data.HeteroData) -> None:
-    node_type_to_one_hot(hdata)
-    edge_type_to_one_hot(hdata)
 
 
 def nx_graph_to_pyg_hetero(

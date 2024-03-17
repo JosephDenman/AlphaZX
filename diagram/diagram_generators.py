@@ -2,6 +2,7 @@ from fractions import Fraction
 
 import networkx as nx
 import pyzx
+import torch
 from torch_geometric.data import HeteroData, Data
 
 from diagram.pyzx_nx_conv import ETYPE, NTYPE, PHASE, Z_NTYPE_NAME, \
@@ -104,3 +105,44 @@ def clifford_pyg_hetero_zx_diagram(num_qubits: int, depth: int, t_gates: bool) -
 
 def clifford_pyg_hetero_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool, one_hot_types: bool) -> HeteroData:
     return clifford_zx_match_diagram(num_qubits, depth, t_gates, one_hot_types).to_pyg_hetero_data()
+
+
+def stringify(v: object | list | str) -> str:
+    if isinstance(v, object):
+        return repr(v)
+    elif isinstance(v, list):
+        return str(v)
+    elif isinstance(v, str):
+        return v
+    elif isinstance(v, torch.Tensor):
+        return str(v.tolist())
+    else:
+        raise Exception(f'Unsupported value {type(v)}')
+
+
+def gml_clifford_nx_graph(num_qubits: int, depth: int, t_gates: bool, path: str) -> nx.MultiGraph:
+    return nx.write_gml(clifford_zx_diagram(num_qubits, depth, t_gates), path, stringify)
+
+
+def gml_clifford_zx_diagram(num_qubits: int, depth: int, t_gates: bool, path: str) -> ZXDiagram:
+    return nx.write_gml(clifford_zx_diagram(num_qubits, depth, t_gates), path, stringify)
+
+
+def gml_clifford_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool, one_hot_types: bool,
+                                  path: str) -> ZXMatchDiagram:
+    return nx.write_gml(clifford_zx_match_diagram(num_qubits, depth, t_gates, one_hot_types), path, stringify)
+
+
+def gml_clifford_pyg_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool, one_hot_types: bool,
+                                      path: str) -> Data:
+    return nx.write_gml(clifford_pyg_zx_match_diagram(num_qubits, depth, t_gates, one_hot_types), path, stringify)
+
+
+def gml_clifford_pyg_hetero_zx_diagram(num_qubits: int, depth: int, t_gates: bool, path: str) -> HeteroData:
+    return nx.write_gml(clifford_pyg_hetero_zx_diagram(num_qubits, depth, t_gates), path, stringify)
+
+
+def gml_clifford_pyg_hetero_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool, one_hot_types: bool,
+                                             path: str) -> HeteroData:
+    return nx.write_gml(clifford_pyg_hetero_zx_match_diagram(num_qubits, depth, t_gates, one_hot_types), path,
+                        stringify)

@@ -2,7 +2,7 @@ import networkx as nx
 
 from diagram.match import Basis, FLeftZMatch, FLeftXMatch, FRightZMatch, FRightXMatch, BLeftMatch, BRightMatch, \
     YLeftZMatch, YLeftXMatch, YRightZMatch, YRightXMatch
-from diagram.match_patterns import f_left_z_pattern, f_left_x_pattern, f_right_z_pattern, f_right_x_pattern, \
+from diagram.tests.match_patterns import f_left_z_pattern, f_left_x_pattern, f_right_z_pattern, f_right_x_pattern, \
     y_left_z_pattern, y_left_x_pattern, y_left_pattern, y_right_z_pattern, y_right_x_pattern, \
     b_left_pattern, b_right_pattern
 from diagram.pyzx_nx_conv import Z_NTYPE_NAME, X_NTYPE_NAME

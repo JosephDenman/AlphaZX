@@ -4,7 +4,7 @@ from hypothesis import strategies as st, given
 from hypothesis.strategies import composite, SearchStrategy
 
 from diagram.match import BLeftMatch, YLeftZMatch, YLeftXMatch, YRightZMatch, YRightXMatch, BRightMatch
-from diagram.match_patterns import b_right_pattern, b_left_pattern, y_left_z_pattern, y_left_x_pattern, \
+from diagram.tests.match_patterns import b_right_pattern, b_left_pattern, y_left_z_pattern, y_left_x_pattern, \
     y_right_x_pattern, y_right_z_pattern
 from diagram.pyzx_nx_conv import is_z_basis, is_x_basis, is_boundary, Z_NTYPE_INDEX, X_NTYPE_INDEX, B_NTYPE_INDEX
 from diagram.zx_diagram import ZXDiagram
