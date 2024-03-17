@@ -1,8 +1,12 @@
 import abc
+import itertools
 from collections.abc import Iterator
 from typing import Type
 
+from torch_geometric.typing import Metadata
 from typing_extensions import Literal
+
+from diagram.constants import B_ETYPE_NAME, I_ETYPE_NAME
 
 Basis = Literal['z', 'x']
 
@@ -46,14 +50,24 @@ class Match(abc.ABC):
     def name(self) -> str:
         pass
 
+    @staticmethod
+    @abc.abstractmethod
+    def abbreviated_name() -> str:
+        pass
+
     @property
     @abc.abstractmethod
     def expected_size(self) -> int:
         pass
 
-    @property
-    def is_base_match(self) -> bool:
-        return isinstance(self, BaseMatch)
+    @staticmethod
+    @abc.abstractmethod
+    def sub_match_types() -> Iterator[Type['Match']]:
+        pass
+
+    @classmethod
+    def is_base_match(cls) -> bool:
+        return issubclass(cls, BaseMatch)
 
     @property
     def is_compound_match(self) -> bool:
@@ -94,8 +108,9 @@ class CompoundMatch(Match, abc.ABC):
         pass
 
 
-class FRightMatch(BaseMatch):
+class FRightMatch(BaseMatch, abc.ABC):
     expected_size = 1
+    sub_match_types = []
 
     @property
     @abc.abstractmethod
@@ -111,26 +126,9 @@ class FRightMatch(BaseMatch):
         return not self.is_z_basis
 
 
-class FLeftMatch(CompoundMatch):
+class FLeftMatch(CompoundMatch, abc.ABC):
     expected_size = 2
-
-    @property
-    @abc.abstractmethod
-    def rule_mode(self) -> Basis:
-        pass
-
-
-class YRightMatch(CompoundMatch):
-    expected_size = 4
-
-    @property
-    @abc.abstractmethod
-    def rule_mode(self) -> Basis:
-        pass
-
-
-class YLeftMatch(CompoundMatch):
-    expected_size = 4
+    sub_match_types = []
 
     @property
     @abc.abstractmethod
@@ -140,14 +138,17 @@ class YLeftMatch(CompoundMatch):
 
 class FRightZMatch(FRightMatch):
     name = 'f_right_z'
+    abbreviated_name = 'frz'
     index = 0
     rule_mode = 'z'
 
 
 class FLeftZMatch(FLeftMatch):
     name = 'f_left_z'
+    abbreviated_name = 'flz'
     index = 1
     rule_mode = 'z'
+    sub_match_types = [FRightZMatch]
 
     @property
     def sub_matches(self) -> Iterator[Match]:
@@ -157,14 +158,17 @@ class FLeftZMatch(FLeftMatch):
 
 class FRightXMatch(FRightMatch):
     name = 'f_right_x'
+    abbreviated_name = 'frx'
     index = 2
     rule_mode = 'x'
 
 
 class FLeftXMatch(FLeftMatch):
     name = 'f_left_x'
+    abbreviated_name = 'flx'
     index = 3
     rule_mode = 'x'
+    sub_match_types = [FRightXMatch]
 
     @property
     def sub_matches(self) -> Iterator[Match]:
@@ -174,8 +178,10 @@ class FLeftXMatch(FLeftMatch):
 
 class BRightMatch(CompoundMatch):
     name = 'b_right'
+    abbreviated_name = 'br'
     index = 4
     expected_size = 2
+    sub_match_types = [FRightZMatch, FRightXMatch]
 
     @property
     def sub_matches(self) -> Iterator[Match]:
@@ -185,8 +191,10 @@ class BRightMatch(CompoundMatch):
 
 class BLeftMatch(CompoundMatch):
     name = 'b_left'
+    abbreviated_name = 'bl'
     index = 5
     expected_size = 4
+    sub_match_types = [BRightMatch, FRightZMatch, FRightXMatch]
 
     @property
     def sub_matches(self) -> Iterator[Match]:
@@ -201,8 +209,29 @@ class BLeftMatch(CompoundMatch):
         yield FRightXMatch(n)
 
 
+class YRightMatch(CompoundMatch, abc.ABC):
+    expected_size = 4
+    sub_match_types = [FRightZMatch, FRightXMatch]
+
+    @property
+    @abc.abstractmethod
+    def rule_mode(self) -> Basis:
+        pass
+
+
+class YLeftMatch(CompoundMatch, abc.ABC):
+    expected_size = 4
+    sub_match_types = [FRightZMatch, FRightXMatch]
+
+    @property
+    @abc.abstractmethod
+    def rule_mode(self) -> Basis:
+        pass
+
+
 class YRightZMatch(YRightMatch):
     name = 'y_right_z'
+    abbreviated_name = 'yrz'
     index = 6
     rule_mode = 'z'
 
@@ -217,6 +246,7 @@ class YRightZMatch(YRightMatch):
 
 class YLeftZMatch(YLeftMatch):
     name = 'y_left_z'
+    abbreviated_name = 'ylz'
     index = 7
     rule_mode = 'z'
 
@@ -231,6 +261,7 @@ class YLeftZMatch(YLeftMatch):
 
 class YRightXMatch(YRightMatch):
     name = 'y_right_x'
+    abbreviated_name = 'yrx'
     index = 8
     rule_mode = 'x'
 
@@ -245,6 +276,7 @@ class YRightXMatch(YRightMatch):
 
 class YLeftXMatch(YLeftMatch):
     name = 'y_left_x'
+    abbreviated_name = 'ylx'
     index = 9
     rule_mode = 'x'
 
@@ -257,23 +289,47 @@ class YLeftXMatch(YLeftMatch):
                 yield FRightXMatch(node)
 
 
-def count_leaf_subclasses(cls: Type[Match]) -> int:
-    """
-    Recursively count all leaf subclasses of a given class.
+def _leaf_classes() -> set[Type[Match]]:
+    leaf_classes = set()
 
-    A leaf subclass is defined as a class that has no further subclasses within its inheritance tree. This function
-    traverses the inheritance tree of the specified class, counting only those classes that do not serve as base classes
-    for other classes.
+    def _inner_leaf_classes(cls: Type[Match]) -> None:
+        # If there are no subclasses, this is a leaf
+        if not cls.__subclasses__():
+            leaf_classes.add(cls)
+        else:
+            for sub_cls in cls.__subclasses__():
+                _inner_leaf_classes(sub_cls)
 
-    :param cls: The class to count leaf subclasses for. This should be Match or a subclass of Match.
-    :return: The total number of leaf subclasses of the given class.
-    :rtype: int
-    """
-    # If there are no subclasses, this is a leaf
-    if not cls.__subclasses__():
-        return 1
-    # Recursively count in subclasses
-    return sum(count_leaf_subclasses(sub_cls) for sub_cls in cls.__subclasses__())
+    _inner_leaf_classes(Match)
+    return leaf_classes
 
 
-MATCH_TYPE_COUNT = count_leaf_subclasses(Match)
+def _count_match_types() -> int:
+    return len(_leaf_classes())
+
+
+def _compute_metadata() -> Metadata:
+    node_metadata = []
+    edge_metadata = []
+    leaf_classes = _leaf_classes()
+
+    for leaf_class in leaf_classes:
+        node_metadata.append(leaf_class.abbreviated_name)
+
+    for leaf_class in leaf_classes:
+        sub_match_class_names = [sub_match_class.abbreviated_name for sub_match_class in leaf_class.sub_match_types]
+        if len(sub_match_class_names) != 0:
+            for sub_match_class_name in sub_match_class_names:
+                for a, b in itertools.permutations([leaf_class.abbreviated_name, sub_match_class_name]):
+                    edge_metadata.append((a, I_ETYPE_NAME, b))
+
+    base_match_names = [leaf_class.abbreviated_name for leaf_class in leaf_classes if leaf_class.is_base_match()]
+    for a, b in itertools.permutations(base_match_names, 2):
+        edge_metadata.append((a, B_ETYPE_NAME, b))
+
+    return node_metadata, edge_metadata
+
+
+MATCH_TYPE_COUNT = _count_match_types()
+METADATA = _compute_metadata()
+

@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 import torch.nn as nn
-import torch_geometric.graphgym.register as register
 import torch_geometric.nn as pygnn
 from performer_pytorch import SelfAttention
 from torch_geometric.data import Batch
@@ -30,7 +29,7 @@ class GPSLayer(nn.Module):
         self.layer_norm = layer_norm
         self.batch_norm = batch_norm
         self.equivstable_pe = equivstable_pe
-        self.activation = register.act_dict[act]
+        self.activation = act
 
         self.log_attn_weights = log_attn_weights
         if log_attn_weights and global_model_type not in ['Transformer',
@@ -196,7 +195,8 @@ class GPSLayer(nn.Module):
 
         # Multi-head attention.
         if self.self_attn is not None:
-            h_dense, mask = to_dense_batch(h, batch.batch)
+            # TODO: Use actual 'max_num_nodes' calculation
+            h_dense, mask = to_dense_batch(h, batch=batch.batch)
             if self.global_model_type == 'Transformer':
                 h_attn = self._sa_block(h_dense, None, ~mask)[mask]
             elif self.global_model_type == 'BiasedTransformer':

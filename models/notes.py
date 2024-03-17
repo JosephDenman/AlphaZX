@@ -100,5 +100,10 @@ Challenges:
         representations. Transformer encoders work pair-wise globally, meaning that features are not propagated through
         component-level vertex bottlenecks.
 
+------------------------------------------------------------------------------------------------------------------------
+
+Decisions:
+
+    D1: Use https://arxiv.org/pdf/2108.13650.pdf as a HGNN-specific feature encoder with hetero-transformed GPSModule.
 
 """

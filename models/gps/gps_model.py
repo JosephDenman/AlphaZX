@@ -20,7 +20,6 @@ class FeatureEncoder(torch.nn.Module):
     def __init__(self, dim_in):
         super(FeatureEncoder, self).__init__()
         self.dim_in = dim_in
-        print(cfg)
         if cfg.dataset.node_encoder:
             # Encode integer node features via nn.Embeddings
             NodeEncoder = register.node_encoder_dict[

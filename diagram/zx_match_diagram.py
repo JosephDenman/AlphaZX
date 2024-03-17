@@ -4,23 +4,17 @@ import torch.nn.functional as torch_func
 import torch_geometric.data as pyg_data
 import torch_geometric.utils as pyg_utils
 
+from diagram.constants import B_ETYPE_INDEX, I_ETYPE_INDEX, I_ETYPE_ONE_HOT, B_ETYPE_ONE_HOT
 from diagram.match import Match, CompoundMatch, FRightMatch, FRightZMatch, FRightXMatch, MATCH_TYPE_COUNT
 from diagram.zx_diagram import ZXDiagram
-
-ETYPE_COUNT = 2
-
-B_ETYPE_INDEX = 0
-B_ETYPE_NAME = 'base'
-B_ETYPE_ONE_HOT = torch_func.one_hot(torch.tensor([B_ETYPE_INDEX]), ETYPE_COUNT)
-
-I_ETYPE_INDEX = 1
-I_ETYPE_NAME = 'inclusion'
-I_ETYPE_ONE_HOT = torch_func.one_hot(torch.tensor([I_ETYPE_INDEX]), ETYPE_COUNT)
 
 
 # TODO: In the future, post-processed versions of ZXMatchDiagram, e.g., adding certain features should be done by
 #       defining methods that return new 'ZXMatchDiagram' instances with the desired properties. This way, post-processing
 #       steps can be easily chained.
+# TODO: Decide on how to handle boundary vertices. Should they be explicitly represented, represented as two aggregate nodes
+#       (input and output) to allow information to flow more effectively between boundary nodes, or should nodes simply have
+#       an 'is_connected_to_boundary' feature?
 class ZXMatchDiagram(nx.MultiGraph):
     NTYPE = 'type'
     ETYPE = 'type'
@@ -41,7 +35,7 @@ class ZXMatchDiagram(nx.MultiGraph):
         for n, m, edata in zx_diagram.edges(data=True):
             if zx_diagram.is_basis(n) and zx_diagram.is_basis(m):
                 self.add_edge(f_right_match_from_node(zx_diagram, n), f_right_match_from_node(zx_diagram, m),
-                              type=compute_edge_type_attr(B_ETYPE_INDEX, one_hot_types))
+                              type=B_ETYPE_ONE_HOT if one_hot_types else B_ETYPE_INDEX)
 
     def to_pyg_hetero_data(self) -> pyg_data.HeteroData:
         pass
@@ -123,10 +117,6 @@ def compute_node_phase_attr(zx_diagram: ZXDiagram, match: Match) -> torch.Tensor
         return torch.tensor([-1])
 
 
-def compute_edge_type_attr(etype_index: int, one_hot_types: bool) -> torch.Tensor:
-    return torch_func.one_hot(torch.tensor(etype_index), ETYPE_COUNT) if one_hot_types else etype_index
-
-
 def add_match(zx_match_diagram: ZXMatchDiagram, zx_diagram: ZXDiagram, match: Match, one_hot_types: bool) -> None:
     if not zx_match_diagram.has_node(match):
         zx_match_diagram.add_node(match,
@@ -137,7 +127,7 @@ def add_match(zx_match_diagram: ZXMatchDiagram, zx_diagram: ZXDiagram, match: Ma
             if not zx_match_diagram.has_node(sub_match):
                 add_match(zx_match_diagram, zx_diagram, sub_match, one_hot_types)
             if not zx_match_diagram.has_edge(sub_match, match):
-                zx_match_diagram.add_edge(match, sub_match, type=compute_edge_type_attr(I_ETYPE_INDEX, one_hot_types))
+                zx_match_diagram.add_edge(match, sub_match, type=I_ETYPE_ONE_HOT if one_hot_types else I_ETYPE_INDEX)
 
 
 def f_right_match_from_node(diagram: ZXDiagram, node: int) -> FRightMatch:
