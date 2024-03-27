@@ -3,7 +3,7 @@ import itertools
 from collections.abc import Iterator
 from typing import Type
 
-from torch_geometric.typing import Metadata
+from torch_geometric.typing import NodeType, EdgeType
 from typing_extensions import Literal
 
 from diagram.constants import B_ETYPE_NAME, I_ETYPE_NAME
@@ -51,8 +51,9 @@ class Match(abc.ABC):
         pass
 
     @staticmethod
+    @property
     @abc.abstractmethod
-    def abbreviated_name() -> str:
+    def abbrev() -> str:
         pass
 
     @property
@@ -91,7 +92,7 @@ class Match(abc.ABC):
         return isinstance(other, Match) and self.name == other.name and self._nodes == other._nodes
 
     def __repr__(self):
-        return self.name + str(list(self._nodes))
+        return self.abbrev + str(list(self._nodes))
 
     def __iter__(self):
         yield from self._nodes
@@ -110,7 +111,7 @@ class CompoundMatch(Match, abc.ABC):
 
 class BoundaryMatch(BaseMatch):
     name = 'boundary'
-    abbreviated_name = 'b'
+    abbrev = 'b'
     index = 0
     expected_size = 1
     sub_match_types = []
@@ -146,14 +147,14 @@ class FLeftMatch(CompoundMatch, abc.ABC):
 
 class FRightZMatch(FRightMatch):
     name = 'f_right_z'
-    abbreviated_name = 'frz'
+    abbrev = 'z'
     index = 1
     rule_mode = 'z'
 
 
 class FLeftZMatch(FLeftMatch):
     name = 'f_left_z'
-    abbreviated_name = 'flz'
+    abbrev = 'zl'
     index = 2
     rule_mode = 'z'
     sub_match_types = [FRightZMatch]
@@ -166,14 +167,14 @@ class FLeftZMatch(FLeftMatch):
 
 class FRightXMatch(FRightMatch):
     name = 'f_right_x'
-    abbreviated_name = 'frx'
+    abbrev = 'x'
     index = 3
     rule_mode = 'x'
 
 
 class FLeftXMatch(FLeftMatch):
     name = 'f_left_x'
-    abbreviated_name = 'flx'
+    abbrev = 'xl'
     index = 4
     rule_mode = 'x'
     sub_match_types = [FRightXMatch]
@@ -186,7 +187,7 @@ class FLeftXMatch(FLeftMatch):
 
 class BRightMatch(CompoundMatch):
     name = 'b_right'
-    abbreviated_name = 'br'
+    abbrev = 'br'
     index = 5
     expected_size = 2
     sub_match_types = [FRightZMatch, FRightXMatch]
@@ -199,7 +200,7 @@ class BRightMatch(CompoundMatch):
 
 class BLeftMatch(CompoundMatch):
     name = 'b_left'
-    abbreviated_name = 'bl'
+    abbrev = 'bl'
     index = 6
     expected_size = 4
     sub_match_types = [BRightMatch, FRightZMatch, FRightXMatch]
@@ -239,7 +240,7 @@ class YLeftMatch(CompoundMatch, abc.ABC):
 
 class YRightZMatch(YRightMatch):
     name = 'y_right_z'
-    abbreviated_name = 'yrz'
+    abbrev = 'yrz'
     index = 7
     rule_mode = 'z'
 
@@ -254,7 +255,7 @@ class YRightZMatch(YRightMatch):
 
 class YLeftZMatch(YLeftMatch):
     name = 'y_left_z'
-    abbreviated_name = 'ylz'
+    abbrev = 'ylz'
     index = 8
     rule_mode = 'z'
 
@@ -269,7 +270,7 @@ class YLeftZMatch(YLeftMatch):
 
 class YRightXMatch(YRightMatch):
     name = 'y_right_x'
-    abbreviated_name = 'yrx'
+    abbrev = 'yrx'
     index = 9
     rule_mode = 'x'
 
@@ -284,7 +285,7 @@ class YRightXMatch(YRightMatch):
 
 class YLeftXMatch(YLeftMatch):
     name = 'y_left_x'
-    abbreviated_name = 'ylx'
+    abbrev = 'ylx'
     index = 10
     rule_mode = 'x'
 
@@ -316,23 +317,30 @@ def _count_match_types() -> int:
     return len(_leaf_classes())
 
 
+Metadata = tuple[
+    list[NodeType], dict[NodeType, int], list[EdgeType], dict[EdgeType, int]]
+
+
 def _compute_metadata() -> Metadata:
     node_metadata = []
     edge_metadata = []
     leaf_classes = _leaf_classes()
     for leaf_class in leaf_classes:
-        node_metadata.append(leaf_class.abbreviated_name)
+        node_metadata.append(leaf_class.abbrev)
+    node_type_to_index_metadata = {value: index for index, value in enumerate(node_metadata)}
     for leaf_class in leaf_classes:
-        sub_match_class_names = [sub_match_class.abbreviated_name for sub_match_class in leaf_class.sub_match_types]
+        sub_match_class_names = [sub_match_class.abbrev for sub_match_class in leaf_class.sub_match_types]
         if len(sub_match_class_names) != 0:
             for sub_match_class_name in sub_match_class_names:
-                for a, b in itertools.permutations([leaf_class.abbreviated_name, sub_match_class_name]):
+                for a, b in itertools.permutations([leaf_class.abbrev, sub_match_class_name]):
                     edge_metadata.append((a, I_ETYPE_NAME, b))
-    base_match_names = [leaf_class.abbreviated_name for leaf_class in leaf_classes if leaf_class.is_base_match()]
-    for a, b in itertools.permutations(base_match_names, 2):
+    base_match_names = [leaf_class.abbrev for leaf_class in leaf_classes if leaf_class.is_base_match()]
+    for a, b in itertools.product(base_match_names, base_match_names):
         edge_metadata.append((a, B_ETYPE_NAME, b))
-    return node_metadata, edge_metadata
+    edge_type_to_index_metadata = {value: index for index, value in enumerate(edge_metadata)}
+    return node_metadata, node_type_to_index_metadata, edge_metadata, edge_type_to_index_metadata
 
 
 MATCH_TYPE_COUNT = _count_match_types()
-METADATA = _compute_metadata()
+NODE_METADATA, NODE_TYPE_TO_INDEX_METADATA, EDGE_METADATA, EDGE_TYPE_TO_INDEX_METADATA = _compute_metadata()
+METADATA = NODE_METADATA, EDGE_METADATA
