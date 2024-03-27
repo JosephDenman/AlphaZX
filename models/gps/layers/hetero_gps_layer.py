@@ -1,19 +1,20 @@
 from torch import nn
-from torch_geometric.nn import to_hetero
+from torch_geometric.experimental import disable_dynamic_shapes
+from torch_geometric.nn import to_hetero, GPSConv, TransformerConv
 
 from diagram.match import METADATA
 from models.gps.gps_model import FeatureEncoder
 from models.gps.layers.gps_layer import GPSLayer
 
 # Have to figure out 'cfg' to make the following work.
-dim_in = 60
+"""dim_in = 60
 f_encoder = FeatureEncoder(dim_in)
-hetero_feature_encoder_layer = to_hetero(f_encoder, METADATA)
+hetero_feature_encoder_layer = to_hetero(f_encoder, METADATA)"""
 
-# This works without 'cfg'.
-hidden_dim = 50
-local_gnn_type = 'GAT'
-global_model_type = 'Transformer'
-num_heads = 10
-gps = GPSLayer(hidden_dim, local_gnn_type, global_model_type, num_heads, act=nn.GELU)
+in_channels = 10
+out_channels = 20
+message_passing = TransformerConv(in_channels, out_channels)
+
+channels = 10
+gps = GPSConv(channels, message_passing)
 hetero_gps_layer = to_hetero(gps, METADATA, debug=True)

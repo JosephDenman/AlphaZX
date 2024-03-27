@@ -108,6 +108,14 @@ class CompoundMatch(Match, abc.ABC):
         pass
 
 
+class BoundaryMatch(BaseMatch):
+    name = 'boundary'
+    abbreviated_name = 'b'
+    index = 0
+    expected_size = 1
+    sub_match_types = []
+
+
 class FRightMatch(BaseMatch, abc.ABC):
     expected_size = 1
     sub_match_types = []
@@ -139,14 +147,14 @@ class FLeftMatch(CompoundMatch, abc.ABC):
 class FRightZMatch(FRightMatch):
     name = 'f_right_z'
     abbreviated_name = 'frz'
-    index = 0
+    index = 1
     rule_mode = 'z'
 
 
 class FLeftZMatch(FLeftMatch):
     name = 'f_left_z'
     abbreviated_name = 'flz'
-    index = 1
+    index = 2
     rule_mode = 'z'
     sub_match_types = [FRightZMatch]
 
@@ -159,14 +167,14 @@ class FLeftZMatch(FLeftMatch):
 class FRightXMatch(FRightMatch):
     name = 'f_right_x'
     abbreviated_name = 'frx'
-    index = 2
+    index = 3
     rule_mode = 'x'
 
 
 class FLeftXMatch(FLeftMatch):
     name = 'f_left_x'
     abbreviated_name = 'flx'
-    index = 3
+    index = 4
     rule_mode = 'x'
     sub_match_types = [FRightXMatch]
 
@@ -179,7 +187,7 @@ class FLeftXMatch(FLeftMatch):
 class BRightMatch(CompoundMatch):
     name = 'b_right'
     abbreviated_name = 'br'
-    index = 4
+    index = 5
     expected_size = 2
     sub_match_types = [FRightZMatch, FRightXMatch]
 
@@ -192,7 +200,7 @@ class BRightMatch(CompoundMatch):
 class BLeftMatch(CompoundMatch):
     name = 'b_left'
     abbreviated_name = 'bl'
-    index = 5
+    index = 6
     expected_size = 4
     sub_match_types = [BRightMatch, FRightZMatch, FRightXMatch]
 
@@ -232,7 +240,7 @@ class YLeftMatch(CompoundMatch, abc.ABC):
 class YRightZMatch(YRightMatch):
     name = 'y_right_z'
     abbreviated_name = 'yrz'
-    index = 6
+    index = 7
     rule_mode = 'z'
 
     @property
@@ -247,7 +255,7 @@ class YRightZMatch(YRightMatch):
 class YLeftZMatch(YLeftMatch):
     name = 'y_left_z'
     abbreviated_name = 'ylz'
-    index = 7
+    index = 8
     rule_mode = 'z'
 
     @property
@@ -262,7 +270,7 @@ class YLeftZMatch(YLeftMatch):
 class YRightXMatch(YRightMatch):
     name = 'y_right_x'
     abbreviated_name = 'yrx'
-    index = 8
+    index = 9
     rule_mode = 'x'
 
     @property
@@ -277,7 +285,7 @@ class YRightXMatch(YRightMatch):
 class YLeftXMatch(YLeftMatch):
     name = 'y_left_x'
     abbreviated_name = 'ylx'
-    index = 9
+    index = 10
     rule_mode = 'x'
 
     @property
@@ -312,21 +320,17 @@ def _compute_metadata() -> Metadata:
     node_metadata = []
     edge_metadata = []
     leaf_classes = _leaf_classes()
-
     for leaf_class in leaf_classes:
         node_metadata.append(leaf_class.abbreviated_name)
-
     for leaf_class in leaf_classes:
         sub_match_class_names = [sub_match_class.abbreviated_name for sub_match_class in leaf_class.sub_match_types]
         if len(sub_match_class_names) != 0:
             for sub_match_class_name in sub_match_class_names:
                 for a, b in itertools.permutations([leaf_class.abbreviated_name, sub_match_class_name]):
                     edge_metadata.append((a, I_ETYPE_NAME, b))
-
     base_match_names = [leaf_class.abbreviated_name for leaf_class in leaf_classes if leaf_class.is_base_match()]
     for a, b in itertools.permutations(base_match_names, 2):
         edge_metadata.append((a, B_ETYPE_NAME, b))
-
     return node_metadata, edge_metadata
 
 

@@ -1,4 +1,4 @@
-from torch_geometric.nn import to_hetero
+from torch_geometric.nn import to_hetero, SAGEConv
 
 from diagram.match import METADATA
 from models.gps.gps_model import GPSModel

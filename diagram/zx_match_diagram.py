@@ -5,7 +5,9 @@ import torch_geometric.data as pyg_data
 import torch_geometric.utils as pyg_utils
 
 from diagram.constants import B_ETYPE_INDEX, I_ETYPE_INDEX, I_ETYPE_ONE_HOT, B_ETYPE_ONE_HOT
-from diagram.match import Match, CompoundMatch, FRightMatch, FRightZMatch, FRightXMatch, MATCH_TYPE_COUNT
+from diagram.match import Match, CompoundMatch, FRightMatch, FRightZMatch, FRightXMatch, MATCH_TYPE_COUNT, \
+    BoundaryMatch, BaseMatch
+from diagram.pyzx_nx_conv import nx_graph_to_pyg_hetero
 from diagram.zx_diagram import ZXDiagram
 
 
@@ -28,17 +30,15 @@ class ZXMatchDiagram(nx.MultiGraph):
         self.max_degree = max(self.zx_diagram.degree, key=lambda x: x[1])[1]
         super().__init__(nx.MultiGraph())
         for n, ndata in zx_diagram.nodes(data=True):
-            if zx_diagram.is_basis(n):
-                f_right_match_node = f_right_match_from_node(zx_diagram, n)
-                self.add_node(f_right_match_node, type=compute_node_type_attr(f_right_match_node, one_hot_types),
-                              phase=compute_node_phase_attr(zx_diagram, f_right_match_node))
+            base_match = base_match_from_node(zx_diagram, n)
+            self.add_node(base_match, type=compute_node_type_attr(base_match, one_hot_types),
+                          phase=compute_node_phase_attr(zx_diagram, base_match))
         for n, m, edata in zx_diagram.edges(data=True):
-            if zx_diagram.is_basis(n) and zx_diagram.is_basis(m):
-                self.add_edge(f_right_match_from_node(zx_diagram, n), f_right_match_from_node(zx_diagram, m),
-                              type=B_ETYPE_ONE_HOT if one_hot_types else B_ETYPE_INDEX)
+            self.add_edge(base_match_from_node(zx_diagram, n), base_match_from_node(zx_diagram, m),
+                          type=B_ETYPE_ONE_HOT if one_hot_types else B_ETYPE_INDEX)
 
     def to_pyg_hetero_data(self) -> pyg_data.HeteroData:
-        pass
+        return nx_graph_to_pyg_hetero(self, node_type_attribute='type', edge_type_attribute='type', group_node_attrs=['phase'])
 
     @staticmethod
     def __flatten_and_concatenate_tensors(tensors: list[torch.Tensor]) -> torch.Tensor:
@@ -130,10 +130,12 @@ def add_match(zx_match_diagram: ZXMatchDiagram, zx_diagram: ZXDiagram, match: Ma
                 zx_match_diagram.add_edge(match, sub_match, type=I_ETYPE_ONE_HOT if one_hot_types else I_ETYPE_INDEX)
 
 
-def f_right_match_from_node(diagram: ZXDiagram, node: int) -> FRightMatch:
+def base_match_from_node(diagram: ZXDiagram, node: int) -> BaseMatch:
     if diagram.is_z_basis(node):
         return FRightZMatch(node)
     elif diagram.is_x_basis(node):
         return FRightXMatch(node)
+    elif diagram.is_boundary(node):
+        return BoundaryMatch(node)
     else:
         raise Exception(f'Unexpected node type {diagram.type(node)}')
