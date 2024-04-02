@@ -12,7 +12,6 @@ class MultivariateBernoulliMixture:
                        The mixture parameters and Bernoulli parameters are combined to form a mixture of Bernoulli distributions of
                        size |E_incident| with events that are |E_incident| long 1D binary tensors.
         """
-        super().__init__(torch.Size(params.shape[:2]), torch.Size([params.shape[-2]]), validate_args=False)
         self.params = params
         # noinspection PyTypeChecker
         if not torch.all((params >= 0.0) & (params <= 1.0)):

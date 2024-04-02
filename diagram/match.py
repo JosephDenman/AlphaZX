@@ -11,16 +11,6 @@ from diagram.constants import B_ETYPE_NAME, I_ETYPE_NAME
 Basis = Literal['z', 'x']
 
 
-def camel_to_snake(s: str) -> str:
-    res = ""
-    for i in s:
-        if i.isupper():
-            res += "_" + i.lower()
-        else:
-            res += i
-    return res[1:]
-
-
 class Match(abc.ABC):
 
     def __init__(self, *match: dict[int, int] | int):
