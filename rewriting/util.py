@@ -27,13 +27,3 @@ def rewrite(diagram: ZXDiagram, match: Match, f_right_params: FRightParameters |
         y_right_rewrite(match, diagram)
     else:
         raise Exception(f'Bug found: unexpected match type {match}')
-
-
-nodes = []
-for i in range(1000):
-    print('i = ', i)
-    d = clifford_zx_diagram(100, 100, True)
-    md = to_zx_match_diagram(d, False)
-    nodes.append(d.number_of_nodes() + md.number_of_nodes())
-
-print(sum(nodes) / len(nodes))
