@@ -3,12 +3,12 @@ from typing import Optional
 from hypothesis import strategies as st, given
 from hypothesis.strategies import composite, SearchStrategy
 
-from src.diagram.match import BLeftMatch, YLeftZMatch, YLeftXMatch, YRightZMatch, YRightXMatch, BRightMatch
-from src.diagram.pyzx_nx_conv import is_z_basis, is_x_basis, is_boundary, Z_NTYPE_INDEX, X_NTYPE_INDEX, B_NTYPE_INDEX
-from src.diagram.zx_diagram import ZXDiagram
-from src.rewriting.b_rule_rewriter import b_right_rewrite, b_left_rewrite
-from src.rewriting.f_rule_rewriter import f_right_rewrite
-from src.rewriting.y_rule_rewriter import y_left_rewrite, y_right_rewrite
+from alphazx.diagram.match import BLeftMatch, YLeftZMatch, YLeftXMatch, YRightZMatch, YRightXMatch, BRightMatch
+from alphazx.diagram.pyzx_nx_conv import is_z_basis, is_x_basis, is_boundary, Z_NTYPE_INDEX, X_NTYPE_INDEX, B_NTYPE_INDEX
+from alphazx.diagram.zx_diagram import ZXDiagram
+from alphazx.rewriting.b_rule_rewriter import b_right_rewrite, b_left_rewrite
+from alphazx.rewriting.f_rule_rewriter import f_right_rewrite
+from alphazx.rewriting.y_rule_rewriter import y_left_rewrite, y_right_rewrite
 from tests.match_patterns import b_right_pattern, b_left_pattern, y_left_z_pattern, y_left_x_pattern, \
     y_right_x_pattern, y_right_z_pattern
 

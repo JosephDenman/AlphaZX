@@ -1,9 +1,9 @@
 import networkx as nx
 
-from src.diagram.match import Basis, FLeftZMatch, FLeftXMatch, FRightZMatch, FRightXMatch, BLeftMatch, BRightMatch, \
+from alphazx.diagram.match import Basis, FLeftZMatch, FLeftXMatch, FRightZMatch, FRightXMatch, BLeftMatch, BRightMatch, \
     YLeftZMatch, YLeftXMatch, YRightZMatch, YRightXMatch
-from src.diagram.pyzx_nx_conv import Z_NTYPE_NAME, X_NTYPE_NAME
-from src.diagram.zx_diagram import ZXDiagram, zx_compose, zx_compose_all
+from alphazx.diagram.pyzx_nx_conv import Z_NTYPE_NAME, X_NTYPE_NAME
+from alphazx.diagram.zx_diagram import ZXDiagram, zx_compose, zx_compose_all
 from tests.match_patterns import f_left_z_pattern, f_left_x_pattern, f_right_z_pattern, f_right_x_pattern, \
     y_left_z_pattern, y_left_x_pattern, y_left_pattern, y_right_z_pattern, y_right_x_pattern, \
     b_left_pattern, b_right_pattern
