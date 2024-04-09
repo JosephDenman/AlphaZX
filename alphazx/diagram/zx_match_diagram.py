@@ -83,8 +83,8 @@ def compute_node_phase_attr(zx_diagram: ZXDiagram, match: Match) -> torch.Tensor
     else:
         # Because phases of f-right matches are always mod 2, giving non-f-right matches a phase of -1 differentiates
         # them from f-right matches.
-        return torch.tensor(-1)
-
+        # TODO: This ^ is not correct.
+        return torch.tensor(-1.)
 
 def add_match(zx_match_diagram: ZXMatchDiagram, zx_diagram: ZXDiagram, match: Match) -> None:
     if not zx_match_diagram.has_node(match):
