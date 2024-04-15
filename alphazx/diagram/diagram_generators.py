@@ -141,7 +141,3 @@ def gml_clifford_pyg_hetero_zx_diagram(num_qubits: int, depth: int, t_gates: boo
 
 def gml_clifford_pyg_hetero_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool, path: str) -> HeteroData:
     return nx.write_gml(clifford_pyg_hetero_zx_match_diagram(num_qubits, depth, t_gates), path, stringify)
-
-
-d = clifford_zx_match_diagram(2, 2, True)
-print(d.to_pyg_data())

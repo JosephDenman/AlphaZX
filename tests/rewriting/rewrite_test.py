@@ -1,3 +1,4 @@
+import unittest
 from typing import Optional
 
 from hypothesis import strategies as st, given
@@ -61,7 +62,7 @@ def add_basis_node(ntype: int, phase: float, diagram: ZXDiagram) -> None:
         raise Exception(f'Unexpected node type {ntype}')
 
 
-class TestFRightRewrite:
+class TestFRightRewrite(unittest.TestCase):
 
     @given(f_right_st())
     def test_simple_f_right_rewrite(self, data):
@@ -91,7 +92,7 @@ def add_node(data: tuple[B_NTYPE_INDEX | X_NTYPE_INDEX | Z_NTYPE_INDEX, float], 
         raise Exception(f'Unexpected node type {ntype}')
 
 
-class TestBRightRewrite:
+class TestBRightRewrite(unittest.TestCase):
 
     @given(st_b_right_nodes())
     def test_simple_b_right_rewrite(self, data_list):
@@ -105,7 +106,7 @@ class TestBRightRewrite:
         assert list(diagram.b_left_matches())[0] == BLeftMatch(7, 9, 6, 8)
 
 
-class TestBLeftRewrite:
+class TestBLeftRewrite(unittest.TestCase):
 
     def test_simple_b_left_rewrite(self):
         diagram = b_left_pattern(PD)
@@ -115,7 +116,7 @@ class TestBLeftRewrite:
         assert list(diagram.b_right_matches())[0] == BRightMatch(8, 9)
 
 
-class TestYLeftRewrite:
+class TestYLeftRewrite(unittest.TestCase):
 
     def test_self_z_rewrite(self):
         diagram = y_left_z_pattern(PD)
@@ -132,7 +133,7 @@ class TestYLeftRewrite:
         assert list(diagram.y_right_matches())[0] == YRightZMatch(0, 1, 2, 3)
 
 
-class TestYRightRewrite:
+class TestYRightRewrite(unittest.TestCase):
 
     def test_self_z_rewrite(self):
         diagram = y_right_z_pattern(PD)

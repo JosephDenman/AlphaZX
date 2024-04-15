@@ -3,6 +3,7 @@ from typing import Iterator
 
 import networkx as nx
 import torch_geometric as pyg
+
 from alphazx.diagram.match import Match, FRightMatch, FRightZMatch, FRightXMatch, FLeftZMatch, FLeftMatch, FLeftXMatch, \
     BLeftMatch, BRightMatch, YLeftMatch, YRightMatch, YLeftXMatch, YLeftZMatch, YRightZMatch, YRightXMatch
 from alphazx.diagram.pyzx_nx_conv import is_basis, is_boundary, is_z_basis, is_x_basis, \
@@ -18,7 +19,7 @@ class ZXDiagram(nx.MultiGraph):
             raise ValueError(f"The phase denominator {phase_denominator} must be positive.")
         self.phase_denominator = phase_denominator
         super().__init__(incoming_graph_data=nx_graph, multigraph_input=True)
-        self.next_node_index = max(nx_graph.nodes(data=False)) + 1 if self.number_of_nodes() > 0 else 0
+        self.next_node_index = max(nx_graph.nodes()) + 1 if self.number_of_nodes() > 0 else 0
         self._z_nodes_set = set()
         self._x_nodes_set = set()
         self._b_nodes_set = set()
@@ -233,20 +234,14 @@ class ZXDiagram(nx.MultiGraph):
         return [(n, m, k) for k in self[n][m]]
 
     def f_left_z_matches(self) -> Iterator[FLeftZMatch]:
-        candidates = set()
-        for s, t, edata in self.edges(data=True):
+        for s, t in set(self.edges()):
             if self.is_z_basis(s) and self.is_z_basis(t):
-                candidates.add((s, t))
-        for s, t in candidates:
-            yield FLeftZMatch(s, t)
+                yield FLeftZMatch(s, t)
 
     def f_left_x_matches(self) -> Iterator[FLeftXMatch]:
-        candidates = set()
-        for s, t, edata in self.edges(data=True):
+        for s, t in set(self.edges()):
             if self.is_x_basis(s) and self.is_x_basis(t):
-                candidates.add((s, t))
-        for s, t in candidates:
-            yield FLeftXMatch(s, t)
+                yield FLeftXMatch(s, t)
 
     def f_left_matches(self) -> Iterator[FLeftMatch]:
         yield from self.f_left_z_matches()
@@ -263,11 +258,17 @@ class ZXDiagram(nx.MultiGraph):
         yield from self.f_right_x_matches()
 
     def b_left_matches(self) -> Iterator[BLeftMatch]:
-        candidates = {(s, t) if self.is_z_basis(s) and self.is_x_basis(t) else (t, s) for s, t in
-                      set(self.edges(data=False))
-                      if self.degree(s) == 3 and self.degree(t) == 3 and
-                      self.is_basis(s) and self.is_basis(t) and self.type(s) != self.type(t) and
-                      self.phase(s) == 0 and self.phase(t) == 0}
+        candidates = set()
+        for s, t in set(self.edges()):
+            if self.degree(s) == 3 and self.degree(t) == 3:
+                if self.is_basis(s) and self.is_basis(t) and self.type(s) != self.type(t):
+                    if self.phase(s) == 0 and self.phase(t) == 0:
+                        if self.is_z_basis(s) and self.is_x_basis(t):
+                            candidates.add((s, t))
+                        elif self.is_z_basis(t) and self.is_x_basis(s):
+                            candidates.add((t, s))
+                        else:
+                            raise Exception(f'Unexpected basis nodes {s} and {t}')
         while len(candidates) > 0:
             z, x = candidates.pop()
             for n in self.neighbors(z):
@@ -283,12 +284,16 @@ class ZXDiagram(nx.MultiGraph):
                                     yield BLeftMatch(z, x, m, n)
 
     def b_right_matches(self) -> Iterator[BRightMatch]:
-        for s, t in set(self.edges(data=False)):
+        for s, t in set(self.edges()):
             if self.degree(s) == 3 and self.degree(t) == 3:
                 if self.is_basis(s) and self.is_basis(t) and self.type(s) != self.type(t):
                     if self.phase(s) == 0 and self.phase(t) == 0:
-                        x, z = (s, t) if self.is_x_basis(s) and self.is_z_basis(t) else (t, s)
-                        yield BRightMatch(x, z)
+                        if self.is_z_basis(s) and self.is_x_basis(t):
+                            yield BRightMatch(s, t)
+                        elif self.is_z_basis(t) and self.is_x_basis(s):
+                            yield BRightMatch(t, s)
+                        else:
+                            raise Exception(f'Bug found: unexpected basis nodes {s} and {t}')
 
     def y_left_z_matches(self) -> Iterator[YLeftZMatch]:
         for n in self.x_nodes():

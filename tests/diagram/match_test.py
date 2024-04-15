@@ -1,3 +1,5 @@
+import unittest
+
 import networkx as nx
 
 from alphazx.diagram.match import Basis, FLeftZMatch, FLeftXMatch, FRightZMatch, FRightXMatch, BLeftMatch, BRightMatch, \
@@ -72,7 +74,7 @@ class TestFLeftMatch:
         assert list(disconnected_test_graph(X_NTYPE_NAME).f_left_x_matches()) == []
 
 
-class TestFRightMatch:
+class TestFRightMatch(unittest.TestCase):
 
     def test_self_match_z(self):
         assert list(f_right_z_pattern(PD).f_right_z_matches()) == [FRightZMatch(0)]
@@ -158,7 +160,7 @@ def square_graph_alternating() -> ZXDiagram:
     return diagram
 
 
-class TestBLeftMatch:
+class TestBLeftMatch(unittest.TestCase):
 
     def test_self_match(self):
         """
@@ -495,7 +497,7 @@ def two_identity_test_graph() -> ZXDiagram:
     return diagram
 
 
-class TestBRightMatch:
+class TestBRightMatch(unittest.TestCase):
 
     def test_self_match_z(self):
         diagram = b_right_pattern(PD)
@@ -549,7 +551,7 @@ def disconnected_no_match_test_graph(basis: Basis, first: bool = False, second: 
     return diagram
 
 
-class TestYLeftMatch:
+class TestYLeftMatch(unittest.TestCase):
 
     def test_self_match_z(self):
         diagram = y_left_z_pattern(PD)
@@ -604,7 +606,7 @@ class TestYLeftMatch:
                         assert matches == []
 
 
-class TestYRightMatch:
+class TestYRightMatch(unittest.TestCase):
 
     def test_self_match_z(self):
         diagram = y_right_z_pattern(PD)

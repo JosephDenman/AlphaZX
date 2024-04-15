@@ -1,11 +1,11 @@
 import abc
 import itertools
-from collections.abc import Iterator
 from typing import Type
 
-from alphazx.diagram.constants import B_ETYPE_NAME, I_ETYPE_NAME
 from torch_geometric.typing import NodeType, EdgeType
 from typing_extensions import Literal
+
+from alphazx.diagram.constants import B_ETYPE_NAME, I_ETYPE_NAME
 
 Basis = Literal['z', 'x']
 
@@ -52,7 +52,7 @@ class Match(abc.ABC):
 
     @staticmethod
     @abc.abstractmethod
-    def sub_match_types() -> Iterator[Type['Match']]:
+    def sub_match_types() -> list[Type['Match']]:
         pass
 
     @classmethod
@@ -71,6 +71,11 @@ class Match(abc.ABC):
     def match(self) -> dict[int, int]:
         return self._match
 
+    @property
+    @abc.abstractmethod
+    def sub_matches(self) -> list['Match']:
+        pass
+
     def __getitem__(self, item):
         return self._nodes[item]
 
@@ -88,14 +93,17 @@ class Match(abc.ABC):
 
 
 class BaseMatch(Match, abc.ABC):
-    pass
+    @property
+    def node(self) -> int:
+        return self.nodes[0]
+
+    @property
+    def sub_matches(self) -> list[Match]:
+        return []
 
 
 class CompoundMatch(Match, abc.ABC):
-    @property
-    @abc.abstractmethod
-    def sub_matches(self) -> Iterator[Match]:
-        pass
+    pass
 
 
 class BoundaryMatch(BaseMatch):
@@ -149,9 +157,8 @@ class FLeftZMatch(FLeftMatch):
     sub_match_types = [FRightZMatch]
 
     @property
-    def sub_matches(self) -> Iterator[Match]:
-        for node in self.nodes:
-            yield FRightZMatch(node)
+    def sub_matches(self) -> list[Match]:
+        return [FRightZMatch(node) for node in self.nodes]
 
 
 class FRightXMatch(FRightMatch):
@@ -169,12 +176,14 @@ class FLeftXMatch(FLeftMatch):
     sub_match_types = [FRightXMatch]
 
     @property
-    def sub_matches(self) -> Iterator[Match]:
-        for node in self.nodes:
-            yield FRightXMatch(node)
+    def sub_matches(self) -> list[Match]:
+        return [FRightXMatch(node) for node in self.nodes]
 
 
 class BRightMatch(CompoundMatch):
+    """
+    The nodes are ordered as z-x.
+    """
     name = 'b_right'
     abbrev = 'br'
     index = 5
@@ -182,12 +191,14 @@ class BRightMatch(CompoundMatch):
     sub_match_types = [FRightZMatch, FRightXMatch]
 
     @property
-    def sub_matches(self) -> Iterator[Match]:
-        yield FRightXMatch(self.nodes[0])
-        yield FRightZMatch(self.nodes[1])
+    def sub_matches(self) -> list[Match]:
+        return [FRightZMatch(self.nodes[0]), FRightXMatch(self.nodes[1])]
 
 
 class BLeftMatch(CompoundMatch):
+    """
+    The nodes are ordered as z-x-z-x.
+    """
     name = 'b_left'
     abbrev = 'bl'
     index = 6
@@ -195,16 +206,10 @@ class BLeftMatch(CompoundMatch):
     sub_match_types = [BRightMatch, FRightZMatch, FRightXMatch]
 
     @property
-    def sub_matches(self) -> Iterator[Match]:
+    def sub_matches(self) -> list[Match]:
         z, x, m, n = self.nodes
-        yield BRightMatch(z, x)
-        yield BRightMatch(z, n)
-        yield BRightMatch(m, x)
-        yield BRightMatch(m, n)
-        yield FRightZMatch(z)
-        yield FRightXMatch(x)
-        yield FRightZMatch(m)
-        yield FRightXMatch(n)
+        return [BRightMatch(z, x), BRightMatch(z, n), BRightMatch(m, x), BRightMatch(m, n), FRightZMatch(z),
+                FRightXMatch(x), FRightZMatch(m), FRightXMatch(n)]
 
 
 class YRightMatch(CompoundMatch, abc.ABC):
@@ -234,12 +239,8 @@ class YRightZMatch(YRightMatch):
     rule_mode = 'z'
 
     @property
-    def sub_matches(self) -> Iterator[Match]:
-        for node in self.nodes:
-            if node == 1:
-                yield FRightXMatch(node)
-            else:
-                yield FRightZMatch(node)
+    def sub_matches(self) -> list[Match]:
+        return [FRightXMatch(node) if i == 1 else FRightZMatch(node) for i, node in enumerate(self.nodes)]
 
 
 class YLeftZMatch(YLeftMatch):
@@ -249,12 +250,8 @@ class YLeftZMatch(YLeftMatch):
     rule_mode = 'z'
 
     @property
-    def sub_matches(self) -> Iterator[Match]:
-        for node in self.nodes:
-            if node == 1:
-                yield FRightXMatch(node)
-            else:
-                yield FRightZMatch(node)
+    def sub_matches(self) -> list[Match]:
+        return [FRightXMatch(node) if i == 1 else FRightZMatch(node) for i, node in enumerate(self.nodes)]
 
 
 class YRightXMatch(YRightMatch):
@@ -264,12 +261,8 @@ class YRightXMatch(YRightMatch):
     rule_mode = 'x'
 
     @property
-    def sub_matches(self) -> Iterator[Match]:
-        for node in self._nodes:
-            if node == 1:
-                yield FRightZMatch(node)
-            else:
-                yield FRightXMatch(node)
+    def sub_matches(self) -> list[Match]:
+        return [FRightZMatch(node) if i == 1 else FRightXMatch(node) for i, node in enumerate(self.nodes)]
 
 
 class YLeftXMatch(YLeftMatch):
@@ -279,12 +272,8 @@ class YLeftXMatch(YLeftMatch):
     rule_mode = 'x'
 
     @property
-    def sub_matches(self) -> Iterator[Match]:
-        for node in self._nodes:
-            if node == 1:
-                yield FRightZMatch(node)
-            else:
-                yield FRightXMatch(node)
+    def sub_matches(self) -> list[Match]:
+        return [FRightZMatch(node) if i == 1 else FRightXMatch(node) for i, node in enumerate(self.nodes)]
 
 
 def _leaf_classes() -> set[Type[Match]]:
