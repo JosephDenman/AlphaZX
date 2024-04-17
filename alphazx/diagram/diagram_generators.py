@@ -94,16 +94,16 @@ def clifford_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool) -> ZXM
     return to_zx_match_diagram(clifford_zx_diagram(num_qubits, depth, t_gates))
 
 
-def clifford_pyg_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool) -> Data:
-    return clifford_zx_match_diagram(num_qubits, depth, t_gates).to_pyg_data()
+def clifford_pyg_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool, with_reverse_mapping: bool = False) -> Data:
+    return clifford_zx_match_diagram(num_qubits, depth, t_gates).to_pyg_data(with_reverse_mapping)
 
 
 def clifford_pyg_hetero_zx_diagram(num_qubits: int, depth: int, t_gates: bool) -> HeteroData:
     return clifford_zx_diagram(num_qubits, depth, t_gates).to_pyg_hdata()
 
 
-def clifford_pyg_hetero_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool) -> HeteroData:
-    return clifford_zx_match_diagram(num_qubits, depth, t_gates).to_pyg_hdata()
+def clifford_pyg_hetero_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool, with_reverse_mapping: bool = False) -> HeteroData:
+    return clifford_zx_match_diagram(num_qubits, depth, t_gates).to_pyg_hdata(with_reverse_mapping)
 
 
 def stringify(v: object | list | str) -> str:

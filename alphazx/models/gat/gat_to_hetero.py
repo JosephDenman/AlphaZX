@@ -1,5 +1,5 @@
-from diagram.diagram_generators import clifford_zx_match_diagram
-from diagram.match import METADATA
+from alphazx.diagram.diagram_generators import clifford_zx_match_diagram
+from alphazx.diagram.match import METADATA
 from torch_geometric.nn import to_hetero, GAT
 
 zx_match_diagram = clifford_zx_match_diagram(10, 10, True).to_pyg_hdata()
