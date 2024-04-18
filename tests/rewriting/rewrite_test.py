@@ -4,8 +4,8 @@ from typing import Optional
 from hypothesis import strategies as st, given
 from hypothesis.strategies import composite, SearchStrategy
 
-from alphazx.diagram.match import BLeftMatch, YLeftZMatch, YLeftXMatch, YRightZMatch, YRightXMatch, BRightMatch
-from alphazx.diagram.pyzx_nx_conv import is_z_basis, is_x_basis, is_boundary, Z_NTYPE_INDEX, X_NTYPE_INDEX, B_NTYPE_INDEX
+from alphazx.diagram.match import BLeftMatch, YLeftZMatch, YLeftXMatch, YRightZMatch, YRightXMatch, BRightMatch, \
+    FRightXMatch, FRightZMatch, BoundaryMatch, is_z_basis, is_x_basis, is_boundary
 from alphazx.diagram.zx_diagram import ZXDiagram
 from alphazx.rewriting.b_rule_rewriter import b_right_rewrite, b_left_rewrite
 from alphazx.rewriting.f_rule_rewriter import f_right_rewrite
@@ -52,11 +52,11 @@ def st_b_right_nodes() -> SearchStrategy[list[tuple[int, float]]]:
 
 
 def add_basis_node(ntype: int, phase: float, diagram: ZXDiagram) -> None:
-    if ntype == Z_NTYPE_INDEX:
+    if ntype == FRightZMatch.index:
         diagram.add_z_node(phase=phase)
-    elif ntype == X_NTYPE_INDEX:
+    elif ntype == FRightXMatch.index:
         diagram.add_x_node(phase=phase)
-    elif ntype == B_NTYPE_INDEX:
+    elif ntype == BoundaryMatch.index:
         diagram.add_b_node()
     else:
         raise Exception(f'Unexpected node type {ntype}')
@@ -80,7 +80,7 @@ class TestFRightRewrite(unittest.TestCase):
         assert new_edges + len(edges) == diagram.number_of_edges()
 
 
-def add_node(data: tuple[B_NTYPE_INDEX | X_NTYPE_INDEX | Z_NTYPE_INDEX, float], diagram: ZXDiagram) -> int:
+def add_node(data: tuple[str, float], diagram: ZXDiagram) -> int:
     ntype, phase = data
     if is_z_basis(ntype):
         return diagram.add_z_node(phase)
@@ -113,7 +113,7 @@ class TestBLeftRewrite(unittest.TestCase):
         b4, b5, b6, b7 = diagram.add_b_node(), diagram.add_b_node(), diagram.add_b_node(), diagram.add_b_node()
         diagram.add_s_edges_from([(b4, 0), (b5, 1), (2, b6), (3, b7)])
         b_left_rewrite(list(diagram.b_left_matches())[0], diagram)
-        assert list(diagram.b_right_matches())[0] == BRightMatch(8, 9)
+        assert list(diagram.b_right_matches())[0] == BRightMatch(9, 8)
 
 
 class TestYLeftRewrite(unittest.TestCase):

@@ -54,7 +54,7 @@ def b_left_rewrite(b_left_match: BLeftMatch, diagram: ZXDiagram) -> None:
 
 
 def b_right_rewrite(b_right_match: BRightMatch, diagram: ZXDiagram) -> None:
-    x, z = b_right_match
+    z, x = b_right_match
 
     validate_node('x', x, diagram)
     validate_node('z', z, diagram)

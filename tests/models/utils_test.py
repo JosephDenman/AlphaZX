@@ -47,7 +47,7 @@ class UtilsTest(unittest.TestCase):
         x = torch.tensor(x, dtype=torch.float64)
         index = torch.tensor(index)
         expected = torch.tensor(expected, dtype=torch.float64)
-        result = cat_aggregate(x, index, max_num_elements)
+        result = cat_aggregate(x, index)
         self.assertTrue(torch.equal(result, expected))
 
     @given(aggr_params())

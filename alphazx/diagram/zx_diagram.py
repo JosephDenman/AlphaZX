@@ -2,12 +2,13 @@ from collections.abc import Iterable
 from typing import Iterator
 
 import networkx as nx
+import torch
 import torch_geometric as pyg
 
 from alphazx.diagram.match import Match, FRightMatch, FRightZMatch, FRightXMatch, FLeftZMatch, FLeftMatch, FLeftXMatch, \
-    BLeftMatch, BRightMatch, YLeftMatch, YRightMatch, YLeftXMatch, YLeftZMatch, YRightZMatch, YRightXMatch
-from alphazx.diagram.pyzx_nx_conv import is_basis, is_boundary, is_z_basis, is_x_basis, \
-    Z_NTYPE_NAME, B_NTYPE_NAME, X_NTYPE_NAME
+    BLeftMatch, BRightMatch, YLeftMatch, YRightMatch, YLeftXMatch, YLeftZMatch, YRightZMatch, YRightXMatch, \
+    NODE_TYPE_TO_INDEX_METADATA, EDGE_TYPE_TO_INDEX_METADATA, NODE_METADATA, EDGE_METADATA, BoundaryMatch, is_boundary, \
+    is_basis, is_z_basis, is_x_basis
 
 
 class ZXDiagram(nx.MultiGraph):
@@ -101,14 +102,14 @@ class ZXDiagram(nx.MultiGraph):
     def flip_basis(self, n: int) -> None:
         assert self.is_basis(n), f'Attempted to basis flip non-basis node {n}'
         (self._x_nodes_set.remove if self.is_x_basis(n) else self._z_nodes_set.remove)(n)
-        self.nodes[n][self.NTYPE] = (X_NTYPE_NAME if self.is_z_basis(n) else Z_NTYPE_NAME)
+        self.nodes[n][self.NTYPE] = (FRightXMatch.abbrev if self.is_z_basis(n) else FRightZMatch.abbrev)
         (self._x_nodes_set.add if self.is_x_basis(n) else self._z_nodes_set.add)(n)
 
     def add_x_node(self, phase: float) -> int:
         assert self.is_valid_phase(
             phase), f'Phase {phase} for X-basis node is invalid for diagram with phase denominator {self.phase_denominator}'
         new_x = self.__next_node()
-        self.add_node(new_x, type=X_NTYPE_NAME, phase=phase)
+        self.add_node(new_x, type=FRightXMatch.abbrev, phase=phase)
         self._x_nodes_set.add(new_x)
         return new_x
 
@@ -141,7 +142,7 @@ class ZXDiagram(nx.MultiGraph):
         assert self.is_valid_phase(
             phase), f'Phase {phase} for Z-basis node is invalid for diagram with phase denominator {self.phase_denominator}'
         new_z = self.__next_node()
-        self.add_node(new_z, type=Z_NTYPE_NAME, phase=phase)
+        self.add_node(new_z, type=FRightZMatch.abbrev, phase=phase)
         self._z_nodes_set.add(new_z)
         return new_z
 
@@ -161,7 +162,7 @@ class ZXDiagram(nx.MultiGraph):
 
     def add_b_node(self) -> int:
         new_b = self.__next_node()
-        self.add_node(new_b, type=B_NTYPE_NAME, phase=0)
+        self.add_node(new_b, type=BoundaryMatch.abbrev, phase=0)
         self._b_nodes_set.add(new_b)
         return new_b
 
@@ -226,7 +227,7 @@ class ZXDiagram(nx.MultiGraph):
         return next_node_index
 
     def edges_between(self, n: int, m: int, data=False) -> list[
-            tuple[int, int, int] | tuple[int, int, int, dict[str, any]]]:
+        tuple[int, int, int] | tuple[int, int, int, dict[str, any]]]:
         assert self.has_node(n), f'Node {n} does not exist'
         assert self.has_node(n), f'Node {m} does not exist'
         if data:
@@ -346,8 +347,15 @@ class ZXDiagram(nx.MultiGraph):
     # def to_zx_match_diagram(self) -> ZXMatchDiagram:
     #     pass
 
-    def to_pyg_data(self, one_hot_types=True) -> pyg.data.Data:
-        pass
+    def to_pyg_hdata(self, sort_by_row: bool = False) -> pyg.data.HeteroData:
+        n_types = torch.tensor([NODE_TYPE_TO_INDEX_METADATA[ndata['type']] for _, ndata in self.nodes(data=True)],
+                               dtype=torch.long)
+        e_types = torch.tensor([EDGE_TYPE_TO_INDEX_METADATA[edata['type']] for _, _, edata in self.edges(data=True)],
+                               dtype=torch.long)
+        return pyg.utils.from_networkx(self, group_node_attrs=['phase']).to_heterogeneous(n_types, e_types,
+                                                                                          node_type_names=NODE_METADATA,
+                                                                                          edge_type_names=EDGE_METADATA).sort(
+            sort_by_row)
 
     def to_pyg_hetero_data(self, one_hot_types=True) -> pyg.data.HeteroData:
         pass

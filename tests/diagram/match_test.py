@@ -4,7 +4,6 @@ import networkx as nx
 
 from alphazx.diagram.match import Basis, FLeftZMatch, FLeftXMatch, FRightZMatch, FRightXMatch, BLeftMatch, BRightMatch, \
     YLeftZMatch, YLeftXMatch, YRightZMatch, YRightXMatch
-from alphazx.diagram.pyzx_nx_conv import Z_NTYPE_NAME, X_NTYPE_NAME
 from alphazx.diagram.zx_diagram import ZXDiagram, zx_compose, zx_compose_all
 from tests.match_patterns import f_left_z_pattern, f_left_x_pattern, f_right_z_pattern, f_right_x_pattern, \
     y_left_z_pattern, y_left_x_pattern, y_left_pattern, y_right_z_pattern, y_right_x_pattern, \
@@ -60,18 +59,20 @@ class TestFLeftMatch:
         assert list(f_left_x_pattern(PD).f_left_x_matches()) == [FLeftXMatch(0, 1)]
 
     def test_parallel_edge_match_z(self):
-        assert list(consecutive_parallel_edge_test_graph(Z_NTYPE_NAME).f_left_z_matches()) == [FLeftZMatch(23, 45),
-                                                                                               FLeftZMatch(45, 57)]
+        assert list(consecutive_parallel_edge_test_graph(FRightZMatch.abbrev).f_left_z_matches()) == [
+            FLeftZMatch(23, 45),
+            FLeftZMatch(45, 57)]
 
     def test_parallel_edge_match_x(self):
-        assert list(consecutive_parallel_edge_test_graph(X_NTYPE_NAME).f_left_x_matches()) == [FLeftXMatch(23, 45),
-                                                                                               FLeftXMatch(45, 57)]
+        assert list(consecutive_parallel_edge_test_graph(FRightXMatch.abbrev).f_left_x_matches()) == [
+            FLeftXMatch(23, 45),
+            FLeftXMatch(45, 57)]
 
     def test_disconnected_no_match_z(self):
-        assert list(disconnected_test_graph(Z_NTYPE_NAME).f_left_z_matches()) == []
+        assert list(disconnected_test_graph(FRightZMatch.abbrev).f_left_z_matches()) == []
 
     def test_disconnected_no_match_x(self):
-        assert list(disconnected_test_graph(X_NTYPE_NAME).f_left_x_matches()) == []
+        assert list(disconnected_test_graph(FRightXMatch.abbrev).f_left_x_matches()) == []
 
 
 class TestFRightMatch(unittest.TestCase):
@@ -95,18 +96,18 @@ class TestFRightMatch(unittest.TestCase):
         assert list(f_right_z_pattern(PD).f_right_x_matches()) == []
 
     def test_disconnected_match_z(self):
-        assert list(disconnected_test_graph(Z_NTYPE_NAME).f_right_z_matches()) == [FRightZMatch(0), FRightZMatch(1)]
+        assert list(disconnected_test_graph(FRightZMatch.abbrev).f_right_z_matches()) == [FRightZMatch(0), FRightZMatch(1)]
 
     def test_disconnected_match_x(self):
-        assert list(disconnected_test_graph(X_NTYPE_NAME).f_right_x_matches()) == [FRightXMatch(0), FRightXMatch(1)]
+        assert list(disconnected_test_graph(FRightXMatch.abbrev).f_right_x_matches()) == [FRightXMatch(0), FRightXMatch(1)]
 
     def test_consecutive_parallel_edge_match_z(self):
-        assert list(consecutive_parallel_edge_test_graph(Z_NTYPE_NAME).f_right_z_matches()) == [FRightZMatch(57),
+        assert list(consecutive_parallel_edge_test_graph(FRightZMatch.abbrev).f_right_z_matches()) == [FRightZMatch(57),
                                                                                                 FRightZMatch(45),
                                                                                                 FRightZMatch(23)]
 
     def test_consecutive_parallel_edge_match_x(self):
-        assert list(consecutive_parallel_edge_test_graph(X_NTYPE_NAME).f_right_x_matches()) == [FRightXMatch(57),
+        assert list(consecutive_parallel_edge_test_graph(FRightXMatch.abbrev).f_right_x_matches()) == [FRightXMatch(57),
                                                                                                 FRightXMatch(45),
                                                                                                 FRightXMatch(23)]
 
@@ -519,8 +520,8 @@ class TestBRightMatch(unittest.TestCase):
         b2, b3, b4, b5 = diagram.add_b_nodes(4)
         diagram.add_s_edges_from([(b2, 0), (b3, 1), (2, b4), (3, b5)])
         assert list(diagram.b_left_matches()) == [BLeftMatch(0, 2, 1, 3)]
-        assert list(diagram.b_right_matches()) == [BRightMatch(2, 1), BRightMatch(3, 0), BRightMatch(2, 0),
-                                                   BRightMatch(3, 1)]
+        assert list(diagram.b_right_matches()) == [BRightMatch(1, 2), BRightMatch(0, 3), BRightMatch(0, 2),
+                                                   BRightMatch(1, 3)]
 
 
 def parallel_edge_no_match_test_graph(basis: Basis, first: bool = False, second: bool = False,
@@ -569,7 +570,7 @@ class TestYLeftMatch(unittest.TestCase):
         for a in [True, False]:
             for b in [True, False]:
                 for c in [True, False]:
-                    matches = list(parallel_edge_no_match_test_graph(Z_NTYPE_NAME, a, b, c).y_left_z_matches())
+                    matches = list(parallel_edge_no_match_test_graph(FRightZMatch.abbrev, a, b, c).y_left_z_matches())
                     if not (a or b or c):
                         assert matches == [YLeftZMatch(0, 1, 2, 3)]
                     else:
@@ -579,7 +580,7 @@ class TestYLeftMatch(unittest.TestCase):
         for a in [True, False]:
             for b in [True, False]:
                 for c in [True, False]:
-                    matches = list(parallel_edge_no_match_test_graph(X_NTYPE_NAME, a, b, c).y_left_x_matches())
+                    matches = list(parallel_edge_no_match_test_graph(FRightXMatch.abbrev, a, b, c).y_left_x_matches())
                     if not (a or b or c):
                         assert matches == [YLeftXMatch(0, 1, 2, 3)]
                     else:
@@ -589,7 +590,7 @@ class TestYLeftMatch(unittest.TestCase):
         for a in [True, False]:
             for b in [True, False]:
                 for c in [True, False]:
-                    matches = list(disconnected_no_match_test_graph(Z_NTYPE_NAME, a, b, c).y_left_z_matches())
+                    matches = list(disconnected_no_match_test_graph(FRightZMatch.abbrev, a, b, c).y_left_z_matches())
                     if not (a or b or c):
                         assert matches == [YLeftZMatch(0, 1, 2, 3)]
                     else:
@@ -599,7 +600,7 @@ class TestYLeftMatch(unittest.TestCase):
         for a in [True, False]:
             for b in [True, False]:
                 for c in [True, False]:
-                    matches = list(disconnected_no_match_test_graph(X_NTYPE_NAME, a, b, c).y_left_x_matches())
+                    matches = list(disconnected_no_match_test_graph(FRightXMatch.abbrev, a, b, c).y_left_x_matches())
                     if not (a or b or c):
                         assert matches == [YLeftXMatch(0, 1, 2, 3)]
                     else:

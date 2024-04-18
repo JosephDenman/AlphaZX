@@ -2,10 +2,8 @@ from fractions import Fraction
 from typing import Tuple, List, Dict, Optional
 
 import networkx as nx
-from alphazx.diagram.match import Match
-from alphazx.diagram.pyzx_nx_conv import Z_NTYPE_INDEX, X_NTYPE_INDEX, B_NTYPE_NAME, B_NTYPE_INDEX, \
-    H_NTYPE_INDEX, PHASE, NTYPE, ROW, COLUMN, X_NTYPE_NAME, Z_NTYPE_NAME, \
-    H_NTYPE_NAME
+from alphazx.diagram.match import Match, is_boundary, is_z_basis, is_x_basis
+from alphazx.diagram.pyzx_nx_conv import PHASE, NTYPE, ROW, COLUMN
 
 Z_NTYPE_COLOR = '#d8f8d8'
 X_NTYPE_COLOR = '#e8a5b0'
@@ -17,22 +15,20 @@ MATCHED_X_NTYPE_COLOR = '#b4b4b4'
 
 
 def node_type_to_color(ntype: int | str) -> str:
-    if ntype == B_NTYPE_INDEX or ntype == B_NTYPE_NAME:
+    if is_boundary(ntype):
         return B_NTYPE_COLOR
-    elif ntype == Z_NTYPE_INDEX or ntype == Z_NTYPE_NAME:
+    elif is_z_basis(ntype):
         return Z_NTYPE_COLOR
-    elif ntype == X_NTYPE_INDEX or ntype == X_NTYPE_NAME:
+    elif is_x_basis(ntype):
         return X_NTYPE_COLOR
-    elif ntype == H_NTYPE_INDEX or ntype == H_NTYPE_NAME:
-        return H_NTYPE_COLOR
     else:
         raise Exception('Unexpected node type ' + str(ntype))
 
 
 def node_match_to_color(ntype: int | str) -> str:
-    if ntype == Z_NTYPE_INDEX or ntype == Z_NTYPE_NAME:
+    if is_z_basis(ntype):
         return MATCHED_Z_NTYPE_COLOR
-    elif ntype == X_NTYPE_INDEX or ntype == X_NTYPE_NAME:
+    elif is_x_basis(ntype):
         return MATCHED_X_NTYPE_COLOR
     else:
         raise Exception('Unexpected node type index ' + str(ntype))

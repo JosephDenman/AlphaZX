@@ -114,6 +114,15 @@ class BoundaryMatch(BaseMatch):
     sub_match_types = []
 
 
+def is_boundary(ntype: str | int) -> bool:
+    if isinstance(ntype, str):
+        return ntype == BoundaryMatch.abbrev
+    elif isinstance(ntype, int):
+        return ntype == BoundaryMatch.index
+    else:
+        raise Exception('Unexpected node type representation ' + str(ntype))
+
+
 class FRightMatch(BaseMatch, abc.ABC):
     expected_size = 1
     sub_match_types = []
@@ -149,23 +158,45 @@ class FRightZMatch(FRightMatch):
     rule_mode = 'z'
 
 
+def is_z_basis(ntype: str | int) -> bool:
+    if isinstance(ntype, str):
+        return ntype == FRightZMatch.abbrev
+    elif isinstance(ntype, int):
+        return ntype == FRightZMatch.index
+    else:
+        raise Exception('Unexpected node type representation ' + str(ntype))
+
+
+class FRightXMatch(FRightMatch):
+    name = 'f_right_x'
+    abbrev = 'x'
+    index = 2
+    rule_mode = 'x'
+
+
+def is_x_basis(ntype: str | int) -> bool:
+    if isinstance(ntype, str):
+        return ntype == FRightXMatch.abbrev
+    elif isinstance(ntype, int):
+        return ntype == FRightXMatch.index
+    else:
+        raise Exception('Unexpected node type representation ' + str(ntype))
+
+
+def is_basis(ntype: str | int) -> bool:
+    return is_z_basis(ntype) or is_x_basis(ntype)
+
+
 class FLeftZMatch(FLeftMatch):
     name = 'f_left_z'
     abbrev = 'zl'
-    index = 2
+    index = 3
     rule_mode = 'z'
     sub_match_types = [FRightZMatch]
 
     @property
     def sub_matches(self) -> list[Match]:
         return [FRightZMatch(node) for node in self.nodes]
-
-
-class FRightXMatch(FRightMatch):
-    name = 'f_right_x'
-    abbrev = 'x'
-    index = 3
-    rule_mode = 'x'
 
 
 class FLeftXMatch(FLeftMatch):
@@ -296,7 +327,7 @@ def _count_match_types() -> int:
 
 
 Metadata = tuple[
-    list[NodeType], dict[NodeType, int], list[EdgeType], dict[EdgeType, int]]
+    list[NodeType], dict[NodeType, int], list[EdgeType], list[EdgeType], dict[EdgeType, int]]
 
 
 def _compute_metadata() -> Metadata:
@@ -312,13 +343,15 @@ def _compute_metadata() -> Metadata:
             for sub_match_class_name in sub_match_class_names:
                 for a, b in itertools.permutations([leaf_class.abbrev, sub_match_class_name]):
                     edge_metadata.append((a, I_ETYPE_NAME, b))
-    base_match_names = [leaf_class.abbrev for leaf_class in leaf_classes if leaf_class.is_base_match()]
-    for a, b in itertools.product(base_match_names, base_match_names):
-        edge_metadata.append((a, B_ETYPE_NAME, b))
+    base_node_metadata = [leaf_class.abbrev for leaf_class in leaf_classes if leaf_class.is_base_match()]
+    base_edge_metadata = []
+    for a, b in itertools.product(base_node_metadata, base_node_metadata):
+        base_edge_metadata.append((a, B_ETYPE_NAME, b))
+    edge_metadata.extend(base_edge_metadata)
     edge_type_to_index_metadata = {value: index for index, value in enumerate(edge_metadata)}
-    return node_metadata, node_type_to_index_metadata, edge_metadata, edge_type_to_index_metadata
+    return node_metadata, base_node_metadata, node_type_to_index_metadata, edge_metadata, base_edge_metadata, edge_type_to_index_metadata
 
 
 MATCH_TYPE_COUNT = _count_match_types()
-NODE_METADATA, NODE_TYPE_TO_INDEX_METADATA, EDGE_METADATA, EDGE_TYPE_TO_INDEX_METADATA = _compute_metadata()
+NODE_METADATA, BASE_NODE_METADATA, NODE_TYPE_TO_INDEX_METADATA, EDGE_METADATA, BASE_EDGE_METADATA, EDGE_TYPE_TO_INDEX_METADATA = _compute_metadata()
 METADATA = NODE_METADATA, EDGE_METADATA

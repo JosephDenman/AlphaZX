@@ -1,7 +1,6 @@
 import networkx as nx
 
-from alphazx.diagram.match import Basis
-from alphazx.diagram.pyzx_nx_conv import Z_NTYPE_NAME, X_NTYPE_NAME
+from alphazx.diagram.match import Basis, FRightXMatch, FRightZMatch
 from alphazx.diagram.zx_diagram import ZXDiagram
 
 
@@ -13,11 +12,11 @@ def f_left_pattern(d: int, basis: Basis) -> ZXDiagram:
 
 
 def f_left_z_pattern(d: int) -> ZXDiagram:
-    return f_left_pattern(d, Z_NTYPE_NAME)
+    return f_left_pattern(d, FRightZMatch.abbrev)
 
 
 def f_left_x_pattern(d: int) -> ZXDiagram:
-    return f_left_pattern(d, X_NTYPE_NAME)
+    return f_left_pattern(d, FRightXMatch.abbrev)
 
 
 def f_right_pattern(d: int, basis: Basis) -> ZXDiagram:
@@ -27,11 +26,11 @@ def f_right_pattern(d: int, basis: Basis) -> ZXDiagram:
 
 
 def f_right_z_pattern(d: int) -> ZXDiagram:
-    return f_right_pattern(d, Z_NTYPE_NAME)
+    return f_right_pattern(d, FRightZMatch.abbrev)
 
 
 def f_right_x_pattern(d: int) -> ZXDiagram:
-    return f_right_pattern(d, X_NTYPE_NAME)
+    return f_right_pattern(d, FRightXMatch.abbrev)
 
 
 def b_right_pattern(d: int) -> ZXDiagram:
@@ -39,21 +38,23 @@ def b_right_pattern(d: int) -> ZXDiagram:
     x0 -- z1
     """
     diagram = ZXDiagram(d)
-    x, z = diagram.add_x_node(0), diagram.add_z_node(0)
-    diagram.add_s_edge(x, z)
+    z, x = diagram.add_z_node(0), diagram.add_x_node(0),
+    diagram.add_s_edge(z, x)
     return diagram
 
 
 def b_left_pattern(d: int, bl: int = 0, br: int = 1, tl: int = 2, tr: int = 3) -> ZXDiagram:
+    # bl and br are Z nodes
+    # tl and tr are X nodes
     graph = nx.MultiGraph()
-    graph.add_nodes_from([bl, br], type=Z_NTYPE_NAME, phase=0)
-    graph.add_nodes_from([tl, tr], type=X_NTYPE_NAME, phase=0)
+    graph.add_nodes_from([bl, br], type=FRightZMatch.abbrev, phase=0)
+    graph.add_nodes_from([tl, tr], type=FRightXMatch.abbrev, phase=0)
     graph.add_edges_from([(bl, tl), (bl, tr), (br, tl), (br, tr)])
     return ZXDiagram(d, graph)
 
 
 def basis_to_ntype_indices(basis: Basis) -> tuple[int, int]:
-    return (Z_NTYPE_NAME, X_NTYPE_NAME) if basis == Z_NTYPE_NAME else (X_NTYPE_NAME, Z_NTYPE_NAME)
+    return (FRightZMatch.abbrev, FRightXMatch.abbrev) if basis == FRightZMatch.abbrev else (FRightXMatch.abbrev, FRightZMatch.abbrev)
 
 
 def y_left_pattern(d: int, basis: Basis) -> ZXDiagram:
@@ -68,11 +69,11 @@ def y_left_pattern(d: int, basis: Basis) -> ZXDiagram:
 
 
 def y_left_z_pattern(d: int) -> ZXDiagram:
-    return y_left_pattern(d, Z_NTYPE_NAME)
+    return y_left_pattern(d, FRightZMatch.abbrev)
 
 
 def y_left_x_pattern(d: int) -> ZXDiagram:
-    return y_left_pattern(d, X_NTYPE_NAME)
+    return y_left_pattern(d, FRightXMatch.abbrev)
 
 
 def y_right_pattern(d: int, rule_mode: Basis) -> ZXDiagram:
@@ -87,8 +88,8 @@ def y_right_pattern(d: int, rule_mode: Basis) -> ZXDiagram:
 
 
 def y_right_z_pattern(d: int) -> ZXDiagram:
-    return y_right_pattern(d, Z_NTYPE_NAME)
+    return y_right_pattern(d, FRightZMatch.abbrev)
 
 
 def y_right_x_pattern(d: int) -> ZXDiagram:
-    return y_right_pattern(d, X_NTYPE_NAME)
+    return y_right_pattern(d, FRightXMatch.abbrev)

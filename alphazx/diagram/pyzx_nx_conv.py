@@ -1,22 +1,6 @@
 import networkx as nx
 
-B_NTYPE_INDEX = 0
-B_NTYPE_NAME = 'b_node'
-Z_NTYPE_INDEX = 1
-Z_NTYPE_NAME = 'z_node'
-X_NTYPE_INDEX = 2
-X_NTYPE_NAME = 'x_node'
-H_NTYPE_INDEX = 3
-H_NTYPE_NAME = 'hadamard'
-D_ETYPE_INDEX = 0
-D_ETYPE_NAME = 'dummy'
-S_ETYPE_INDEX = 1
-S_ETYPE_NAME = 'simple'
-H_ETYPE_INDEX = 2
-H_ETYPE_NAME = 'hadamard'
-
-NTYPE_NAMES = [B_NTYPE_NAME, Z_NTYPE_NAME, X_NTYPE_NAME, H_NTYPE_NAME]
-ETYPE_NAMES = [D_ETYPE_NAME, S_ETYPE_NAME, H_ETYPE_NAME]
+from alphazx.diagram.match import is_boundary
 
 PHASE = 'phase'
 DEGREE = 'degree'
@@ -25,40 +9,6 @@ COLUMN = 'x'
 ROW = 'y'
 CONNECTED_TO = 'connected_to'
 ETYPE = 'type'
-
-
-def is_basis(ntype: str | int) -> bool:
-    if isinstance(ntype, str) or isinstance(ntype, int):
-        return is_z_basis(ntype) or is_x_basis(ntype)
-    else:
-        raise Exception('Unexpected node type representation ' + str(ntype))
-
-
-def is_z_basis(ntype: str | int) -> bool:
-    if isinstance(ntype, str):
-        return ntype == Z_NTYPE_NAME
-    elif isinstance(ntype, int):
-        return ntype == Z_NTYPE_INDEX
-    else:
-        raise Exception('Unexpected node type representation ' + str(ntype))
-
-
-def is_x_basis(ntype: str | int) -> bool:
-    if isinstance(ntype, str):
-        return ntype == X_NTYPE_NAME
-    elif isinstance(ntype, int):
-        return ntype == X_NTYPE_INDEX
-    else:
-        raise Exception('Unexpected node type representation ' + str(ntype))
-
-
-def is_boundary(ntype: str | int) -> bool:
-    if isinstance(ntype, str):
-        return ntype == B_NTYPE_NAME
-    elif isinstance(ntype, int):
-        return ntype == B_NTYPE_INDEX
-    else:
-        raise Exception('Unexpected node type representation ' + str(ntype))
 
 
 def nx_remove_position_attributes(nx_graph: nx.MultiGraph) -> None:

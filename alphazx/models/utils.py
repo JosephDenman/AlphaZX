@@ -13,7 +13,9 @@ def cat_aggregate(x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
     sorted_x = x[sorted_idx]
     # Calculate sizes and maximum group size
     group_sizes = torch.zeros(num_groups, dtype=torch.long, device=x.device)
+    print('group_sizes = ', group_sizes)
     group_sizes.scatter_add_(0, sorted_indices, torch.ones_like(sorted_indices))
+    print('scatter_add_group_sizes = ', group_sizes)
     # Prepare the output tensor, padded with zeros
     result = torch.zeros((num_groups, max_num_elements), dtype=x.dtype, device=x.device)
     # Calculate group start indices and place values
@@ -25,5 +27,5 @@ def cat_aggregate(x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
         sorted_indices])
     print('flat_indices = ', flat_indices)
     print('sorted_x = ', sorted_x)
-    result.view(-1).scatter_(0, flat_indices, sorted_x)
+    result.view(-1).scatter_(-1, flat_indices, sorted_x)
     return result

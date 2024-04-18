@@ -1,14 +1,25 @@
 from typing import Optional, Dict
 
 import torch
+import torch_geometric as pyg
 from torch import Tensor
-from torch_geometric.nn import HGTConv, Aggregation, HeteroConv, GATv2Conv
+from torch_geometric.nn import Aggregation, HeteroConv, GATv2Conv
 from torch_geometric.typing import EdgeType, NodeType
 
-from alphazx.diagram.constants import B_ETYPE_NAME
-from alphazx.diagram.diagram_generators import clifford_pyg_hetero_zx_match_diagram
-from alphazx.diagram.match import METADATA, FRightZMatch, FRightXMatch
+from alphazx.diagram.diagram_generators import clifford_pyg_hetero_zx_diagram
+from alphazx.diagram.match import BASE_EDGE_METADATA, NODE_METADATA, BASE_NODE_METADATA
 from alphazx.models.utils import cat_aggregate
+
+torch.use_deterministic_algorithms(True)
+
+
+def base_node_subgraph(zx_match_diagram_hdata: pyg.data.HeteroData) -> pyg.data.HeteroData:
+    subgraph_dict = {}
+    for ntype in NODE_METADATA:
+        subgraph_dict[ntype] = torch.squeeze(
+            torch.full(zx_match_diagram_hdata[ntype]['x'].size(), ntype in BASE_NODE_METADATA, dtype=torch.bool), dim=-1)
+    print('subgraph_dict = ', subgraph_dict)
+    return zx_match_diagram_hdata.subgraph(subgraph_dict)
 
 
 class ConcatAggregation(Aggregation):
@@ -24,7 +35,7 @@ class ConcatAggregation(Aggregation):
             dim: int = 0,
             max_num_elements: Optional[int] = None,
     ) -> Tensor:
-        return cat_aggregate(torch.squeeze(x), index)
+        return cat_aggregate(x, index)
 
 
 class EdgeAttn(torch.nn.Module):
@@ -32,19 +43,20 @@ class EdgeAttn(torch.nn.Module):
     def __init__(self):
         super(EdgeAttn, self).__init__()
         self.hetero_conv = HeteroConv({
-            (FRightZMatch.abbrev, B_ETYPE_NAME, FRightZMatch.abbrev): GATv2Conv(1, 8, concat=False, add_self_loops=False, aggr=ConcatAggregation()),
-            (FRightZMatch.abbrev, B_ETYPE_NAME, FRightXMatch.abbrev): GATv2Conv(1, 8, concat=False, add_self_loops=False, aggr=ConcatAggregation()),
-            (FRightXMatch.abbrev, B_ETYPE_NAME, FRightZMatch.abbrev): GATv2Conv(1, 8, concat=False, add_self_loops=False, aggr=ConcatAggregation()),
-            (FRightXMatch.abbrev, B_ETYPE_NAME, FRightXMatch.abbrev): GATv2Conv(1, 8, concat=False, add_self_loops=False, aggr=ConcatAggregation()),
-        }, 'cat')
+            etype: GATv2Conv(1, 1, heads=1, concat=False, add_self_loops=False, aggr=ConcatAggregation()) for etype in
+            BASE_EDGE_METADATA
+        }, 'sum')
 
     def forward(self, x_dict: Dict[NodeType, torch.Tensor], edge_index_dict: Dict[EdgeType, torch.Tensor]) -> Dict[
             NodeType, torch.Tensor]:
         return self.hetero_conv(x_dict, edge_index_dict)
 
 
-zx_match_diagram_hdata = clifford_pyg_hetero_zx_match_diagram(100, 100, True)
+zx_diagram = clifford_pyg_hetero_zx_diagram(30, 30, True)
 edge_attn = EdgeAttn()
-print('x_dict = ', zx_match_diagram_hdata.x_dict)
-print('edge_index_dict = ', zx_match_diagram_hdata.edge_index_dict)
-print(edge_attn(zx_match_diagram_hdata.x_dict, zx_match_diagram_hdata.edge_index_dict))
+
+print(edge_attn(zx_diagram.x_dict, zx_diagram.edge_index_dict))
+
+# zx_match_diagram_hdata = clifford_pyg_hetero_zx_match_diagram(30, 30, True)
+# print('zx_match_diagram_hdata = ', zx_match_diagram_hdata.x_dict)
+# print(edge_attn(zx_match_diagram_hdata.x_dict, zx_match_diagram_hdata.edge_index_dict))
