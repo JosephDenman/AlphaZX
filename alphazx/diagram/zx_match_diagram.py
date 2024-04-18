@@ -49,25 +49,25 @@ class ZXMatchDiagram(nx.DiGraph):
                           type=compute_edge_type_attr(match_n, match_m),
                           size=compute_edge_size_attr(zx_diagram, match_n, match_m))
 
-    def to_pyg_hdata(self, with_reverse_mapping: bool = False) -> pyg_data.HeteroData | tuple[
-        pyg_data.HeteroData, 'HeteroDataIndexToMatch']:
+    def to_pyg_hdata(self, with_reverse_mapping: bool = False, sort_by_dest: bool = True) -> pyg_data.HeteroData | tuple[
+            pyg_data.HeteroData, 'HeteroDataIndexToMatch']:
         n_types = torch.tensor([NODE_TYPE_TO_INDEX_METADATA[ndata['type']] for _, ndata in self.nodes(data=True)],
                                dtype=torch.long)
         e_types = torch.tensor([EDGE_TYPE_TO_INDEX_METADATA[edata['type']] for _, _, edata in self.edges(data=True)],
                                dtype=torch.long)
         hdata = pyg_utils.from_networkx(self, group_node_attrs=['phase'], group_edge_attrs=['size']).to_heterogeneous(
-            n_types, e_types, node_type_names=NODE_METADATA, edge_type_names=EDGE_METADATA)
+            n_types, e_types, node_type_names=NODE_METADATA, edge_type_names=EDGE_METADATA).sort(sort_by_dest)
         if with_reverse_mapping:
             return hdata, HeteroDataIndexToMatch(self)
         return hdata
 
-    def to_pyg_data(self, with_reverse_mapping: bool = False) -> pyg_data.Data | tuple[
-        pyg_data.Data, 'DataIndexToMatch']:
+    def to_pyg_data(self, with_reverse_mapping: bool = False, sort_by_dest: bool = True) -> pyg_data.Data | tuple[
+            pyg_data.Data, 'DataIndexToMatch']:
         for _, ndata in self.nodes(data=True):
             ndata['type'] = NODE_TYPE_TO_INDEX_METADATA[ndata['type']]
         for _, _, edata in self.edges(data=True):
             edata['type'] = EDGE_TYPE_TO_INDEX_METADATA[edata['type']]
-        data = pyg_utils.from_networkx(self, group_node_attrs=['type', 'phase'], group_edge_attrs=['type', 'size'])
+        data = pyg_utils.from_networkx(self, group_node_attrs=['type', 'phase'], group_edge_attrs=['type', 'size']).sort(sort_by_dest)
         if with_reverse_mapping:
             return data, DataIndexToMatch(self)
         return data

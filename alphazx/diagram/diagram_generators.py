@@ -94,16 +94,12 @@ def clifford_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool) -> ZXM
     return to_zx_match_diagram(clifford_zx_diagram(num_qubits, depth, t_gates))
 
 
-def clifford_pyg_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool, with_reverse_mapping: bool = False) -> Data:
-    return clifford_zx_match_diagram(num_qubits, depth, t_gates).to_pyg_data(with_reverse_mapping)
+def clifford_pyg_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool, with_reverse_mapping: bool = False, sort_by_dest: bool = True) -> Data:
+    return clifford_zx_match_diagram(num_qubits, depth, t_gates).to_pyg_data(with_reverse_mapping, sort_by_dest)
 
 
-def clifford_pyg_hetero_zx_diagram(num_qubits: int, depth: int, t_gates: bool) -> HeteroData:
-    return clifford_zx_diagram(num_qubits, depth, t_gates).to_pyg_hdata()
-
-
-def clifford_pyg_hetero_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool, with_reverse_mapping: bool = False) -> HeteroData:
-    return clifford_zx_match_diagram(num_qubits, depth, t_gates).to_pyg_hdata(with_reverse_mapping)
+def clifford_pyg_hetero_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool, with_reverse_mapping: bool = False, sort_by_dest: bool = True) -> HeteroData:
+    return clifford_zx_match_diagram(num_qubits, depth, t_gates).to_pyg_hdata(with_reverse_mapping, sort_by_dest)
 
 
 def stringify(v: object | list | str) -> str:
@@ -133,10 +129,6 @@ def gml_clifford_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool, pa
 
 def gml_clifford_pyg_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool, path: str) -> Data:
     return nx.write_gml(clifford_pyg_zx_match_diagram(num_qubits, depth, t_gates), path, stringify)
-
-
-def gml_clifford_pyg_hetero_zx_diagram(num_qubits: int, depth: int, t_gates: bool, path: str) -> HeteroData:
-    return nx.write_gml(clifford_pyg_hetero_zx_diagram(num_qubits, depth, t_gates), path, stringify)
 
 
 def gml_clifford_pyg_hetero_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool, path: str) -> HeteroData:
