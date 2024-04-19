@@ -8,7 +8,8 @@ import torch_geometric as pyg
 from alphazx.diagram.match import Match, FRightMatch, FRightZMatch, FRightXMatch, FLeftZMatch, FLeftMatch, FLeftXMatch, \
     BLeftMatch, BRightMatch, YLeftMatch, YRightMatch, YLeftXMatch, YLeftZMatch, YRightZMatch, YRightXMatch, \
     NODE_TYPE_TO_INDEX_METADATA, EDGE_TYPE_TO_INDEX_METADATA, NODE_METADATA, EDGE_METADATA, BoundaryMatch, is_boundary, \
-    is_basis, is_z_basis, is_x_basis, SimpleMatch, SIMPLE_NODE_METADATA, SIMPLE_EDGE_METADATA
+    is_basis, is_z_basis, is_x_basis, SimpleMatch, SIMPLE_NODE_METADATA, SIMPLE_EDGE_METADATA, \
+    SIMPLE_EDGE_TYPE_TO_INDEX_METADATA
 from alphazx.diagram.pyg_conv import compute_edge_type_attr
 
 
@@ -354,13 +355,25 @@ class ZXDiagram(nx.MultiGraph):
     def to_pyg_hdata(self, sort_by_row: bool = False) -> pyg.data.HeteroData:
         n_types = torch.tensor([NODE_TYPE_TO_INDEX_METADATA[ndata['type']] for _, ndata in self.nodes(data=True)],
                                dtype=torch.long)
-        e_types = torch.tensor([EDGE_TYPE_TO_INDEX_METADATA[edata['type']] for _, _, edata in self.edges(data=True)],
+        e_types = torch.tensor([SIMPLE_EDGE_TYPE_TO_INDEX_METADATA[edata['type']] for _, _, edata in self.edges(data=True)],
                                dtype=torch.long)
-        hdata = pyg.utils.from_networkx(self, group_node_attrs=['phase']).to_heterogeneous(n_types, e_types,
-                                                                                           node_type_names=SIMPLE_NODE_METADATA,
-                                                                                           edge_type_names=SIMPLE_EDGE_METADATA).sort(sort_by_row)
+        # TODO: This conversion still produces a 'HeteroData' object that has empty 'edge_index' for each edge type, but the
+        #       'ZXMatchDiagram.to_pyg_hdata' works correctly. Get to the bottom of this.
+        hdata = pyg.utils.from_networkx(self, group_node_attrs=['phase']).to_heterogeneous(n_types,
+                                                                                           e_types,
+                                                                                           SIMPLE_NODE_METADATA,
+                                                                                           SIMPLE_EDGE_METADATA).sort(sort_by_row)
         hdata.validate()
         return hdata
+
+    def to_pyg_data(self, sort_by_row: bool = False) -> pyg.data.Data:
+        for _, ndata in self.nodes(data=True):
+            ndata['type'] = NODE_TYPE_TO_INDEX_METADATA[ndata['type']]
+        for _, _, edata in self.edges(data=True):
+            edata['type'] = EDGE_TYPE_TO_INDEX_METADATA[edata['type']]
+        data = pyg.utils.from_networkx(self, group_node_attrs=['phase', 'type']).sort(sort_by_row)
+        data.validate()
+        return data
 
     def copy(self, as_view=False):
         diagram_copy = self.__class__(self.phase_denominator, self)

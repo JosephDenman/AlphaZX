@@ -1,7 +1,6 @@
 import networkx as nx
 import torch
-import torch_geometric.data as pyg_data
-import torch_geometric.utils as pyg_utils
+import torch_geometric as pyg
 from torch_geometric.typing import NodeType
 
 from alphazx.diagram.match import Match, CompoundMatch, BoundaryMatch, NODE_TYPE_TO_INDEX_METADATA, \
@@ -51,27 +50,32 @@ class ZXMatchDiagram(nx.DiGraph):
                           size=compute_edge_size_attr(zx_diagram.number_of_edges(match_n.node, match_m.node), match_n,
                                                       match_m))
 
-    def to_pyg_hdata(self, with_reverse_mapping: bool = False, sort_by_row: bool = False) -> pyg_data.HeteroData | \
+    def to_pyg_hdata(self, with_reverse_mapping: bool = False, sort_by_row: bool = False) -> pyg.data.HeteroData | \
                                                                                              tuple[
-                                                                                                 pyg_data.HeteroData, 'HeteroDataIndexToMatch']:
+                                                                                                 pyg.data.HeteroData, 'HeteroDataIndexToMatch']:
         n_types = torch.tensor([NODE_TYPE_TO_INDEX_METADATA[ndata['type']] for _, ndata in self.nodes(data=True)],
                                dtype=torch.long)
         e_types = torch.tensor([EDGE_TYPE_TO_INDEX_METADATA[edata['type']] for _, _, edata in self.edges(data=True)],
                                dtype=torch.long)
-        hdata = pyg_utils.from_networkx(self, group_node_attrs=['phase'], group_edge_attrs=['size']).to_heterogeneous(
-            n_types, e_types, node_type_names=NODE_METADATA, edge_type_names=EDGE_METADATA).sort(sort_by_row)
+        hdata = pyg.utils.from_networkx(self,
+                                        group_node_attrs=['phase'],
+                                        group_edge_attrs=['size']).to_heterogeneous(n_types,
+                                                                                    e_types,
+                                                                                    NODE_METADATA,
+                                                                                    EDGE_METADATA).sort(sort_by_row)
         hdata.validate()
         if with_reverse_mapping:
             return hdata, HeteroDataIndexToMatch(self)
         return hdata
 
-    def to_pyg_data(self, with_reverse_mapping: bool = False, sort_by_row: bool = False) -> pyg_data.Data | tuple[
-        pyg_data.Data, 'DataIndexToMatch']:
+    def to_pyg_data(self, with_reverse_mapping: bool = False, sort_by_row: bool = False) -> pyg.data.Data | tuple[
+        pyg.data.Data, 'DataIndexToMatch']:
         for _, ndata in self.nodes(data=True):
             ndata['type'] = NODE_TYPE_TO_INDEX_METADATA[ndata['type']]
         for _, _, edata in self.edges(data=True):
             edata['type'] = EDGE_TYPE_TO_INDEX_METADATA[edata['type']]
-        data = pyg_utils.from_networkx(self, group_node_attrs=['type', 'phase'],
+        data = pyg.utils.from_networkx(self,
+                                       group_node_attrs=['type', 'phase'],
                                        group_edge_attrs=['type', 'size']).sort(sort_by_row)
         if with_reverse_mapping:
             return data, DataIndexToMatch(self)

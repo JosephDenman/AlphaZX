@@ -56,12 +56,12 @@ class Match(abc.ABC):
         pass
 
     @classmethod
-    def is_base_match(cls) -> bool:
+    def is_simple_match(cls) -> bool:
         return issubclass(cls, SimpleMatch)
 
     @property
     def is_compound_match(self) -> bool:
-        return not self.is_base_match
+        return not self.is_simple_match
 
     @property
     def nodes(self) -> list[int]:
@@ -327,32 +327,42 @@ def _count_match_types() -> int:
 
 
 Metadata = tuple[
-    list[NodeType], dict[NodeType, int], list[EdgeType], list[EdgeType], dict[EdgeType, int]]
+    list[NodeType], list[NodeType], dict[NodeType, int], list[EdgeType], list[EdgeType], dict[EdgeType, int]]
 
 
 def _compute_metadata() -> Metadata:
-    node_metadata = []
     edge_metadata = []
     leaf_classes = _leaf_classes()
-    for leaf_class in leaf_classes:
-        node_metadata.append(leaf_class)
-    node_type_to_index_metadata = {leaf_class.abbrev: leaf_class.index for leaf_class in node_metadata}
+    leaf_classes = sorted(leaf_classes, key=lambda lc: lc.index)
+    node_type_to_index_metadata = {leaf_class.abbrev: leaf_class.index for leaf_class in leaf_classes}
     for leaf_class in leaf_classes:
         sub_match_class_names = [sub_match_class.abbrev for sub_match_class in leaf_class.sub_match_types]
         if len(sub_match_class_names) != 0:
             for sub_match_class_name in sub_match_class_names:
                 for a, b in itertools.permutations([leaf_class.abbrev, sub_match_class_name]):
                     edge_metadata.append((a, I_ETYPE_NAME, b))
-    base_node_metadata = [leaf_class.abbrev for leaf_class in leaf_classes if leaf_class.is_base_match()]
-    base_edge_metadata = []
-    for a, b in itertools.product(base_node_metadata, base_node_metadata):
-        base_edge_metadata.append((a, S_ETYPE_NAME, b))
-    edge_metadata.extend(base_edge_metadata)
+    simple_leaf_classes = list(filter(lambda lc: lc.is_simple_match(), leaf_classes))
+    simple_node_metadata = [leaf_class.abbrev for leaf_class in simple_leaf_classes]
+    simple_edge_metadata = []
+    for a, b in itertools.product(simple_node_metadata, simple_node_metadata):
+        simple_edge_metadata.append((a, S_ETYPE_NAME, b))
+    simple_edge_type_to_index_metadata = {value: index for index, value in enumerate(simple_edge_metadata)}
+    edge_metadata += simple_edge_metadata
     edge_type_to_index_metadata = {value: index for index, value in enumerate(edge_metadata)}
     node_metadata = [leaf_class.abbrev for leaf_class in leaf_classes]
-    return node_metadata, base_node_metadata, node_type_to_index_metadata, edge_metadata, base_edge_metadata, edge_type_to_index_metadata
+    return (node_metadata,
+            simple_node_metadata,
+            node_type_to_index_metadata,
+            edge_metadata,
+            edge_type_to_index_metadata,
+            simple_edge_metadata,
+            simple_edge_type_to_index_metadata)
 
 
 MATCH_TYPE_COUNT = _count_match_types()
-NODE_METADATA, SIMPLE_NODE_METADATA, NODE_TYPE_TO_INDEX_METADATA, EDGE_METADATA, SIMPLE_EDGE_METADATA, EDGE_TYPE_TO_INDEX_METADATA = _compute_metadata()
+(NODE_METADATA,
+ SIMPLE_NODE_METADATA,
+ NODE_TYPE_TO_INDEX_METADATA,
+ EDGE_METADATA,
+ EDGE_TYPE_TO_INDEX_METADATA, SIMPLE_EDGE_METADATA, SIMPLE_EDGE_TYPE_TO_INDEX_METADATA) = _compute_metadata()
 METADATA = NODE_METADATA, EDGE_METADATA

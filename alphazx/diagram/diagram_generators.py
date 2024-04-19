@@ -76,34 +76,38 @@ def post_process(nx_graph: nx.MultiGraph) -> None:
     remove_edge_types(nx_graph)
 
 
-def phase_denominator(t_gates: bool) -> int:
+def phase_denominator(t_gates: bool = True) -> int:
     return 4 if t_gates else 2
 
 
-def clifford_nx_graph(num_qubits: int, depth: int, t_gates: bool) -> nx.MultiGraph:
+def clifford_nx_graph(num_qubits: int, depth: int, t_gates: bool = True) -> nx.MultiGraph:
     # TODO: Add support for H gates
     nx_graph = graph_to_nx_graph(pyzx.generate.cliffords(num_qubits, depth, True, t_gates))
     post_process(nx_graph)
     return nx_graph
 
 
-def clifford_zx_diagram(num_qubits: int, depth: int, t_gates: bool) -> ZXDiagram:
+def clifford_zx_diagram(num_qubits: int, depth: int, t_gates: bool = True) -> ZXDiagram:
     return ZXDiagram(phase_denominator(t_gates), clifford_nx_graph(num_qubits, depth, t_gates))
 
 
-def clifford_pyg_hetero_zx_diagram(num_qubits: int, depth: int, t_gates: bool, sort_by_row: bool = False) -> HeteroData:
+def clifford_pyg_hdata_zx_diagram(num_qubits: int, depth: int, t_gates: bool = True, sort_by_row: bool = False) -> HeteroData:
     return ZXDiagram(phase_denominator(t_gates), clifford_nx_graph(num_qubits, depth, t_gates)).to_pyg_hdata(sort_by_row)
 
 
-def clifford_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool) -> ZXMatchDiagram:
+def clifford_pyg_zx_diagram(num_qubits: int, depth: int, t_gates: bool = True, sort_by_row: bool = False) -> Data:
+    return ZXDiagram(phase_denominator(t_gates), clifford_nx_graph(num_qubits, depth, t_gates)).to_pyg_data(sort_by_row)
+
+
+def clifford_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool = True) -> ZXMatchDiagram:
     return to_zx_match_diagram(clifford_zx_diagram(num_qubits, depth, t_gates))
 
 
-def clifford_pyg_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool, with_reverse_mapping: bool = False, sort_by_row: bool = False) -> Data:
+def clifford_pyg_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool = True, with_reverse_mapping: bool = False, sort_by_row: bool = False) -> Data:
     return clifford_zx_match_diagram(num_qubits, depth, t_gates).to_pyg_data(with_reverse_mapping, sort_by_row)
 
 
-def clifford_pyg_hetero_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool, with_reverse_mapping: bool = False, sort_by_row: bool = False) -> HeteroData:
+def clifford_pyg_hdata_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool = True, with_reverse_mapping: bool = False, sort_by_row: bool = False) -> HeteroData:
     return clifford_zx_match_diagram(num_qubits, depth, t_gates).to_pyg_hdata(with_reverse_mapping, sort_by_row)
 
 
@@ -136,5 +140,5 @@ def gml_clifford_pyg_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool
     return nx.write_gml(clifford_pyg_zx_match_diagram(num_qubits, depth, t_gates), path, stringify)
 
 
-def gml_clifford_pyg_hetero_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool, path: str) -> HeteroData:
-    return nx.write_gml(clifford_pyg_hetero_zx_match_diagram(num_qubits, depth, t_gates), path, stringify)
+def gml_clifford_pyg_hdata_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool, path: str) -> HeteroData:
+    return nx.write_gml(clifford_pyg_hdata_zx_match_diagram(num_qubits, depth, t_gates), path, stringify)
