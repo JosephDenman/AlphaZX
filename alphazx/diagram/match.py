@@ -5,7 +5,7 @@ from typing import Type
 from torch_geometric.typing import NodeType, EdgeType
 from typing_extensions import Literal
 
-from alphazx.diagram.constants import B_ETYPE_NAME, I_ETYPE_NAME
+from alphazx.diagram.constants import S_ETYPE_NAME, I_ETYPE_NAME
 
 Basis = Literal['z', 'x']
 
@@ -57,7 +57,7 @@ class Match(abc.ABC):
 
     @classmethod
     def is_base_match(cls) -> bool:
-        return issubclass(cls, BaseMatch)
+        return issubclass(cls, SimpleMatch)
 
     @property
     def is_compound_match(self) -> bool:
@@ -92,7 +92,7 @@ class Match(abc.ABC):
         yield from self._nodes
 
 
-class BaseMatch(Match, abc.ABC):
+class SimpleMatch(Match, abc.ABC):
     @property
     def node(self) -> int:
         return self.nodes[0]
@@ -106,7 +106,7 @@ class CompoundMatch(Match, abc.ABC):
     pass
 
 
-class BoundaryMatch(BaseMatch):
+class BoundaryMatch(SimpleMatch):
     name = 'boundary'
     abbrev = 'b'
     index = 0
@@ -123,7 +123,7 @@ def is_boundary(ntype: str | int) -> bool:
         raise Exception('Unexpected node type representation ' + str(ntype))
 
 
-class FRightMatch(BaseMatch, abc.ABC):
+class FRightMatch(SimpleMatch, abc.ABC):
     expected_size = 1
     sub_match_types = []
 
@@ -335,8 +335,8 @@ def _compute_metadata() -> Metadata:
     edge_metadata = []
     leaf_classes = _leaf_classes()
     for leaf_class in leaf_classes:
-        node_metadata.append(leaf_class.abbrev)
-    node_type_to_index_metadata = {value: index for index, value in enumerate(node_metadata)}
+        node_metadata.append(leaf_class)
+    node_type_to_index_metadata = {leaf_class.abbrev: leaf_class.index for leaf_class in node_metadata}
     for leaf_class in leaf_classes:
         sub_match_class_names = [sub_match_class.abbrev for sub_match_class in leaf_class.sub_match_types]
         if len(sub_match_class_names) != 0:
@@ -346,12 +346,13 @@ def _compute_metadata() -> Metadata:
     base_node_metadata = [leaf_class.abbrev for leaf_class in leaf_classes if leaf_class.is_base_match()]
     base_edge_metadata = []
     for a, b in itertools.product(base_node_metadata, base_node_metadata):
-        base_edge_metadata.append((a, B_ETYPE_NAME, b))
+        base_edge_metadata.append((a, S_ETYPE_NAME, b))
     edge_metadata.extend(base_edge_metadata)
     edge_type_to_index_metadata = {value: index for index, value in enumerate(edge_metadata)}
+    node_metadata = [leaf_class.abbrev for leaf_class in leaf_classes]
     return node_metadata, base_node_metadata, node_type_to_index_metadata, edge_metadata, base_edge_metadata, edge_type_to_index_metadata
 
 
 MATCH_TYPE_COUNT = _count_match_types()
-NODE_METADATA, BASE_NODE_METADATA, NODE_TYPE_TO_INDEX_METADATA, EDGE_METADATA, BASE_EDGE_METADATA, EDGE_TYPE_TO_INDEX_METADATA = _compute_metadata()
+NODE_METADATA, SIMPLE_NODE_METADATA, NODE_TYPE_TO_INDEX_METADATA, EDGE_METADATA, SIMPLE_EDGE_METADATA, EDGE_TYPE_TO_INDEX_METADATA = _compute_metadata()
 METADATA = NODE_METADATA, EDGE_METADATA

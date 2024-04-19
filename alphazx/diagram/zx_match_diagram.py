@@ -4,10 +4,10 @@ import torch_geometric.data as pyg_data
 import torch_geometric.utils as pyg_utils
 from torch_geometric.typing import NodeType
 
-from alphazx.diagram.constants import B_ETYPE_NAME, I_ETYPE_NAME
-from alphazx.diagram.match import Match, CompoundMatch, FRightMatch, FRightZMatch, FRightXMatch, BoundaryMatch, \
-    BaseMatch, NODE_TYPE_TO_INDEX_METADATA, EDGE_TYPE_TO_INDEX_METADATA, NODE_METADATA, EDGE_METADATA
-from alphazx.diagram.zx_diagram import ZXDiagram
+from alphazx.diagram.match import Match, CompoundMatch, BoundaryMatch, NODE_TYPE_TO_INDEX_METADATA, \
+    EDGE_TYPE_TO_INDEX_METADATA, NODE_METADATA, EDGE_METADATA, FRightMatch
+from alphazx.diagram.pyg_conv import compute_node_type_attr, compute_edge_size_attr, compute_edge_type_attr
+from alphazx.diagram.zx_diagram import ZXDiagram, base_match_from_node
 
 
 class ZXMatchDiagram(nx.DiGraph):
@@ -43,31 +43,36 @@ class ZXMatchDiagram(nx.DiGraph):
             self.add_edge(match_m,
                           match_n,
                           type=compute_edge_type_attr(match_m, match_n),
-                          size=compute_edge_size_attr(zx_diagram, match_m, match_n))
+                          size=compute_edge_size_attr(zx_diagram.number_of_edges(match_m.node, match_n.node), match_m,
+                                                      match_n))
             self.add_edge(match_n,
                           match_m,
                           type=compute_edge_type_attr(match_n, match_m),
-                          size=compute_edge_size_attr(zx_diagram, match_n, match_m))
+                          size=compute_edge_size_attr(zx_diagram.number_of_edges(match_n.node, match_m.node), match_n,
+                                                      match_m))
 
-    def to_pyg_hdata(self, with_reverse_mapping: bool = False, sort_by_row: bool = False) -> pyg_data.HeteroData | tuple[
-            pyg_data.HeteroData, 'HeteroDataIndexToMatch']:
+    def to_pyg_hdata(self, with_reverse_mapping: bool = False, sort_by_row: bool = False) -> pyg_data.HeteroData | \
+                                                                                             tuple[
+                                                                                                 pyg_data.HeteroData, 'HeteroDataIndexToMatch']:
         n_types = torch.tensor([NODE_TYPE_TO_INDEX_METADATA[ndata['type']] for _, ndata in self.nodes(data=True)],
                                dtype=torch.long)
         e_types = torch.tensor([EDGE_TYPE_TO_INDEX_METADATA[edata['type']] for _, _, edata in self.edges(data=True)],
                                dtype=torch.long)
         hdata = pyg_utils.from_networkx(self, group_node_attrs=['phase'], group_edge_attrs=['size']).to_heterogeneous(
             n_types, e_types, node_type_names=NODE_METADATA, edge_type_names=EDGE_METADATA).sort(sort_by_row)
+        hdata.validate()
         if with_reverse_mapping:
             return hdata, HeteroDataIndexToMatch(self)
         return hdata
 
     def to_pyg_data(self, with_reverse_mapping: bool = False, sort_by_row: bool = False) -> pyg_data.Data | tuple[
-            pyg_data.Data, 'DataIndexToMatch']:
+        pyg_data.Data, 'DataIndexToMatch']:
         for _, ndata in self.nodes(data=True):
             ndata['type'] = NODE_TYPE_TO_INDEX_METADATA[ndata['type']]
         for _, _, edata in self.edges(data=True):
             edata['type'] = EDGE_TYPE_TO_INDEX_METADATA[edata['type']]
-        data = pyg_utils.from_networkx(self, group_node_attrs=['type', 'phase'], group_edge_attrs=['type', 'size']).sort(sort_by_row)
+        data = pyg_utils.from_networkx(self, group_node_attrs=['type', 'phase'],
+                                       group_edge_attrs=['type', 'size']).sort(sort_by_row)
         if with_reverse_mapping:
             return data, DataIndexToMatch(self)
         return data
@@ -91,17 +96,23 @@ def to_zx_match_diagram(zx_diagram: ZXDiagram) -> ZXMatchDiagram:
     return zx_match_diagram
 
 
-def compute_edge_type_attr(m: Match, n: Match) -> tuple[str, str, str]:
-    return m.abbrev, B_ETYPE_NAME if isinstance(m, BaseMatch) and isinstance(n, BaseMatch) else I_ETYPE_NAME, n.abbrev
-
-
-def compute_edge_size_attr(zx_diagram: ZXDiagram, m: Match, n: Match) -> int:
-    return zx_diagram.number_of_edges(m.node, n.node) if isinstance(m, FRightMatch) and isinstance(n,
-                                                                                                   FRightMatch) else 1
-
-
-def compute_node_type_attr(match: Match) -> str:
-    return match.abbrev
+def add_match(zx_match_diagram: ZXMatchDiagram, zx_diagram: ZXDiagram, match: Match) -> None:
+    zx_match_diagram.add_node(match,
+                              type=compute_node_type_attr(match),
+                              phase=compute_node_phase_attr(zx_diagram, match))
+    if isinstance(match, CompoundMatch):
+        for sub_match in match.sub_matches:
+            add_match(zx_match_diagram, zx_diagram, sub_match)
+            zx_match_diagram.add_edge(match,
+                                      sub_match,
+                                      type=compute_edge_type_attr(match, sub_match),
+                                      size=compute_edge_size_attr(zx_diagram.number_of_edges(match, sub_match), match,
+                                                                  sub_match))
+            zx_match_diagram.add_edge(sub_match,
+                                      match,
+                                      type=compute_edge_type_attr(sub_match, match),
+                                      size=compute_edge_size_attr(zx_diagram.number_of_edges(sub_match, match),
+                                                                  sub_match, match))
 
 
 def compute_node_phase_attr(zx_diagram: ZXDiagram, match: Match) -> torch.Tensor:
@@ -113,34 +124,6 @@ def compute_node_phase_attr(zx_diagram: ZXDiagram, match: Match) -> torch.Tensor
         # them from f-right matches.
         # TODO: This ^ is not correct.
         return torch.tensor(-1.)
-
-
-def add_match(zx_match_diagram: ZXMatchDiagram, zx_diagram: ZXDiagram, match: Match) -> None:
-    zx_match_diagram.add_node(match,
-                              type=compute_node_type_attr(match),
-                              phase=compute_node_phase_attr(zx_diagram, match))
-    if isinstance(match, CompoundMatch):
-        for sub_match in match.sub_matches:
-            add_match(zx_match_diagram, zx_diagram, sub_match)
-            zx_match_diagram.add_edge(match,
-                                      sub_match,
-                                      type=compute_edge_type_attr(match, sub_match),
-                                      size=compute_edge_size_attr(zx_diagram, match, sub_match))
-            zx_match_diagram.add_edge(sub_match,
-                                      match,
-                                      type=compute_edge_type_attr(sub_match, match),
-                                      size=compute_edge_size_attr(zx_diagram, sub_match, match))
-
-
-def base_match_from_node(diagram: ZXDiagram, node: int) -> BaseMatch:
-    if diagram.is_z_basis(node):
-        return FRightZMatch(node)
-    elif diagram.is_x_basis(node):
-        return FRightXMatch(node)
-    elif diagram.is_boundary(node):
-        return BoundaryMatch(-1)
-    else:
-        raise Exception(f'Unexpected node type {diagram.type(node)}')
 
 
 class DataIndexToMatch:

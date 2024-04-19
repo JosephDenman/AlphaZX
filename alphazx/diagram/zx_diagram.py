@@ -8,7 +8,8 @@ import torch_geometric as pyg
 from alphazx.diagram.match import Match, FRightMatch, FRightZMatch, FRightXMatch, FLeftZMatch, FLeftMatch, FLeftXMatch, \
     BLeftMatch, BRightMatch, YLeftMatch, YRightMatch, YLeftXMatch, YLeftZMatch, YRightZMatch, YRightXMatch, \
     NODE_TYPE_TO_INDEX_METADATA, EDGE_TYPE_TO_INDEX_METADATA, NODE_METADATA, EDGE_METADATA, BoundaryMatch, is_boundary, \
-    is_basis, is_z_basis, is_x_basis
+    is_basis, is_z_basis, is_x_basis, SimpleMatch, SIMPLE_NODE_METADATA, SIMPLE_EDGE_METADATA
+from alphazx.diagram.pyg_conv import compute_edge_type_attr
 
 
 class ZXDiagram(nx.MultiGraph):
@@ -25,6 +26,8 @@ class ZXDiagram(nx.MultiGraph):
         self._x_nodes_set = set()
         self._b_nodes_set = set()
         self.__initialize_graph_from_nx_graph(nx_graph)
+        for s, t, edata in self.edges(data=True):
+            edata['type'] = compute_edge_type_attr(base_match_from_node(self, s), base_match_from_node(self, t))
 
     def __initialize_graph_from_nx_graph(self, nx_graph: nx.MultiGraph = None):
         if nx_graph is not None:
@@ -186,13 +189,17 @@ class ZXDiagram(nx.MultiGraph):
     def add_s_edge(self, s: int, t: int) -> int:
         assert self.has_node(s), f'Node {s} does not exist'
         assert self.has_node(s), f'Node {t} does not exist'
-        return self.add_edge(s, t)
+        return self.add_edge(s, t,
+                             type=compute_edge_type_attr(base_match_from_node(self, s), base_match_from_node(self, t)))
 
     def add_s_edges_from(self, es: Iterable[tuple[int, int]]) -> list[int]:
         for s, t in es:
             assert self.has_node(s), f'Node {s} does not exist'
             assert self.has_node(t), f'Node {t} does not exist'
-        return self.add_edges_from(es)
+        edge_indices = []
+        for s, t in es:
+            edge_indices.append(self.add_s_edge(s, t))
+        return edge_indices
 
     def remove_edges(self, s: int, t: int) -> None:
         assert self.has_node(s), f'Node {s} does not exist'
@@ -344,21 +351,16 @@ class ZXDiagram(nx.MultiGraph):
         yield from self.y_left_matches()
         yield from self.y_right_matches()
 
-    # def to_zx_match_diagram(self) -> ZXMatchDiagram:
-    #     pass
-
     def to_pyg_hdata(self, sort_by_row: bool = False) -> pyg.data.HeteroData:
         n_types = torch.tensor([NODE_TYPE_TO_INDEX_METADATA[ndata['type']] for _, ndata in self.nodes(data=True)],
                                dtype=torch.long)
         e_types = torch.tensor([EDGE_TYPE_TO_INDEX_METADATA[edata['type']] for _, _, edata in self.edges(data=True)],
                                dtype=torch.long)
-        return pyg.utils.from_networkx(self, group_node_attrs=['phase']).to_heterogeneous(n_types, e_types,
-                                                                                          node_type_names=NODE_METADATA,
-                                                                                          edge_type_names=EDGE_METADATA).sort(
-            sort_by_row)
-
-    def to_pyg_hetero_data(self, one_hot_types=True) -> pyg.data.HeteroData:
-        pass
+        hdata = pyg.utils.from_networkx(self, group_node_attrs=['phase']).to_heterogeneous(n_types, e_types,
+                                                                                           node_type_names=SIMPLE_NODE_METADATA,
+                                                                                           edge_type_names=SIMPLE_EDGE_METADATA).sort(sort_by_row)
+        hdata.validate()
+        return hdata
 
     def copy(self, as_view=False):
         diagram_copy = self.__class__(self.phase_denominator, self)
@@ -390,3 +392,14 @@ def zx_compose_all(zx_diagrams: Iterable[ZXDiagram]) -> ZXDiagram:
     if composed_diagram is None:
         raise ValueError("cannot apply zx_compose_all to an empty list")
     return composed_diagram
+
+
+def base_match_from_node(diagram: ZXDiagram, node: int) -> SimpleMatch:
+    if diagram.is_z_basis(node):
+        return FRightZMatch(node)
+    elif diagram.is_x_basis(node):
+        return FRightXMatch(node)
+    elif diagram.is_boundary(node):
+        return BoundaryMatch(-1)
+    else:
+        raise Exception(f'Unexpected node type {diagram.type(node)}')
