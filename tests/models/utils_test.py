@@ -56,6 +56,3 @@ class UtilsTest(unittest.TestCase):
         x = torch.tensor(x, dtype=torch.float64)
         index = torch.tensor(index, dtype=torch.int64)
         result = SoftmaxAggregation().forward(x, index, dim=0)
-        print('x = ', x)
-        print('index = ', index)
-        print('result = ', result)

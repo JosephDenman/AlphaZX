@@ -2,30 +2,20 @@ import torch
 
 
 def cat_aggregate(x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
-    print('x = ', x)
-    print('index = ', index)
-    max_num_elements = torch.max(torch.bincount(index))
-    print('max_num_elements = ', max_num_elements)
-    # Number of groups
+    # Number of groups and the number of features in each row of x
     num_groups = index.max().item() + 1
-    # Sort index and x in order of index
-    sorted_indices, sorted_idx = index.sort()
-    sorted_x = x[sorted_idx]
-    # Calculate sizes and maximum group size
+    num_features = x.size(1)
+    # Compute the maximum number of elements in any group
     group_sizes = torch.zeros(num_groups, dtype=torch.long, device=x.device)
-    print('group_sizes = ', group_sizes)
-    group_sizes.scatter_add_(0, sorted_indices, torch.ones_like(sorted_indices))
-    print('scatter_add_group_sizes = ', group_sizes)
+    group_sizes.index_add_(0, index, torch.ones_like(index, dtype=torch.long))
     # Prepare the output tensor, padded with zeros
-    result = torch.zeros((num_groups, max_num_elements), dtype=x.dtype, device=x.device)
-    # Calculate group start indices and place values
-    start_indices = torch.zeros(num_groups, dtype=torch.long, device=x.device).scatter_(
-        0, torch.arange(num_groups, device=x.device),
-        torch.cat([torch.tensor([0], device=x.device), group_sizes[:-1].cumsum(0)])
-    )
-    flat_indices = (sorted_indices * max_num_elements + torch.arange(sorted_x.size(0), device=x.device) - start_indices[
-        sorted_indices])
-    print('flat_indices = ', flat_indices)
-    print('sorted_x = ', sorted_x)
-    result.view(-1).scatter_(-1, flat_indices, sorted_x)
+    max_num_elements = group_sizes.max()
+    result = torch.zeros(num_groups, max_num_elements, num_features, dtype=x.dtype, device=x.device)
+    # Positions to fill in the result tensor
+    positions = group_sizes.clone().fill_(0)  # Current fill position in each group
+    # Fill the tensor
+    for i in range(x.size(0)):
+        group_id = index[i]
+        result[group_id, positions[group_id]] = x[i]
+        positions[group_id] += 1
     return result
