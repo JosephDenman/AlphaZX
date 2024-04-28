@@ -327,7 +327,7 @@ def _count_match_types() -> int:
 
 
 Metadata = tuple[
-    list[NodeType], list[NodeType], dict[NodeType, int], list[EdgeType], list[EdgeType], dict[EdgeType, int]]
+    list[NodeType], list[NodeType], dict[NodeType, int], list[EdgeType], dict[EdgeType, int], list[EdgeType], dict[EdgeType, int]]
 
 
 def _compute_metadata() -> Metadata:
@@ -365,4 +365,5 @@ MATCH_TYPE_COUNT = _count_match_types()
  NODE_TYPE_TO_INDEX_METADATA,
  EDGE_METADATA,
  EDGE_TYPE_TO_INDEX_METADATA, SIMPLE_EDGE_METADATA, SIMPLE_EDGE_TYPE_TO_INDEX_METADATA) = _compute_metadata()
+SIMPLE_METADATA = SIMPLE_NODE_METADATA, SIMPLE_EDGE_METADATA
 METADATA = NODE_METADATA, EDGE_METADATA

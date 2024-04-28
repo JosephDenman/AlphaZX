@@ -34,8 +34,11 @@ class ZXMatchDiagram(nx.DiGraph):
             if not zx_diagram.is_boundary(n):
                 base_match = base_match_from_node(zx_diagram, n)
                 self.add_node(base_match,
+                              # id=n,
                               type=compute_node_type_attr(base_match),
                               phase=compute_node_phase_attr(zx_diagram, base_match))
+        self.num_simple_nodes = self.number_of_nodes()
+        # print('nodes = ', self.nodes(data=True))
         for m, n in set(zx_diagram.edges()):
             match_m = base_match_from_node(zx_diagram, n)
             match_n = base_match_from_node(zx_diagram, m)
@@ -69,14 +72,19 @@ class ZXMatchDiagram(nx.DiGraph):
         return hdata
 
     def to_pyg_data(self, with_reverse_mapping: bool = False, sort_by_row: bool = False) -> pyg.data.Data | tuple[
-        pyg.data.Data, 'DataIndexToMatch']:
+            pyg.data.Data, 'DataIndexToMatch']:
+
+        # Map string node type to integer node type
         for _, ndata in self.nodes(data=True):
             ndata['type'] = NODE_TYPE_TO_INDEX_METADATA[ndata['type']]
+        # Map string edge type to integer edge type
         for _, _, edata in self.edges(data=True):
             edata['type'] = EDGE_TYPE_TO_INDEX_METADATA[edata['type']]
         data = pyg.utils.from_networkx(self,
                                        group_node_attrs=['type', 'phase'],
                                        group_edge_attrs=['type', 'size']).sort(sort_by_row)
+        data.validate()
+        data['node_ids'] = torch.arange(self.number_of_nodes())
         if with_reverse_mapping:
             return data, DataIndexToMatch(self)
         return data
@@ -136,8 +144,8 @@ class DataIndexToMatch:
         for i, match in enumerate(zx_match_diagram.nodes()):
             self.indices[i] = match
 
-    def __getitem__(self, item: tuple[NodeType, int]):
-        return self.indices[item[1]]
+    def __getitem__(self, item: int):
+        return self.indices[item]
 
 
 class HeteroDataIndexToMatch:

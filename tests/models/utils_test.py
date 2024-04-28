@@ -1,12 +1,12 @@
-import torch
 import unittest
 
-from torch_geometric.nn import SoftmaxAggregation
-
-from alphazx.models.utils import cat_aggregate
-
+import torch
 from hypothesis import strategies as st, given
 from hypothesis.strategies import composite
+
+from alphazx import concatenate_by_group, concatenate_neighbor_features
+from alphazx.diagram.diagram_generators import clifford_zx_match_diagram
+from tests.utils import zx_match_diagram_st
 
 
 def aggregate_py(x, index) -> tuple[int, list[list[float]]]:
@@ -23,6 +23,20 @@ def aggregate_py(x, index) -> tuple[int, list[list[float]]]:
     for group in groups:
         group.extend([0] * (max_num_elements - len(group)))
     return max_num_elements, groups
+
+
+def concatenate_neighbor_features_py(x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
+    max_nodes = torch.bincount(edge_index[1]).max()
+    num_groups = torch.max(edge_index[1]) + 1
+    expected_list = []
+    for i in range(num_groups):
+        expected_list.append([])
+    for i, node in enumerate(edge_index[1]):
+        expected_list[node.item()].append(x[edge_index[0][i]].tolist())
+    for i in range(num_groups):
+        while len(expected_list[i]) < max_nodes:
+            expected_list[i].append([0, 0])
+    return torch.tensor(expected_list)
 
 
 @composite
@@ -42,17 +56,23 @@ def aggr_params(draw):
 
 class UtilsTest(unittest.TestCase):
     @given(aggr_params())
-    def test_cat_aggregation(self, params: tuple[list[float], list[int], int, list[list[float]]]):
+    def test_concat_group_by(self, params: tuple[list[float], list[int], int, list[list[float]]]):
         x, index, max_num_elements, expected = params
         x = torch.tensor(x, dtype=torch.float64)
         index = torch.tensor(index)
         expected = torch.tensor(expected, dtype=torch.float64)
-        result = cat_aggregate(x, index)
+        result = concatenate_by_group(x, index)
         self.assertTrue(torch.equal(result, expected))
 
-    @given(aggr_params())
-    def test_softmax_aggregation(self, params: tuple[list[float], list[int], int, list[list[float]]]):
-        x, index, max_num_elements, expected = params
-        x = torch.tensor(x, dtype=torch.float64)
-        index = torch.tensor(index, dtype=torch.int64)
-        result = SoftmaxAggregation().forward(x, index, dim=0)
+    @given(zx_match_diagram_st())
+    def test_concatenate_neighbor_features(self, config: tuple[int, int, bool, bool]):
+        result = clifford_zx_match_diagram(*config[:-1]).to_pyg_data(with_reverse_mapping=config[-1])
+        if isinstance(result, tuple):
+            d = result[0]
+        else:
+            d = result
+        x = d.x
+        edge_index = d.edge_index
+        expected = concatenate_neighbor_features_py(x, edge_index)
+        actual = concatenate_neighbor_features(x, edge_index)
+        self.assertTrue(torch.all(actual.eq(expected)))
