@@ -1,7 +1,6 @@
-from diagram.match import METADATA
-from models.gps.gps_model import GPSModel
-from torch_geometric.nn import to_hetero
+from alphazx.diagram.match import METADATA
+from torch_geometric.nn import to_hetero, GPSConv, GATv2Conv
 
-gps = GPSModel(64, 4)
-hetero_gps = to_hetero(gps, METADATA, aggr='sum')
+gps = GPSConv(64, GATv2Conv(-1, 3))
+hetero_gps = to_hetero(gps, METADATA, aggr='sum', debug=True)
 print(hetero_gps.meta)

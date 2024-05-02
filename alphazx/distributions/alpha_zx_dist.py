@@ -4,6 +4,14 @@ import torch
 from alphazx.distributions.bernoulli_mixture import MultivariateBernoulliMixture
 from torch.distributions.categorical import Categorical
 
+AZXDistributionParams = dict[
+    Literal['mixture_dist_params'] |
+    Literal['frz_node_dist_params'] |
+    Literal['flz_node_dist_params'] |
+    Literal['phase_dist_params'] |
+    Literal['new_edges_dist_params'] |
+    Literal['transfer_edges_dist_params'], torch.Tensor]
+
 
 class AlphaZXDistribution:
     """
@@ -22,7 +30,7 @@ class AlphaZXDistribution:
     For simplicity, T is always fixed to the maximum (two in this case).
     """
 
-    def __init__(self, params: dict[str, torch.Tensor]):
+    def __init__(self, params: AZXDistributionParams):
         """
         :param params: A dictionary of tensors representing the parameters of the distribution. It contains the following keys:
         mixture_dist_params: B x T tensor of mixture probabilities. mixture_dist_params[b] is the mixture probabilities
@@ -30,7 +38,7 @@ class AlphaZXDistribution:
                              we are in the MCTS portion of the algorithm.
         frz_node_dist_params: B x N tensor of frz-node selection probabilities. For a node n in batch b that does
                               not represent a frz-node, frz_node_dist_params[b, n] = 0.
-        frz_node_dist_params: B x N tensor of flz-node selection probabilities. For a node n in batch b that does
+        flz_node_dist_params: B x N tensor of flz-node selection probabilities. For a node n in batch b that does
                               not represent a flz-node, flz_node_dist_params[b, n] = 0.
         phase_dist_params: B x N x P tensor of phase probabilities. For a node n in batch b that does not
                            represent an f-right match, phase_dist_params[b, n] = torch.zeroes((P, ))

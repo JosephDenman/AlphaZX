@@ -1,15 +1,13 @@
 import torch
-import torch_geometric as pyg
 from torch import index_select
+from torch_geometric.nn.to_hetero_with_bases_transformer import split_output
 from torch_geometric.typing import NodeType
-
-from alphazx.diagram.zx_match_diagram import ZXMatchDiagram
 
 
 def concatenate_by_group(x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
     index_count = torch.bincount(index)
     fill_count = index_count.max() - index_count
-    fill_zeros = torch.zeros_like(x[0]).repeat(fill_count.sum(), *([1]*(len(x.shape)-1)))
+    fill_zeros = torch.zeros_like(x[0]).repeat(fill_count.sum(), *([1] * (len(x.shape) - 1)))
     fill_index = torch.arange(0, fill_count.shape[0]).repeat_interleave(fill_count)
     index_ = torch.cat([index, fill_index], dim=0)
     x_ = torch.cat([x, fill_zeros], dim=0)
@@ -21,6 +19,25 @@ def concatenate_neighbor_features(x: torch.Tensor, edge_index: torch.Tensor) -> 
     neighbor_x = index_select(x, 0, edge_index[0])
     x_ = concatenate_by_group(neighbor_x, edge_index[1])
     return x_
+
+
+def concatenate_with_neighbor_features(x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
+    neighbor_x = concatenate_neighbor_features(x, edge_index)
+    x_ = torch.cat([x.unsqueeze(dim=1), neighbor_x], dim=1)
+    return x_
+
+# print(concatenate_neighbor_features(x, ))
+
+
+def join_features(x_dict: dict[NodeType, torch.Tensor]) -> tuple[torch.Tensor, dict[NodeType, int]]:
+    # offsets = get_node_offset_dict(x_dict, type_to_id_dict)
+    # x = group_node_placeholder(x_dict, type_to_id_dict)
+    # return
+    pass
+
+
+def split_features(x: torch.Tensor, offsets: dict[NodeType, int]) -> dict[NodeType, torch.Tensor]:
+    return split_output(x, offsets)
 
 
 def pad_and_stack(tensors: list[torch.Tensor], pad_value=0.) -> torch.Tensor:
@@ -49,44 +66,3 @@ def pad_and_stack(tensors: list[torch.Tensor], pad_value=0.) -> torch.Tensor:
     # Stack all the padded tensors
     result = torch.stack(padded_tensors)
     return result
-
-
-def get_expected_node_features(zx_match_diagram: ZXMatchDiagram, data: pyg.data.Data) -> list[list[list[float]]] | \
-                                                                                         dict[NodeType, list[
-                                                                                             list[float]]]:
-    indices = data['node_ids']
-    match_to_index = {}
-    original_nodes = list(zx_match_diagram.nodes(data=True))
-    if isinstance(indices, dict):
-        expected_features_dict = {}
-        for ntype, indices in indices.items():
-            expected_features = []
-            for node_index in indices.tolist():
-                n, ndata = original_nodes[node_index]
-                match_to_index[n] = node_index
-            for node_index in indices.tolist():
-                n, ndata = original_nodes[node_index]
-                pairs = []
-                for m in zx_match_diagram.neighbors(n):
-                    pairs.append((m, match_to_index[m]))
-                pairs = sorted(pairs, key=lambda x: x[1])
-                ordered_neighbor_ndata = [zx_match_diagram.nodes[m] for m, _ in pairs]
-                expected_neighbor_features = [[ndata['type'], ndata['phase'].item()] for ndata in
-                                              ordered_neighbor_ndata]
-                expected_features.append(expected_neighbor_features)
-            expected_features_dict[ntype] = expected_features
-    else:
-        expected_features = []
-        for node_index in indices.tolist():
-            n, ndata = original_nodes[node_index]
-            match_to_index[n] = node_index
-        for node_index in indices.tolist():
-            n, ndata = original_nodes[node_index]
-            pairs = []
-            for m in zx_match_diagram.neighbors(n):
-                pairs.append((m, match_to_index[m]))
-            pairs = sorted(pairs, key=lambda x: x[1])
-            ordered_neighbor_ndata = [zx_match_diagram.nodes[m] for m, _ in pairs]
-            expected_neighbor_features = [[ndata['type'], ndata['phase'].item()] for ndata in ordered_neighbor_ndata]
-            expected_features.append(expected_neighbor_features)
-        return expected_features

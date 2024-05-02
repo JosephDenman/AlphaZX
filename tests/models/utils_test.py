@@ -4,7 +4,7 @@ import torch
 from hypothesis import strategies as st, given
 from hypothesis.strategies import composite
 
-from alphazx import concatenate_by_group, concatenate_neighbor_features
+from alphazx import concatenate_by_group, concatenate_neighbor_features, concatenate_with_neighbor_features
 from alphazx.diagram.diagram_generators import clifford_zx_match_diagram
 from tests.utils import zx_match_diagram_st
 
@@ -39,6 +39,14 @@ def concatenate_neighbor_features_py(x: torch.Tensor, edge_index: torch.Tensor) 
     return torch.tensor(expected_list)
 
 
+def concatenate_with_neighbor_features_py(x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
+    x_ = concatenate_neighbor_features_py(x, edge_index)
+    expected_list = []
+    for i, x_n in enumerate(x):
+        expected_list.append([x_n.tolist()] + x_[i].tolist())
+    return torch.tensor(expected_list)
+
+
 @composite
 def aggr_params(draw):
     x = draw(st.lists(st.floats(allow_nan=False), min_size=2))
@@ -65,14 +73,19 @@ class UtilsTest(unittest.TestCase):
         self.assertTrue(torch.equal(result, expected))
 
     @given(zx_match_diagram_st())
-    def test_concatenate_neighbor_features(self, config: tuple[int, int, bool, bool]):
-        result = clifford_zx_match_diagram(*config[:-1]).to_pyg_data(with_reverse_mapping=config[-1])
-        if isinstance(result, tuple):
-            d = result[0]
-        else:
-            d = result
+    def test_concatenate_neighbor_features(self, config: tuple[int, int, bool]):
+        d = clifford_zx_match_diagram(*config[:-1]).to_pyg_data()
         x = d.x
         edge_index = d.edge_index
         expected = concatenate_neighbor_features_py(x, edge_index)
         actual = concatenate_neighbor_features(x, edge_index)
+        self.assertTrue(torch.all(actual.eq(expected)))
+
+    @given(zx_match_diagram_st())
+    def test_concatenate_with_neighbor_features(self, config: tuple[int, int, bool]):
+        d = clifford_zx_match_diagram(*config[:-1]).to_pyg_data()
+        x = d.x
+        edge_index = d.edge_index
+        expected = concatenate_with_neighbor_features_py(x, edge_index)
+        actual = concatenate_with_neighbor_features(x, edge_index)
         self.assertTrue(torch.all(actual.eq(expected)))
