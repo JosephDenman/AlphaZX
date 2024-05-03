@@ -103,6 +103,7 @@ class ZXMatchDiagram(nx.DiGraph):
             sort_by_row)
         data.x = torch.stack([data.node_type, data.node_phase], dim=-1)
         data.edge_attr = torch.stack([data.edge_type, data.edge_size], dim=-1)
+        data.sort(sort_by_row)
         data.validate()
         if with_reverse_mapping:
             return data, DataIndexToMatch(self)
