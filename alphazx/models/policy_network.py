@@ -101,9 +101,15 @@ class PolicyNetwork(nn.Module):
         node_probs[node_probs.isnan()] = 0.
         return node_probs
 
-    def _compute_mixture_probs(self, x: torch.Tensor, node_type: torch.Tensor) -> torch.Tensor:
-        mixture_params = self.mixture_aggr(x, node_type)
-        mixture_params = self.mixture_mlp(mixture_params).squeeze(dim=-1)
+    def _compute_mixture_probs(self, x: torch.Tensor, edge_index: torch.Tensor, node_type: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
+        print('dense_node_type = ', pyg.utils.to_dense_batch(x, node_type))
+        # mixture_params = pyg.utils.in(x, 0, torch.stack([node_type, batch], dim=-1))
+        # print('mixture_params = ', mixture_params)
+        print('x = ', x)
+        print('node_type = ', edge_index)
+        print('batch = ', batch)
+        # mixture_params = self.mixture_aggr(x, edge_index)
+        mixture_params = self.mixture_mlp(x).squeeze(dim=-1)
         mixture_params = F.pad(mixture_params, [0, self.num_node_types - mixture_params.shape[0]], mode='constant',
                                value=-torch.inf)
         mixture_pad_mask = torch.isnan(mixture_params)
@@ -122,7 +128,9 @@ class PolicyNetwork(nn.Module):
                  parameters.
         """
         x = self.gps(data.x, data.pe, data.edge_index, data.edge_attr, data.batch)
-        x = self.neighbor_aggr(index_select(x, 0, data.edge_index[0]), data.edge_index[1])
+        # x = self.neighbor_aggr(index_select(x, 0, data.edge_index[0]), data.edge_index[1])
+        mixture_probs = self._compute_mixture_probs(x, data.edge_index[1], data.node_type, data.batch)
+        print('mixture_probs = ', mixture_probs)
         return AlphaZXDistributionParams(self._compute_mixture_probs(x, data.node_type).unsqueeze(dim=0),
                                          self._compute_node_probs(x, data.node_type).unsqueeze(dim=0),
                                          self._compute_phase_probs(x, data.node_type).unsqueeze(dim=0),

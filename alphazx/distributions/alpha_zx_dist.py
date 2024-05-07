@@ -48,7 +48,7 @@ class AlphaZXDistribution:
                                    in the top left corner of the innermost 2D tensor. All other entries in the innermost 2D tensor are 0.
                                    Samples drawn from this distribution are all zeros (no edges are selected to be transferred).
         """
-        print('params:', params)
+        # print('params:', params)
         self.mixture_dist_params = params.mixture_dist_probs
         self.node_dist_params = params.node_dist_probs
         self.phase_dist_params = params.phase_dist_probs
@@ -163,15 +163,15 @@ class AlphaZXDistribution:
         :return: K x L tensor of actions.
         """
         action_types = self._sample_action_types(k)
-        print('sampled_action_types = ', action_types)
+        # print('sampled_action_types = ', action_types)
         nodes = self._sample_nodes(action_types)
-        print('sampled_nodes = ', nodes)
+        # print('sampled_nodes = ', nodes)
         phases = self._sample_features('phase', nodes)
-        print('sampled_phases = ', phases)
+        # print('sampled_phases = ', phases)
         new_edges = self._sample_features('new_edge', nodes)
-        print('sampled_new_edges = ', new_edges)
+        # print('sampled_new_edges = ', new_edges)
         transfer_edges = self._sample_transfer_edges(nodes)
-        print('sampled_transfer_edges = ', transfer_edges)
+        # print('sampled_transfer_edges = ', transfer_edges)
         return torch.cat((torch.stack((action_types, nodes, phases, new_edges), dim=-1), transfer_edges), dim=-1).long()
 
     def entropy(self) -> torch.Tensor:
@@ -195,6 +195,6 @@ def mixture_dist_test():
     sampled_action_types = torch.tensor([[2, 2], [0, 1]])
     expanded_sampled_action_types = sampled_action_types.unsqueeze(-1).expand(-1, -1, node_dist_params.size(-1))
     output = torch.gather(node_dist_params, 1, expanded_sampled_action_types)
-    print('output:', output)
+    # print('output:', output)
 
 # mixture_dist_test()
