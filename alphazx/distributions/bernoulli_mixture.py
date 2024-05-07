@@ -2,6 +2,27 @@ import torch
 from torch.distributions import Categorical, Independent, Bernoulli, MixtureSameFamily
 
 
+class MultivariateBernoulli:
+    def __init__(self, params: torch.Tensor):
+        """
+        A multivariate Bernoulli mixture distribution.
+        :param params: B x N x E_incident tensor of Bernoulli mixture parameters. Each entry in the last dimension is a
+                       parameter to a Bernoulli distribution, i.e., a multivariate Bernoulli distribution.
+        """
+        self.params = params
+        # noinspection PyTypeChecker
+        if not torch.all((params >= 0.0) & (params <= 1.0)):
+            raise ValueError('All parameters must be in the range [0, 1].')
+        # Since each component is multivariate Bernoulli, we treat each independently
+        self.dist = Independent(Bernoulli(probs=self.params), 1)
+
+    def log_prob(self, value: torch.Tensor) -> torch.Tensor:
+        return self.dist.log_prob(value)
+
+    def sample(self, sample_shape: torch.Size = torch.Size()) -> torch.Tensor:
+        return self.dist.sample(sample_shape)
+
+
 class MultivariateBernoulliMixture:
     def __init__(self, params: torch.Tensor):
         """

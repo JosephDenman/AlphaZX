@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch_geometric.typing import NodeType, EdgeType
 
-from alphazx.distributions.alpha_zx_dist import AZXDistributionParams
+from alphazx.distributions.alpha_zx_dist import AlphaZXDistributionParams
 from alphazx.models.policy_network import PolicyNetwork
 from alphazx.models.value_network import ValueNetwork
 
@@ -64,7 +64,7 @@ class PredictionNetwork(nn.Module):
 
     def forward(self,
                 x_dict: dict[NodeType, torch.Tensor],
-                edge_index_dict: dict[EdgeType, torch.Tensor]) -> tuple[AZXDistributionParams, torch.Tensor]:
+                edge_index_dict: dict[EdgeType, torch.Tensor]) -> tuple[AlphaZXDistributionParams, torch.Tensor]:
         x_dict = self.hgt(x_dict, edge_index_dict)
         policy = self.policy_network(x_dict, edge_index_dict)
         value = self.value_network(x_dict, edge_index_dict)

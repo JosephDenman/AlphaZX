@@ -26,15 +26,6 @@ def concatenate_with_neighbor_features(x: torch.Tensor, edge_index: torch.Tensor
     x_ = torch.cat([x.unsqueeze(dim=1), neighbor_x], dim=1)
     return x_
 
-# print(concatenate_neighbor_features(x, ))
-
-
-def join_features(x_dict: dict[NodeType, torch.Tensor]) -> tuple[torch.Tensor, dict[NodeType, int]]:
-    # offsets = get_node_offset_dict(x_dict, type_to_id_dict)
-    # x = group_node_placeholder(x_dict, type_to_id_dict)
-    # return
-    pass
-
 
 def split_features(x: torch.Tensor, offsets: dict[NodeType, int]) -> dict[NodeType, torch.Tensor]:
     return split_output(x, offsets)
