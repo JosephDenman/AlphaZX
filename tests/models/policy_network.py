@@ -21,11 +21,11 @@ def create_data_loader(num_diagrams: int, batch_size: int, num_qubits: int, dept
 def policy_network():
     num_diagrams = 20
     batch_size = 2
-    num_qubits = 10
-    depth = 10
+    num_qubits = 5
+    depth = 5
     num_node_types = len(NODE_METADATA)
     num_possible_phases = len(POSSIBLE_PHASES)
-    num_possible_new_edges = 15
+    num_possible_new_edges = 2
     gps_channels = 1 + num_possible_phases + num_possible_new_edges + 2
     node_embedding_channels = 1 + num_possible_phases + num_possible_new_edges
     gps_edge_in_channels = 2
@@ -64,8 +64,9 @@ def policy_network():
 
     dataloader = create_data_loader(num_diagrams, batch_size, num_qubits, depth)
     for batch in dataloader:
+        print('batch = ', batch)
         batch = batch.sort(False)
-        batch.node_type = torch.sort(batch.node_type).values
+        assert torch.bincount(batch.node_type)[0] == batch_size
         azx_dist = AlphaZXDistribution(model(batch))
         print(azx_dist.sample(8))
 

@@ -1,5 +1,5 @@
 import torch
-from torch import index_select
+import torch_geometric as pyg
 from torch_geometric.nn.to_hetero_with_bases_transformer import split_output
 from torch_geometric.typing import NodeType
 
@@ -16,8 +16,9 @@ def concatenate_by_group(x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
 
 
 def concatenate_neighbor_features(x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
-    neighbor_x = index_select(x, 0, edge_index[0])
-    x_ = concatenate_by_group(neighbor_x, edge_index[1])
+    neighbor_x = torch.index_select(x, 0, edge_index[0])
+    x_, mask = pyg.utils.to_dense_batch(neighbor_x, edge_index[1])
+    x_[~mask] = -torch.inf
     return x_
 
 

@@ -1,3 +1,4 @@
 /tests/rewriting/.hypothesis/
 /tests/diagram/.hypothesis/
 /tests/models/.hypothesis/
+/__pycache__/

@@ -4,15 +4,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch_geometric as pyg
-from torch import index_select
 
-from alphazx import concatenate_neighbor_features
-from alphazx.diagram.match import BoundaryMatch, FRightZMatch, FRightXMatch
+from alphazx.diagram.match import BoundaryMatch, FRightZMatch, FRightXMatch, NODE_METADATA
 from alphazx.distributions.alpha_zx_dist import AlphaZXDistributionParams
-from alphazx.models.attention import SigmoidCrossAttention
+from alphazx.models.aggregation.neighbor_sigmoid import NeighborSigmoidTransformer
 from alphazx.models.gps import GPS
 
-torch.set_printoptions(threshold=200)
+torch.set_printoptions(threshold=10000)
 
 
 class PolicyNetwork(nn.Module):
@@ -59,7 +57,7 @@ class PolicyNetwork(nn.Module):
                                                              num_pooling_heads,
                                                              pooling_layer_norm,
                                                              pooling_dropout)
-        self.sigmoid_attn = SigmoidCrossAttention(node_embedding_channels)
+        self.neighbor_sigmoid_trans = NeighborSigmoidTransformer(node_embedding_channels, num_node_types)
         self.mixture_aggr = pyg.nn.GraphMultisetTransformer(node_embedding_channels,
                                                             num_node_types,
                                                             num_pooling_encoder_blocks,
@@ -68,11 +66,9 @@ class PolicyNetwork(nn.Module):
                                                             pooling_dropout)
         self.mixture_mlp = pyg.nn.MLP([node_embedding_channels, 1])
 
-    def _compute_transfer_edge_probs(self, x: torch.Tensor, edge_index: torch.Tensor,
-                                     node_types: torch.Tensor) -> torch.Tensor:
-        neighbor_x = concatenate_neighbor_features(x, edge_index)
-        neighbor_pad_mask = (neighbor_x == torch.full_like(x[0], -torch.inf).unsqueeze(0).unsqueeze(0)).all(dim=-1)
-        transfer_edge_params = self.sigmoid_attn(x.unsqueeze(dim=1), neighbor_x, neighbor_pad_mask).squeeze(dim=1)
+    def _compute_transfer_edge_probs(self, x: torch.Tensor, edge_index: torch.Tensor, node_types: torch.Tensor,
+                                     batch: torch.Tensor) -> torch.Tensor:
+        transfer_edge_params = self.neighbor_sigmoid_trans(x, edge_index, batch)
         non_simple_node_mask = torch.logical_and(node_types != FRightZMatch.index, node_types != FRightXMatch.index)
         transfer_edge_params[non_simple_node_mask] = torch.zeros(transfer_edge_params.shape[1])
         return transfer_edge_params
@@ -91,7 +87,10 @@ class PolicyNetwork(nn.Module):
         phase_probs[simple_node_mask] = torch.softmax(x[simple_node_mask][:, 1:1 + self.num_possible_phases], dim=-1)
         return phase_probs
 
-    def _compute_node_probs(self, x: torch.Tensor, node_types: torch.Tensor) -> torch.Tensor:
+    def _compute_node_probs(self, x: torch.Tensor, node_types: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
+        print('batch = ', batch)
+        x = pyg.utils.to_dense_batch(x, batch)[0]
+        print('x = ', x)
         node_probs = torch.fill(torch.empty([self.num_node_types, x.shape[0]]), 0)
         for node_type in range(self.num_node_types):
             if node_type != BoundaryMatch.index:
@@ -99,22 +98,30 @@ class PolicyNetwork(nn.Module):
                 node_probs[node_type][node_types == node_type] = x[node_types == node_type][:, :1].squeeze(dim=-1)
                 node_probs[node_type] = torch.softmax(node_probs[node_type], dim=-1)
         node_probs[node_probs.isnan()] = 0.
+        print('node_probs = ', node_probs)
         return node_probs
 
-    def _compute_mixture_probs(self, x: torch.Tensor, edge_index: torch.Tensor, node_type: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
-        print('dense_node_type = ', pyg.utils.to_dense_batch(x, node_type))
-        # mixture_params = pyg.utils.in(x, 0, torch.stack([node_type, batch], dim=-1))
-        # print('mixture_params = ', mixture_params)
-        print('x = ', x)
-        print('node_type = ', edge_index)
-        print('batch = ', batch)
-        # mixture_params = self.mixture_aggr(x, edge_index)
-        mixture_params = self.mixture_mlp(x).squeeze(dim=-1)
-        mixture_params = F.pad(mixture_params, [0, self.num_node_types - mixture_params.shape[0]], mode='constant',
-                               value=-torch.inf)
-        mixture_pad_mask = torch.isnan(mixture_params)
-        mixture_params[mixture_pad_mask] = -torch.inf
-        mixture_params[BoundaryMatch.index] = -torch.inf
+    def _compute_mixture_probs(self, x: torch.Tensor, node_type: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
+        # We need to compute the mixture probabilities for each batch separately, so we modify node types so that the
+        # same node type in different batches is represented by a different index
+        index = node_type + self.num_node_types * batch
+        # Aggregate the node embeddings by node type
+        mixture_params = self.mixture_aggr(x, index)
+        # Project the final embeddings to a scalar
+        mixture_params = self.mixture_mlp(mixture_params).squeeze(dim=-1)
+        # Replace nan values produced by the aggregation with negative infinities
+        mixture_params[torch.isnan(mixture_params)] = -torch.inf
+        # The last negative infinity in the tensor is the last element before the start of the last batch
+        inf_indices = torch.where(mixture_params == -torch.inf)[0]
+        if len(inf_indices) > 0:
+            # Pad the last batch with negative infinity so that all batches have the same number of elements
+            pad_length = self.num_node_types - (len(mixture_params) - inf_indices[-1] - 1)
+            mixture_params = F.pad(mixture_params, (0, pad_length), mode='constant', value=-torch.inf)
+        # Reshape the tensor to have the batch dimension
+        mixture_params = mixture_params.view(-1, self.num_node_types)
+        # Probability of selecting a boundary node should be zero
+        mixture_params[:, 0] = -torch.inf
+        # Apply softmax to get the mixture probabilities
         mixture_params = torch.softmax(mixture_params, dim=-1)
         return mixture_params
 
@@ -128,15 +135,17 @@ class PolicyNetwork(nn.Module):
                  parameters.
         """
         x = self.gps(data.x, data.pe, data.edge_index, data.edge_attr, data.batch)
-        # x = self.neighbor_aggr(index_select(x, 0, data.edge_index[0]), data.edge_index[1])
-        mixture_probs = self._compute_mixture_probs(x, data.edge_index[1], data.node_type, data.batch)
+        mixture_probs = self._compute_mixture_probs(x, data.node_type, data.batch)
         print('mixture_probs = ', mixture_probs)
-        return AlphaZXDistributionParams(self._compute_mixture_probs(x, data.node_type).unsqueeze(dim=0),
-                                         self._compute_node_probs(x, data.node_type).unsqueeze(dim=0),
+        node_probs = self._compute_node_probs(x, data.node_type, data.batch)
+        print('node_probs = ', node_probs)
+        transfer_edge_probs = self._compute_transfer_edge_probs(x, data.edge_index, data.node_type, data.batch)
+        print('transfer_edge_probs = ', transfer_edge_probs)
+        return AlphaZXDistributionParams(mixture_probs,
+                                         node_probs,
                                          self._compute_phase_probs(x, data.node_type).unsqueeze(dim=0),
                                          self._compute_new_edge_probs(x, data.node_type).unsqueeze(dim=0),
-                                         self._compute_transfer_edge_probs(x, data.edge_index,
-                                                                           data.node_type).unsqueeze(dim=0))
+                                         transfer_edge_probs)
 
 
 def trans_dec_test():
@@ -145,3 +154,33 @@ def trans_dec_test():
     memory = torch.rand(2, 8, 16)
     tgt = torch.rand(2, 8, 16)
     print(transformer_decoder(tgt, memory))
+
+
+def batch_node_type_test():
+    node_type = torch.tensor([0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 10, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 10, 10])
+    batch = torch.tensor([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2])
+    node_type = node_type + len(NODE_METADATA) * batch
+    print(node_type)
+
+
+# batch_node_type_test()
+
+def reshape_test():
+    num_node_types = 11
+    mixture_params = torch.tensor(
+        [0.3473, 0.3252, 0.3170, 0.3252, 0.2990, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan,
+         0.3451, 0.3349, 0.3056, 0.3277, 0.3001, 0.3152])
+    mixture_params[torch.isnan(mixture_params)] = -torch.inf
+    inf_indices = torch.where(mixture_params == -torch.inf)[0]
+    if len(inf_indices) > 0:
+        pad_length = num_node_types - (len(mixture_params) - inf_indices[-1] - 1)
+        mixture_params = torch.nn.functional.pad(mixture_params, (0, pad_length), mode='constant', value=-torch.inf)
+    mixture_params = mixture_params.view(-1, num_node_types)
+    print('mixture_params = ', mixture_params)
+    mixture_params = torch.softmax(mixture_params, dim=-1)
+    print('mixture_params = ', mixture_params)
+    output = torch.tensor([[0.3473, 0.3252, 0.3170, 0.3252, 0.2990, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan],
+                           [0.3451, 0.3349, 0.3056, 0.3277, 0.3001, 0.3152, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan]])
+
+
+# reshape_test()
