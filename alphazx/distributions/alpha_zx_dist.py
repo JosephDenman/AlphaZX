@@ -37,8 +37,8 @@ class AlphaZXDistribution:
         mixture_dist_params: B x T tensor of mixture probabilities. mixture_dist_params[b] is the mixture probabilities
                              at some step in a trajectory. It is assumed to be a softmax output of a DNN. When B = 1,
                              we are in the MCTS portion of the algorithm.
-        frz_node_dist_params: B x T x N tensor of node selection probabilities. For a node n that is not of type t in batch b,
-                              node_dist_params[b, t, n] = 0.
+        node_dist_params: B x T x N tensor of node selection probabilities. For a node n that is not of type t in batch b,
+                          node_dist_params[b, t, n] = 0.
         phase_dist_params: B x N x P tensor of phase probabilities. For a node n in batch b that does not
                            represent an f-right match, phase_dist_params[b, n] = torch.zeroes((P, ))
         new_edge_dist_params: B x N x E_new tensor of new edge probabilities. For a node n in batch b that does not

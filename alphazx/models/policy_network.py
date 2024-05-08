@@ -51,12 +51,13 @@ class PolicyNetwork(nn.Module):
                        gps_attn_type,
                        gps_attn_kwargs,
                        gps_mlp_hidden_channels)
-        self.neighbor_aggr = pyg.nn.GraphMultisetTransformer(node_embedding_channels,
-                                                             num_node_types,
-                                                             num_pooling_encoder_blocks,
-                                                             num_pooling_heads,
-                                                             pooling_layer_norm,
-                                                             pooling_dropout)
+        # self.neighbor_aggr = pyg.nn.GraphMultisetTransformer(node_embedding_channels,
+        #                                                      num_node_types,
+        #                                                      num_pooling_encoder_blocks,
+        #                                                      num_pooling_heads,
+        #                                                      pooling_layer_norm,
+        #                                                      pooling_dropout)
+        self.node_mlp = pyg.nn.MLP([node_embedding_channels, 1])
         self.neighbor_sigmoid_trans = NeighborSigmoidTransformer(node_embedding_channels, num_node_types)
         self.mixture_aggr = pyg.nn.GraphMultisetTransformer(node_embedding_channels,
                                                             num_node_types,
@@ -88,17 +89,25 @@ class PolicyNetwork(nn.Module):
         return phase_probs
 
     def _compute_node_probs(self, x: torch.Tensor, node_types: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
-        print('batch = ', batch)
-        x = pyg.utils.to_dense_batch(x, batch)[0]
-        print('x = ', x)
-        node_probs = torch.fill(torch.empty([self.num_node_types, x.shape[0]]), 0)
-        for node_type in range(self.num_node_types):
-            if node_type != BoundaryMatch.index:
-                node_probs[node_type][node_types != node_type] = -torch.inf
-                node_probs[node_type][node_types == node_type] = x[node_types == node_type][:, :1].squeeze(dim=-1)
-                node_probs[node_type] = torch.softmax(node_probs[node_type], dim=-1)
-        node_probs[node_probs.isnan()] = 0.
-        print('node_probs = ', node_probs)
+        # TODO: Add a neighbor aggregation
+        # Gather node embeddings according to batch
+        x, batch_mask = pyg.utils.to_dense_batch(x, batch)
+        # Project node embeddings to a scalar representing an un-normalized probability of selecting the node
+        x = self.node_mlp(x).squeeze(dim=-1)
+        # Mask padding nodes from to_dense_batch with negative infinity
+        x[~batch_mask] = -torch.inf
+        # Gather node types according to batch
+        node_type_batch = pyg.utils.to_dense_batch(node_types, batch, torch.nan)[0]
+        # Initialize the result tensor
+        node_probs = torch.fill(torch.empty(x.shape[0], self.num_node_types, x.shape[1]), -torch.inf)
+        # Scatter selection probabilities to correct column and row, respecting batching
+        node_probs = node_probs.scatter(1, node_type_batch.unsqueeze(dim=1), x.unsqueeze(dim=1))
+        # Softmax over innermost rows
+        node_probs = torch.softmax(node_probs, dim=-1)
+        # Sometimes softmax produces NaN, so set those values to zero - no chance of selection.
+        node_probs[torch.isnan(node_probs)] = 0.
+        # Zero out boundary probabilities
+        node_probs[:, 0, 0] = 0.
         return node_probs
 
     def _compute_mixture_probs(self, x: torch.Tensor, node_type: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
@@ -136,11 +145,8 @@ class PolicyNetwork(nn.Module):
         """
         x = self.gps(data.x, data.pe, data.edge_index, data.edge_attr, data.batch)
         mixture_probs = self._compute_mixture_probs(x, data.node_type, data.batch)
-        print('mixture_probs = ', mixture_probs)
         node_probs = self._compute_node_probs(x, data.node_type, data.batch)
-        print('node_probs = ', node_probs)
         transfer_edge_probs = self._compute_transfer_edge_probs(x, data.edge_index, data.node_type, data.batch)
-        print('transfer_edge_probs = ', transfer_edge_probs)
         return AlphaZXDistributionParams(mixture_probs,
                                          node_probs,
                                          self._compute_phase_probs(x, data.node_type).unsqueeze(dim=0),
@@ -179,8 +185,74 @@ def reshape_test():
     print('mixture_params = ', mixture_params)
     mixture_params = torch.softmax(mixture_params, dim=-1)
     print('mixture_params = ', mixture_params)
-    output = torch.tensor([[0.3473, 0.3252, 0.3170, 0.3252, 0.2990, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan],
-                           [0.3451, 0.3349, 0.3056, 0.3277, 0.3001, 0.3152, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan]])
+    output = torch.tensor(
+        [[0.3473, 0.3252, 0.3170, 0.3252, 0.2990, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan],
+         [0.3451, 0.3349, 0.3056, 0.3277, 0.3001, 0.3152, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan]])
 
 
 # reshape_test()
+
+def node_batch_test():
+    num_node_types = 11
+    batch = torch.tensor([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+    node_types = torch.tensor([0, 1, 1, 1, 2, 2, 2, 2, 2, 3, 4, 4, 4, 5, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 4, 4])
+    node_type_batch, mask = pyg.utils.to_dense_batch(node_types, batch, torch.nan)
+    print('node_type_batch = ', node_type_batch)
+    x = torch.tensor([[-0.1566, -0.1319, -0.1401, -0.1364, -0.1452, -0.1705, -0.1439, -0.1300, -0.1368, -0.1325,
+                       -0.1559, -0.1649, -0.1576, -0.1599],
+                      [-0.1552, -0.1329, -0.1384, -0.1322, -0.1441, -0.1450, -0.1415, -0.1636, -0.1276, -0.1508,
+                       -0.1276, -0.1355, -0.1708, -0.1495]])
+    input = torch.zeros((x.shape[0], num_node_types, x.shape[1]))
+    print('input = ', input)
+    print(input.scatter(1, node_type_batch.unsqueeze(dim=-1), x.unsqueeze(dim=-1)))
+    # output = torch.tensor([[[-0.1566, 0., ..., 0.],
+    #                        [-0.1566, -0.1319, -0.1401, -0.1364, -0.1452, -0.1705, -0.1439, -0.1300, -0.1368, -0.1325, -0.1559, -0.1649, -0.1576, -0.1599],
+    #                        [-0.1566, -0.1319, -0.1401, -0.1364, -0.1452, -0.1705, -0.1439, -0.1300, -0.1368, -0.1325, -0.1559, -0.1649, -0.1576, -0.1599],
+    #                        [-0.1566, -0.1319, -0.1401, -0.1364, -0.1452, -0.1705, -0.1439, -0.1300, -0.1368, -0.1325, -0.1559, -0.1649, -0.1576, -0.1599],
+    #                        [-0.1566, -0.1319, -0.1401, -0.1364, -0.1452, -0.1705, -0.1439, -0.1300, -0.1368, -0.1325, -0.1559, -0.1649, -0.1576, -0.1599],
+    #                        [-0.1566, -0.1319, -0.1401, -0.1364, -0.1452, -0.1705, -0.1439, -0.1300, -0.1368, -0.1325, -0.1559, -0.1649, -0.1576, -0.1599],
+    #                        [-0.1566, -0.1319, -0.1401, -0.1364, -0.1452, -0.1705, -0.1439, -0.1300, -0.1368, -0.1325, -0.1559, -0.1649, -0.1576, -0.1599],
+    #                        [-0.1566, -0.1319, -0.1401, -0.1364, -0.1452, -0.1705, -0.1439, -0.1300, -0.1368, -0.1325, -0.1559, -0.1649, -0.1576, -0.1599],
+    #                        [-0.1566, -0.1319, -0.1401, -0.1364, -0.1452, -0.1705, -0.1439, -0.1300, -0.1368, -0.1325, -0.1559, -0.1649, -0.1576, -0.1599],
+    #                        [-0.1566, -0.1319, -0.1401, -0.1364, -0.1452, -0.1705, -0.1439, -0.1300, -0.1368, -0.1325, -0.1559, -0.1649, -0.1576, -0.1599],
+    #                        [-0.1566, -0.1319, -0.1401, -0.1364, -0.1452, -0.1705, -0.1439, -0.1300, -0.1368, -0.1325, -0.1559, -0.1649, -0.1576, -0.1599]],
+    #                        [[-0.1566, -0.1319, -0.1401, -0.1364, -0.1452, -0.1705, -0.1439, -0.1300, -0.1368, -0.1325, -0.1559, -0.1649, -0.1576, -0.1599],
+    #                         [-0.1566, -0.1319, -0.1401, -0.1364, -0.1452, -0.1705, -0.1439, -0.1300, -0.1368, -0.1325, -0.1559, -0.1649, -0.1576, -0.1599],
+    #                         [-0.1566, -0.1319, -0.1401, -0.1364, -0.1452, -0.1705, -0.1439, -0.1300, -0.1368, -0.1325, -0.1559, -0.1649, -0.1576, -0.1599],
+    #                         [-0.1566, -0.1319, -0.1401, -0.1364, -0.1452, -0.1705, -0.1439, -0.1300, -0.1368, -0.1325, -0.1559, -0.1649, -0.1576, -0.1599],
+    #                         [-0.1566, -0.1319, -0.1401, -0.1364, -0.1452, -0.1705, -0.1439, -0.1300, -0.1368, -0.1325, -0.1559, -0.1649, -0.1576, -0.1599],
+    #                         [-0.1566, -0.1319, -0.1401, -0.1364, -0.1452, -0.1705, -0.1439, -0.1300, -0.1368, -0.1325, -0.1559, -0.1649, -0.1576, -0.1599],
+    #                         [-0.1566, -0.1319, -0.1401, -0.1364, -0.1452, -0.1705, -0.1439, -0.1300, -0.1368, -0.1325, -0.1559, -0.1649, -0.1576, -0.1599],
+    #                         [-0.1566, -0.1319, -0.1401, -0.1364, -0.1452, -0.1705, -0.1439, -0.1300, -0.1368, -0.1325, -0.1559, -0.1649, -0.1576, -0.1599],
+    #                         [-0.1566, -0.1319, -0.1401, -0.1364, -0.1452, -0.1705, -0.1439, -0.1300, -0.1368, -0.1325, -0.1559, -0.1649, -0.1576, -0.1599],
+    #                         [-0.1566, -0.1319, -0.1401, -0.1364, -0.1452, -0.1705, -0.1439, -0.1300, -0.1368, -0.1325, -0.1559, -0.1649, -0.1576, -0.1599],
+    #                         [-0.1566, -0.1319, -0.1401, -0.1364, -0.1452, -0.1705, -0.1439, -0.1300, -0.1368, -0.1325, -0.1559, -0.1649, -0.1576, -0.1599]]])
+
+
+# node_batch_test()
+
+def example():
+    num_node_types = 7
+    batch = torch.tensor([0, 0, 0, 0, 0, 1, 1, 1, 1])
+    node_types = torch.tensor([0, 1, 3, 4, 4, 0, 1, 1, 5])
+    node_type_batch = pyg.utils.to_dense_batch(node_types, batch)[0]
+    x = torch.tensor([[-0.1566, -0.1319, -0.1401, -0.1364, -0.1452],
+                      [-0.1552, -0.1329, -0.1384, -0.1322, torch.nan]])
+    print(torch.scatter(torch.zeros((x.shape[0], num_node_types, x.shape[1])), 1, node_type_batch.unsqueeze(dim=1), x.unsqueeze(dim=1)))
+    # expected = torch.tensor([[[-0.1566, 0., 0., 0., 0.],
+    #                           [0., -0.1319, 0., 0., 0.],
+    #                           [0., 0., 0., 0., 0.],
+    #                           [0., 0., -0.1401, 0., 0.],
+    #                           [0., 0., 0., -0.1364, -0.1452],
+    #                           [0., 0., 0., 0., 0.],
+    #                           [0., 0., 0., 0., 0.]],
+    #                          [[-0.1552, 0., 0., 0., 0.],
+    #                           [0., -0.132, -0.1384, 0., 0.],
+    #                           [0., 0., 0., 0., 0.],
+    #                           [0., 0., 0., 0., 0.],
+    #                           [0., 0., 0., 0., 0.],
+    #                           [0., 0., 0., -0.1322, 0.],
+    #                           [0., 0., 0., 0., 0.]]])
+
+
+# example()

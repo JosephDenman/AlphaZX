@@ -11,6 +11,7 @@ from torch.nn import (
 )
 from torch_geometric.nn import GPSConv, TransformerConv
 
+
 class GPS(torch.nn.Module):
     def __init__(self,
                  num_node_embeddings: int,

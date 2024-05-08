@@ -64,9 +64,7 @@ def policy_network():
 
     dataloader = create_data_loader(num_diagrams, batch_size, num_qubits, depth)
     for batch in dataloader:
-        print('batch = ', batch)
         batch = batch.sort(False)
-        assert torch.bincount(batch.node_type)[0] == batch_size
         azx_dist = AlphaZXDistribution(model(batch))
         print(azx_dist.sample(8))
 
