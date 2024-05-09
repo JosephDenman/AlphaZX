@@ -7,7 +7,7 @@ import torch_geometric as pyg
 
 from alphazx.diagram.match import BoundaryMatch, FRightZMatch, FRightXMatch, NODE_METADATA
 from alphazx.distributions.alpha_zx_dist import AlphaZXDistributionParams
-from alphazx.models.aggregation.neighbor_sigmoid import NeighborSigmoidTransformer
+from alphazx.models.aggregation.transfer_edge_transformer import TransferEdgeTransformer
 from alphazx.models.gps import GPS
 
 torch.set_printoptions(threshold=10000)
@@ -57,19 +57,21 @@ class PolicyNetwork(nn.Module):
         #                                                      num_pooling_heads,
         #                                                      pooling_layer_norm,
         #                                                      pooling_dropout)
-        self.node_mlp = pyg.nn.MLP([node_embedding_channels, 1])
-        self.neighbor_sigmoid_trans = NeighborSigmoidTransformer(node_embedding_channels, num_node_types)
-        self.mixture_aggr = pyg.nn.GraphMultisetTransformer(node_embedding_channels,
-                                                            num_node_types,
-                                                            num_pooling_encoder_blocks,
-                                                            num_pooling_heads,
-                                                            pooling_layer_norm,
-                                                            pooling_dropout)
         self.mixture_mlp = pyg.nn.MLP([node_embedding_channels, 1])
+        self.node_mlp = pyg.nn.MLP([node_embedding_channels, 1])
+        self.edge_mlp = pyg.nn.MLP([node_embedding_channels, num_possible_new_edges])
+        self.phase_mlp = pyg.nn.MLP([node_embedding_channels, num_possible_phases])
+        self.transfer_edge_trans = TransferEdgeTransformer(node_embedding_channels, num_node_types)
+        self.mixture_trans = pyg.nn.GraphMultisetTransformer(node_embedding_channels,
+                                                             num_node_types,
+                                                             num_pooling_encoder_blocks,
+                                                             num_pooling_heads,
+                                                             pooling_layer_norm,
+                                                             pooling_dropout)
 
     def _compute_transfer_edge_probs(self, x: torch.Tensor, edge_index: torch.Tensor, node_types: torch.Tensor,
                                      batch: torch.Tensor) -> torch.Tensor:
-        transfer_edge_params = self.neighbor_sigmoid_trans(x, edge_index, batch)
+        transfer_edge_params = self.transfer_edge_trans(x, edge_index, batch)
         non_simple_node_mask = torch.logical_and(node_types != FRightZMatch.index, node_types != FRightXMatch.index)
         transfer_edge_params[non_simple_node_mask] = torch.zeros(transfer_edge_params.shape[1])
         return transfer_edge_params
@@ -82,10 +84,23 @@ class PolicyNetwork(nn.Module):
         new_edge_probs[simple_node_mask] = torch.softmax(x[simple_node_mask][:, 1 + self.num_possible_phases:], dim=-1)
         return new_edge_probs
 
-    def _compute_phase_probs(self, x: torch.Tensor, node_types: torch.Tensor) -> torch.Tensor:
-        phase_probs = torch.cat([torch.tensor([1.]), torch.zeros(self.num_possible_phases - 1)]).repeat(x.shape[0], 1)
-        simple_node_mask = torch.logical_or(node_types == FRightZMatch.index, node_types == FRightXMatch.index)
-        phase_probs[simple_node_mask] = torch.softmax(x[simple_node_mask][:, 1:1 + self.num_possible_phases], dim=-1)
+    def _compute_phase_probs(self, x: torch.Tensor, node_types: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
+        # Gather node embeddings according to batch
+        x, x_mask = pyg.utils.to_dense_batch(x, batch)
+        # Project node embeddings to a vector representing the probabilities of selecting phases.
+        x = self.phase_mlp(x).squeeze(dim=-1)
+        # Gather node types according to batch
+        node_type_batch = pyg.utils.to_dense_batch(node_types, batch, torch.nan)[0]
+        # Mask out all non-simple nodes
+        node_type_mask = torch.logical_or(node_type_batch == FRightZMatch.index, node_type_batch == FRightXMatch.index)
+        phase_probs = x
+        # Create the row to insert for each non-simple node
+        replacement_row = torch.zeros(self.num_possible_phases, device=x.device)
+        replacement_row[0] = 1
+        # Insert replacement row for each non-simple node
+        phase_probs = torch.where(~node_type_mask.unsqueeze(-1).expand_as(phase_probs), replacement_row, phase_probs)
+        # Softmax over probabilities for each simple node
+        phase_probs[node_type_mask] = torch.softmax(phase_probs[node_type_mask], dim=-1)
         return phase_probs
 
     def _compute_node_probs(self, x: torch.Tensor, node_types: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
@@ -115,7 +130,7 @@ class PolicyNetwork(nn.Module):
         # same node type in different batches is represented by a different index
         index = node_type + self.num_node_types * batch
         # Aggregate the node embeddings by node type
-        mixture_params = self.mixture_aggr(x, index)
+        mixture_params = self.mixture_trans(x, index)
         # Project the final embeddings to a scalar
         mixture_params = self.mixture_mlp(mixture_params).squeeze(dim=-1)
         # Replace nan values produced by the aggregation with negative infinities
@@ -136,8 +151,6 @@ class PolicyNetwork(nn.Module):
 
     def forward(self, data: pyg.data.Data) -> AlphaZXDistributionParams:
         """
-        TODO: Figure out batching. All of the edge index based operations should stay correct, since the batched graphs
-              are disconnected. We just have to collect the result from the different connected components using 'data.batch'.
         TODO: Ensure that removing connected components from the ZXDiagram does not affect 'Data' batching.
         :param data: The pyg.data.Data object representing the ZXMatchDiagram.
         :return: Parameters for the AlphaZXDistribution. Each value in the returned dictionary is a batch of distribution
@@ -146,10 +159,12 @@ class PolicyNetwork(nn.Module):
         x = self.gps(data.x, data.pe, data.edge_index, data.edge_attr, data.batch)
         mixture_probs = self._compute_mixture_probs(x, data.node_type, data.batch)
         node_probs = self._compute_node_probs(x, data.node_type, data.batch)
+        phase_probs = self._compute_phase_probs(x, data.node_type, data.batch)
+        print('phase_probs = ', phase_probs)
         transfer_edge_probs = self._compute_transfer_edge_probs(x, data.edge_index, data.node_type, data.batch)
         return AlphaZXDistributionParams(mixture_probs,
                                          node_probs,
-                                         self._compute_phase_probs(x, data.node_type).unsqueeze(dim=0),
+                                         phase_probs,
                                          self._compute_new_edge_probs(x, data.node_type).unsqueeze(dim=0),
                                          transfer_edge_probs)
 
@@ -256,3 +271,77 @@ def example():
 
 
 # example()
+
+
+def test():
+    mask = torch.tensor([[True, False, False, False, False, False, False, False, False, False, False, True, True, True, True, True, True],
+                         [True, False, False, False, False, False, False, False, False, False, True, True, True, True, True, True, True]])
+    phase_probs = torch.tensor([[[1.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
+                            0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
+                           [0.0523, 0.0621, 0.0808, 0.0615, 0.0542, 0.0853, 0.0325, 0.0522,
+                            0.0576, 0.0574, 0.0550, 0.0856, 0.0497, 0.0573, 0.0993, 0.0573],
+                           [0.0565, 0.0661, 0.0754, 0.0612, 0.0557, 0.0747, 0.0325, 0.0491,
+                            0.0521, 0.0603, 0.0541, 0.0851, 0.0573, 0.0603, 0.1005, 0.0591],
+                           [0.0560, 0.0606, 0.0836, 0.0609, 0.0572, 0.0839, 0.0341, 0.0486,
+                            0.0578, 0.0570, 0.0521, 0.0896, 0.0513, 0.0556, 0.0974, 0.0543],
+                           [0.0560, 0.0606, 0.0836, 0.0609, 0.0572, 0.0839, 0.0341, 0.0486,
+                            0.0578, 0.0570, 0.0521, 0.0896, 0.0513, 0.0556, 0.0974, 0.0543],
+                           [0.0545, 0.0599, 0.0816, 0.0607, 0.0564, 0.0864, 0.0341, 0.0490,
+                            0.0592, 0.0553, 0.0544, 0.0883, 0.0506, 0.0558, 0.0984, 0.0556],
+                           [0.0544, 0.0669, 0.0759, 0.0618, 0.0541, 0.0757, 0.0315, 0.0515,
+                            0.0522, 0.0612, 0.0545, 0.0837, 0.0553, 0.0608, 0.1009, 0.0598],
+                           [0.0541, 0.0629, 0.0802, 0.0601, 0.0551, 0.0826, 0.0329, 0.0504,
+                            0.0561, 0.0580, 0.0551, 0.0858, 0.0522, 0.0583, 0.0984, 0.0578],
+                           [0.0574, 0.0647, 0.0798, 0.0611, 0.0568, 0.0764, 0.0330, 0.0486,
+                            0.0532, 0.0605, 0.0518, 0.0876, 0.0556, 0.0585, 0.0985, 0.0565],
+                           [0.0574, 0.0647, 0.0798, 0.0611, 0.0568, 0.0764, 0.0330, 0.0486,
+                            0.0532, 0.0605, 0.0518, 0.0876, 0.0556, 0.0585, 0.0985, 0.0565],
+                           [0.0573, 0.0576, 0.0881, 0.0625, 0.0591, 0.0865, 0.0350, 0.0474,
+                            0.0606, 0.0556, 0.0485, 0.0941, 0.0489, 0.0520, 0.0966, 0.0502],
+                           [1.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
+                            0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
+                           [1.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
+                            0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
+                           [1.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
+                            0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
+                           [1.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
+                            0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
+                           [1.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
+                            0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
+                           [1.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
+                            0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000]],
+
+                          [[1.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
+                            0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
+                           [0.0561, 0.0607, 0.0905, 0.0555, 0.0572, 0.0870, 0.0346, 0.0479,
+                            0.0572, 0.0581, 0.0533, 0.0889, 0.0507, 0.0567, 0.0910, 0.0546],
+                           [0.0537, 0.0602, 0.0827, 0.0611, 0.0557, 0.0870, 0.0336, 0.0502,
+                            0.0592, 0.0559, 0.0539, 0.0880, 0.0494, 0.0557, 0.0982, 0.0554],
+                           [0.0549, 0.0621, 0.0795, 0.0610, 0.0560, 0.0824, 0.0334, 0.0494,
+                            0.0567, 0.0571, 0.0544, 0.0870, 0.0526, 0.0574, 0.0993, 0.0569],
+                           [0.0571, 0.0643, 0.0821, 0.0574, 0.0567, 0.0790, 0.0336, 0.0479,
+                            0.0534, 0.0600, 0.0542, 0.0866, 0.0556, 0.0596, 0.0951, 0.0576],
+                           [0.0521, 0.0622, 0.0809, 0.0616, 0.0540, 0.0854, 0.0324, 0.0525,
+                            0.0576, 0.0574, 0.0550, 0.0854, 0.0495, 0.0574, 0.0993, 0.0573],
+                           [0.0580, 0.0661, 0.0799, 0.0608, 0.0567, 0.0742, 0.0326, 0.0487,
+                            0.0517, 0.0621, 0.0513, 0.0872, 0.0567, 0.0593, 0.0980, 0.0568],
+                           [0.0561, 0.0662, 0.0755, 0.0613, 0.0554, 0.0748, 0.0323, 0.0495,
+                            0.0521, 0.0605, 0.0541, 0.0849, 0.0570, 0.0604, 0.1006, 0.0592],
+                           [0.0580, 0.0575, 0.0909, 0.0620, 0.0596, 0.0865, 0.0352, 0.0471,
+                            0.0604, 0.0563, 0.0472, 0.0952, 0.0485, 0.0515, 0.0950, 0.0491],
+                           [0.0539, 0.0671, 0.0760, 0.0619, 0.0537, 0.0759, 0.0313, 0.0521,
+                            0.0521, 0.0614, 0.0546, 0.0833, 0.0549, 0.0609, 0.1009, 0.0600],
+                           [1.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
+                            0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
+                           [1.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
+                            0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
+                           [1.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
+                            0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
+                           [1.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
+                            0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
+                           [1.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
+                            0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
+                           [1.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
+                            0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
+                           [1.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
+                            0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000]]])

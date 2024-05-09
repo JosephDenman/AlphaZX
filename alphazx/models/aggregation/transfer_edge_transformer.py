@@ -6,7 +6,7 @@ import torch_geometric as pyg
 from alphazx import concatenate_neighbor_features
 
 
-class NeighborSigmoidTransformer(torch.nn.Module):
+class TransferEdgeTransformer(torch.nn.Module):
     def __init__(self,
                  in_channels: int,
                  gmt_k: int,
