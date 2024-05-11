@@ -48,7 +48,6 @@ class AlphaZXDistribution:
                                    in the top left corner of the innermost 2D tensor. All other entries in the innermost 2D tensor are 0.
                                    Samples drawn from this distribution are all zeros (no edges are selected to be transferred).
         """
-        # print('params:', params)
         self.mixture_dist_params = params.mixture_dist_probs
         self.node_dist_params = params.node_dist_probs
         self.phase_dist_params = params.phase_dist_probs
@@ -103,7 +102,7 @@ class AlphaZXDistribution:
         feature_dist_params = self.phase_dist_params if feature_type == 'phase' else self.new_edge_dist_params if feature_type == 'new_edge' else self.transfer_edge_dist_params
         # Obtain batch indices for each element in nodes
         batch_indices = torch.arange(nodes.size(0)).view(-1, 1).expand_as(nodes)
-        # Select the rows from phase_dist_params
+        # Select the rows from either phase or new edge probabilities
         selected_distributions = feature_dist_params[batch_indices, nodes]
         return selected_distributions
 
@@ -157,7 +156,7 @@ class AlphaZXDistribution:
         """
         Each of the 'nodes' sampled from the node type distributions (e.g. frz_node_dist_params) is an index into the
         node set for that specific type, where the indices start at zero. For example, if the first two items of an action
-        are [0, 3], then the action is to apply the frz rewrite corresponding to the fourth node in the frz node set.
+        are [1, 3], then the action is to apply the frz rewrite corresponding to the fourth node in the frz node set.
 
         :param k: The number of samples to produce.
         :return: K x L tensor of actions.
@@ -176,25 +175,3 @@ class AlphaZXDistribution:
 
     def entropy(self) -> torch.Tensor:
         raise NotImplementedError
-
-
-def test():
-    node_dist_params = torch.tensor([[[0.1, 0.2, 0.3, 0.4], [0.4, 0.3, 0.2, 0.1], [1., 0., 0., 0.]],
-                                     [[0.2, 0.2, 0.6, 0.], [0., 0., 0.5, 0.5], [0., 0., 0., 1.]]])
-    sampled_action_types = torch.tensor([2, 2])
-
-
-def mixture_dist_test():
-    mixture_dist_params = torch.tensor(
-        [[0.0000, 0.3312, 0.3341, 0.3347, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
-         [0.0000, 0.3312, 0.3341, 0.3347, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000]])
-    node_dist_params = torch.tensor([[[0.1, 0.2, 0.3, 0.4], [0.4, 0.3, 0.2, 0.1], [1., 0., 0., 0.]],
-                                     [[0.2, 0.2, 0.6, 0.], [0., 0., 0.5, 0.5], [0., 0., 0., 1.]]])
-    dist = Categorical(probs=mixture_dist_params)
-    # sampled_action_types = dist.sample(torch.Size([2])).T
-    sampled_action_types = torch.tensor([[2, 2], [0, 1]])
-    expanded_sampled_action_types = sampled_action_types.unsqueeze(-1).expand(-1, -1, node_dist_params.size(-1))
-    output = torch.gather(node_dist_params, 1, expanded_sampled_action_types)
-    # print('output:', output)
-
-# mixture_dist_test()

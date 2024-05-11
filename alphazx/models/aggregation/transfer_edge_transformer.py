@@ -41,12 +41,11 @@ class TransferEdgeTransformer(torch.nn.Module):
         self.mlp.reset_parameters()
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
-        # TODO: For num_qubits = 5, depth = 5, batch_size = 2, the following code seems to almost always have all
-        #       elements of node 16 be non-zero. Why does this node have so many neighbors?
         neighbor_x = torch.index_select(x, 0, edge_index[0])
         neighbor_x = self.gmt(neighbor_x, edge_index[1])
         neighbor_x = concatenate_neighbor_features(neighbor_x, edge_index)
         neighbor_x = self.mlp(neighbor_x, batch)
         neighbor_x[neighbor_x.isnan()] = -torch.inf
         neighbor_x = torch.sigmoid(neighbor_x).squeeze(dim=-1)
+        neighbor_x = pyg.utils.to_dense_batch(neighbor_x, batch)[0]
         return neighbor_x

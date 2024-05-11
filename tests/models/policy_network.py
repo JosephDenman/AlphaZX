@@ -20,12 +20,12 @@ def create_data_loader(num_diagrams: int, batch_size: int, num_qubits: int, dept
 
 def policy_network():
     num_diagrams = 20
-    batch_size = 2
-    num_qubits = 5
-    depth = 5
+    batch_size = 5
+    num_qubits = 1000
+    depth = 1000
     num_node_types = len(NODE_METADATA)
     num_possible_phases = len(POSSIBLE_PHASES)
-    num_possible_new_edges = 2
+    num_possible_new_edges = 10
     gps_channels = 1 + num_possible_phases + num_possible_new_edges + 2
     node_embedding_channels = 1 + num_possible_phases + num_possible_new_edges
     gps_edge_in_channels = 2
@@ -66,7 +66,7 @@ def policy_network():
     for batch in dataloader:
         batch = batch.sort(False)
         azx_dist = AlphaZXDistribution(model(batch))
-        print(azx_dist.sample(8))
+        print('samples = ', azx_dist.prob(azx_dist.sample(8)))
 
 
 policy_network()
