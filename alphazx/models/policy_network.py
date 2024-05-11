@@ -5,12 +5,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch_geometric as pyg
 
-from alphazx.diagram.match import BoundaryMatch, FRightZMatch, FRightXMatch, NODE_METADATA
+from alphazx.diagram.match import FRightZMatch, FRightXMatch
 from alphazx.distributions.alpha_zx_dist import AlphaZXDistributionParams
 from alphazx.models.aggregation.transfer_edge_transformer import TransferEdgeTransformer
 from alphazx.models.gps import GPS
-
-torch.set_printoptions(threshold=100000)
 
 
 class PolicyNetwork(nn.Module):
@@ -51,23 +49,17 @@ class PolicyNetwork(nn.Module):
                        gps_attn_type,
                        gps_attn_kwargs,
                        gps_mlp_hidden_channels)
-        # self.neighbor_aggr = pyg.nn.GraphMultisetTransformer(node_embedding_channels,
-        #                                                      num_node_types,
-        #                                                      num_pooling_encoder_blocks,
-        #                                                      num_pooling_heads,
-        #                                                      pooling_layer_norm,
-        #                                                      pooling_dropout)
         self.mixture_mlp = pyg.nn.MLP([node_embedding_channels, 1])
-        self.node_mlp = pyg.nn.MLP([node_embedding_channels, 1])
-        self.edge_mlp = pyg.nn.MLP([node_embedding_channels, num_possible_new_edges])
-        self.phase_mlp = pyg.nn.MLP([node_embedding_channels, num_possible_phases])
-        self.transfer_edge_trans = TransferEdgeTransformer(node_embedding_channels, num_node_types)
         self.mixture_trans = pyg.nn.GraphMultisetTransformer(node_embedding_channels,
                                                              num_node_types,
                                                              num_pooling_encoder_blocks,
                                                              num_pooling_heads,
                                                              pooling_layer_norm,
                                                              pooling_dropout)
+        self.node_mlp = pyg.nn.MLP([node_embedding_channels, 1])
+        self.phase_mlp = pyg.nn.MLP([node_embedding_channels, num_possible_phases])
+        self.edge_mlp = pyg.nn.MLP([node_embedding_channels, num_possible_new_edges])
+        self.transfer_edge_trans = TransferEdgeTransformer(node_embedding_channels, num_node_types)
 
     def _compute_transfer_edge_probs(self, x: torch.Tensor, edge_index: torch.Tensor, node_types: torch.Tensor,
                                      batch: torch.Tensor) -> torch.Tensor:
@@ -78,23 +70,22 @@ class PolicyNetwork(nn.Module):
         # Mask out all non-simple nodes
         node_type_mask = torch.logical_or(node_type_batch == FRightZMatch.index, node_type_batch == FRightXMatch.index)
         # Create the row to insert for each non-simple node
-        replacement_row = torch.zeros(transfer_edge_params.shape[2], device=x.device)
+        replacement_row = torch.zeros(transfer_edge_params.shape[2], device=transfer_edge_params.device)
         # Transfer edge selection probabilities should be zero for all non-simple nodes
         transfer_edge_params = torch.where(~node_type_mask.unsqueeze(-1).expand_as(transfer_edge_params), replacement_row, transfer_edge_params)
         return transfer_edge_params
 
     def _compute_new_edge_probs(self, x: torch.Tensor, node_types: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
         # Gather node embeddings according to batch
-        x, x_mask = pyg.utils.to_dense_batch(x, batch)
+        new_edge_probs = pyg.utils.to_dense_batch(x, batch)[0]
         # Project node embeddings to a vector representing the probabilities of selecting the number of new edges
-        x = self.edge_mlp(x).squeeze(dim=-1)
+        new_edge_probs = self.edge_mlp(new_edge_probs).squeeze(dim=-1)
         # Gather node types according to batch
         node_type_batch = pyg.utils.to_dense_batch(node_types, batch, torch.nan)[0]
         # Mask out all non-simple nodes
         node_type_mask = torch.logical_or(node_type_batch == FRightZMatch.index, node_type_batch == FRightXMatch.index)
-        new_edge_probs = x
         # Create the row to insert for each non-simple node
-        replacement_row = torch.zeros(self.num_possible_new_edges, device=x.device)
+        replacement_row = torch.zeros(self.num_possible_new_edges, device=new_edge_probs.device)
         replacement_row[0] = 1
         # Insert replacement row for each non-simple node
         new_edge_probs = torch.where(~node_type_mask.unsqueeze(-1).expand_as(new_edge_probs), replacement_row, new_edge_probs)
@@ -105,16 +96,15 @@ class PolicyNetwork(nn.Module):
     def _compute_phase_probs(self, x: torch.Tensor, node_types: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
         # Exact same computation as the new edge probs computation
         # Gather node embeddings according to batch
-        x, x_mask = pyg.utils.to_dense_batch(x, batch)
+        phase_probs = pyg.utils.to_dense_batch(x, batch)[0]
         # Project node embeddings to a vector representing the probabilities of selecting phases
-        x = self.phase_mlp(x).squeeze(dim=-1)
+        phase_probs = self.phase_mlp(phase_probs).squeeze(dim=-1)
         # Gather node types according to batch
         node_type_batch = pyg.utils.to_dense_batch(node_types, batch, torch.nan)[0]
         # Mask out all non-simple nodes
         node_type_mask = torch.logical_or(node_type_batch == FRightZMatch.index, node_type_batch == FRightXMatch.index)
-        phase_probs = x
         # Create the row to insert for each non-simple node
-        replacement_row = torch.zeros(self.num_possible_phases, device=x.device)
+        replacement_row = torch.zeros(self.num_possible_phases, device=phase_probs.device)
         replacement_row[0] = 1
         # Insert replacement row for each non-simple node
         phase_probs = torch.where(~node_type_mask.unsqueeze(-1).expand_as(phase_probs), replacement_row, phase_probs)
