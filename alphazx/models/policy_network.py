@@ -123,7 +123,7 @@ class PolicyNetwork(nn.Module):
         # Gather node types according to batch
         node_type_batch = pyg.utils.to_dense_batch(node_types, batch, torch.nan)[0]
         # Initialize the result tensor
-        node_probs = torch.fill(torch.empty(x.shape[0], self.num_node_types, x.shape[1]), -torch.inf)
+        node_probs = torch.fill(torch.empty(x.shape[0], self.num_node_types, x.shape[1], device=x.device), -torch.inf)
         # Scatter selection probabilities to correct column and row, respecting batching
         node_probs = node_probs.scatter(1, node_type_batch.unsqueeze(dim=1), x.unsqueeze(dim=1))
         # Softmax over innermost rows
@@ -150,6 +150,10 @@ class PolicyNetwork(nn.Module):
             # Pad the last batch with negative infinity so that all batches have the same number of elements
             pad_length = self.num_node_types - (len(mixture_params) - inf_indices[-1] - 1)
             mixture_params = F.pad(mixture_params, (0, pad_length), mode='constant', value=-torch.inf)
+        else:
+            pad_length = self.num_node_types - len(mixture_params)
+            mixture_params = F.pad(mixture_params, (0, pad_length), mode='constant', value=-torch.inf)
+
         # Reshape the tensor to have the batch dimension
         mixture_params = mixture_params.view(-1, self.num_node_types)
         # Probability of selecting a boundary node should be zero

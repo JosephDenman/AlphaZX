@@ -1,0 +1,26 @@
+import torch
+
+from alphazx.distributions.alpha_zx_dist import AlphaZXDistribution
+from alphazx.game.zx_game import ZXGame
+from tests.models.policy_network import policy_network
+
+num_qubits = 5
+depth = 5
+
+while True:
+    model = policy_network(num_qubits, depth)
+    zx_game = ZXGame(num_qubits, depth)
+    data, reward, done = zx_game.reset()
+    data.batch = torch.zeros_like(data.node_type)
+    while not done:
+        params = model(data)
+        azx_dist = AlphaZXDistribution(params)
+        action = tuple(azx_dist.sample(1)[0][0].tolist())
+        print('action = ', action)
+        step_result = zx_game.step(action)
+        data = step_result.data
+        reward = step_result.reward
+        print('reward = ', reward)
+        done = step_result.done
+        print('done = ', done)
+

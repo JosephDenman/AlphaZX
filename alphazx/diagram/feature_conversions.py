@@ -1,6 +1,8 @@
 import torch
+import torch_geometric as pyg
 
-from alphazx.diagram.zx_match_diagram import ZXMatchDiagram
+from alphazx.diagram.match import FRightMatch
+from alphazx.diagram.zx_match_diagram import ZXMatchDiagram, DataIndexToMatch
 
 
 def is_integer_tensor(tensor: torch.Tensor) -> bool:
@@ -31,10 +33,6 @@ def cat_phase_to_float(cat_phase: torch.Tensor, phase_denominator: int) -> float
     :param phase_denominator: The number of discrete positions (categories) on the unit circle.
     :return: The float value representing the position on the unit circle.
     """
-    if len(cat_phase.shape) != 0:
-        raise ValueError(f"The input tensor {cat_phase} is not a scalar.")
-    if is_integer_tensor(cat_phase):
-        raise ValueError(f"The input tensor {cat_phase} is not an integer.")
     if phase_denominator <= 0:
         raise ValueError(f"The phase denominator {phase_denominator} is not positive.")
     # Ensure position wraps around using modulus to handle negative and overflow positions
@@ -69,6 +67,17 @@ def cat_new_edges_to_int(cat_new_edges: torch.Tensor) -> int:
     return int(cat_new_edges) + 1
 
 
-def bernoulli_transfer_edges_to_set(zx_match_diagram: ZXMatchDiagram, transfer_edges_tensor: torch.Tensor) -> set[
-        tuple[int, int]]:
-    pass
+def bernoulli_transfer_edges_to_set(node: int,
+                                    data: pyg.data.Data,
+                                    data_index: DataIndexToMatch,
+                                    transfer_edges_tensor: tuple) -> set[tuple[int, int]]:
+    subset, edge_index, _, _ = pyg.utils.k_hop_subgraph(node, 1, data.edge_index)
+    masked_edges = edge_index[torch.tensor(transfer_edges_tensor)]
+    edges = set()
+    for e in masked_edges.tolist():
+        s, t = tuple(e)
+        s_match, t_match = data_index[s], data_index[t]
+        assert isinstance(s_match, FRightMatch), f'Expected {s_match} to be an FRightMatch'
+        assert isinstance(t_match, FRightMatch), f'Expected {t_match} to be an FRightMatch'
+        edges.add((s_match.node, t_match.node))
+    return edges

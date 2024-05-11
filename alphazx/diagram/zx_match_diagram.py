@@ -96,8 +96,7 @@ class ZXMatchDiagram(nx.DiGraph):
             return hdata, HeteroDataIndexToMatch(self)
         return hdata
 
-    def to_pyg_data(self, with_reverse_mapping: bool = False, sort_by_row: bool = False) -> pyg.data.Data | tuple[
-        pyg.data.Data, 'DataIndexToMatch']:
+    def to_pyg_data(self, with_reverse_mapping: bool = False, sort_by_row: bool = False) -> pyg.data.Data | tuple[pyg.data.Data, 'DataIndexToMatch']:
         data = self.to_pyg_hdata(with_reverse_mapping=False, sort_by_row=sort_by_row).to_homogeneous(
             node_attrs=['node_phase'], edge_attrs=['edge_size'], add_node_type=True, add_edge_type=True, dummy_values=False).sort(
             sort_by_row)
