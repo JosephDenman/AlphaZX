@@ -40,9 +40,13 @@ class TransferEdgeTransformer(torch.nn.Module):
         self.gmt.reset_parameters()
         self.mlp.reset_parameters()
 
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, node_type: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
         neighbor_x = torch.index_select(x, 0, edge_index[0])
         neighbor_x = self.gmt(neighbor_x, edge_index[1])
+        src_node_types = torch.index_select(node_type, 0, edge_index[0])
+        tgt_node_types = torch.index_select(node_type, 0, edge_index[1])
+
+        print('masked_edge_index = ', masked_edge_index)
         neighbor_x = concatenate_neighbor_features(neighbor_x, edge_index)
         neighbor_x = self.mlp(neighbor_x, batch)
         neighbor_x[neighbor_x.isnan()] = -torch.inf

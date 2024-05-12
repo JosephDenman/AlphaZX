@@ -1,6 +1,8 @@
 from typing import Type
 
 import networkx as nx
+import torch
+
 from alphazx.diagram.feature_conversions import cat_phase_to_float, cat_new_edges_to_int, bernoulli_transfer_edges_to_set
 from alphazx.diagram.match import Match, FRightZMatch, FLeftZMatch, FRightXMatch, FLeftXMatch, \
     BRightMatch, BLeftMatch, YRightZMatch, YLeftZMatch, YRightXMatch, YLeftXMatch
@@ -25,11 +27,8 @@ def assert_correct_match_instance(expected_class: Type[Match], match: Match) -> 
 def tuple_to_match(zx_match_diagram: ZXMatchDiagram, data: Data, action: tuple, data_index: DataIndexToMatch) -> tuple[Match, FRightParameters | None]:
     # In this function, the batch dimension of 'action' is always one.
     action_type = action[0]
-    node = action[1] - 1
+    node = action[1]
     match = data_index[node]
-    print('node = ', node)
-    print('data.node_type = ', data.node_type)
-    print('match.index = ', match.index)
     if action_type == FRightZMatch.index:
         assert_correct_match_instance(FRightZMatch, match)
         phase = cat_phase_to_float(action[2], zx_match_diagram.phase_denominator)
@@ -38,31 +37,34 @@ def tuple_to_match(zx_match_diagram: ZXMatchDiagram, data: Data, action: tuple, 
         return match, FRightParameters(phase, new_edges, transfer_edges)
     elif action_type == FLeftZMatch.index:
         assert_correct_match_instance(FLeftZMatch, match)
-        return match
+        return match, None
     elif action_type == FRightXMatch.index:
         assert_correct_match_instance(FRightXMatch, match)
-        return match
+        phase = cat_phase_to_float(action[2], zx_match_diagram.phase_denominator)
+        new_edges = cat_new_edges_to_int(action[3])
+        transfer_edges = bernoulli_transfer_edges_to_set(node, data, data_index, action[4:])
+        return match, FRightParameters(phase, new_edges, transfer_edges)
     elif action_type == FLeftXMatch.index:
         assert_correct_match_instance(FLeftXMatch, match)
-        return match
+        return match, None
     elif action_type == BRightMatch.index:
         assert_correct_match_instance(BRightMatch, match)
-        return match
+        return match, None
     elif action_type == BLeftMatch.index:
         assert_correct_match_instance(BLeftMatch, match)
-        return match
+        return match, None
     elif action_type == YRightZMatch.index:
         assert_correct_match_instance(YRightZMatch, match)
-        return match
+        return match, None
     elif action_type == YLeftZMatch.index:
         assert_correct_match_instance(YLeftZMatch, match)
-        return match
+        return match, None
     elif action_type == YRightXMatch.index:
         assert_correct_match_instance(YRightXMatch, match)
-        return match
+        return match, None
     elif action_type == YLeftXMatch.index:
         assert_correct_match_instance(YLeftXMatch, match)
-        return match
+        return match, None
     else:
         raise ValueError(f'Unexpected action type {action_type}')
 
@@ -129,7 +131,11 @@ class ZXGame:
         self.episode_return += self.previous_reward
         self.previous_value = current_value
         self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram)
-        self.data, self.data_index = self.zx_match_diagram.to_pyg_data(True, False)
+        data, self.data_index = self.zx_match_diagram.to_pyg_data(True, False)
+        data = with_embeddable_feats(data)
+        data = with_laplacian_pe(data, 2)
+        data.batch = torch.zeros_like(data.node_type)
+        self.data = data
         return {
             'observation': self.data,
             'reward': self.previous_reward,
@@ -146,5 +152,6 @@ class ZXGame:
         data, self.data_index = self.zx_match_diagram.to_pyg_data(True, False)
         data = with_embeddable_feats(data)
         data = with_laplacian_pe(data, 2)
+        data.batch = torch.zeros_like(data.node_type)
         self.data = data
         return self.data, 0, self.done

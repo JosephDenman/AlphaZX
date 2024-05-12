@@ -12,7 +12,7 @@ Basis = Literal['z', 'x']
 
 class Match(abc.ABC):
 
-    def __init__(self, *match: dict[int, int] | tuple | int):
+    def __init__(self, *match: dict[int, int] | tuple | list | int):
         """
         :param match: The domain of the dictionary is the nodes from the diagram,
                       while the range of the dictionary is the nodes from the pattern.
@@ -21,6 +21,8 @@ class Match(abc.ABC):
             self.original_match = match[0]
         elif isinstance(match, tuple):
             self.original_match = {node: i for i, node in enumerate(match)}
+        elif isinstance(match, list):
+            self.original_match = {node: i for i, node in enumerate(tuple(*match))}
         else:
             raise Exception(f'Unexpected argument {match} to match constructor')
         assert len(
@@ -149,6 +151,14 @@ class FLeftMatch(CompoundMatch, abc.ABC):
     @abc.abstractmethod
     def rule_mode(self) -> Basis:
         pass
+
+    @property
+    def is_z_basis(self) -> bool:
+        return self.rule_mode == 'z'
+
+    @property
+    def is_x_basis(self) -> bool:
+        return not self.is_z_basis
 
 
 class FRightZMatch(FRightMatch):
@@ -307,6 +317,16 @@ class YLeftXMatch(YLeftMatch):
         return [FRightZMatch(node) if i == 1 else FRightXMatch(node) for i, node in enumerate(self.nodes)]
 
 
+def from_index_and_node_set(index: int, node_set: tuple[int] | list[int] | int) -> Match:
+    constructor = INDEX_TO_CONSTRUCTOR_METADATA[index]
+    if isinstance(constructor, SimpleMatch):
+        if isinstance(node_set, tuple) or isinstance(node_set, list):
+            assert len(node_set) == 1, f'Expected a single node but received {len(node_set)}'
+            return constructor(node_set[0])
+    else:
+        return constructor(*node_set)
+
+
 def _leaf_classes() -> set[Type[Match]]:
     leaf_classes = set()
 
@@ -328,7 +348,7 @@ def _count_match_types() -> int:
 
 Metadata = tuple[
     list[NodeType], list[NodeType], dict[NodeType, int], list[EdgeType], dict[EdgeType, int], list[EdgeType], dict[
-        EdgeType, int], dict[tuple[int, tuple[float, float]], int]]
+        EdgeType, int], dict[tuple[int, tuple[float, float]], int], list[Type[Match]]]
 
 POSSIBLE_PHASES = [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1., 1.125, 1.25, 1.375, 1.5, 1.625, 1.75, 1.875]
 
@@ -356,6 +376,8 @@ def _compute_metadata() -> Metadata:
     node_type_indices = [leaf_class.index for leaf_class in leaf_classes]
     node_feature_pair_to_index_metadata = {tuple(pair): i for i, pair in
                                            enumerate(list(itertools.product(node_type_indices, POSSIBLE_PHASES)))}
+    index_to_constructor_metadata = [leaf_class for leaf_class in leaf_classes]
+    max_match_size_metadata = max([leaf_class.expected_size for leaf_class in leaf_classes])
     return (node_metadata,
             simple_node_metadata,
             node_type_to_index_metadata,
@@ -363,15 +385,23 @@ def _compute_metadata() -> Metadata:
             edge_type_to_index_metadata,
             simple_edge_metadata,
             simple_edge_type_to_index_metadata,
-            node_feature_pair_to_index_metadata)
+            node_feature_pair_to_index_metadata,
+            index_to_constructor_metadata,
+            max_match_size_metadata)
 
 
 MATCH_TYPE_COUNT = _count_match_types()
+
 (NODE_METADATA,
  SIMPLE_NODE_METADATA,
  NODE_TYPE_TO_INDEX_METADATA,
  EDGE_METADATA,
- EDGE_TYPE_TO_INDEX_METADATA, SIMPLE_EDGE_METADATA, SIMPLE_EDGE_TYPE_TO_INDEX_METADATA,
- NODE_FEATURE_PAIR_TO_INDEX_METADATA) = _compute_metadata()
+ EDGE_TYPE_TO_INDEX_METADATA,
+ SIMPLE_EDGE_METADATA,
+ SIMPLE_EDGE_TYPE_TO_INDEX_METADATA,
+ NODE_FEATURE_PAIR_TO_INDEX_METADATA,
+ INDEX_TO_CONSTRUCTOR_METADATA,
+ MAX_MATCH_SIZE_METADATA) = _compute_metadata()
+
 SIMPLE_METADATA = SIMPLE_NODE_METADATA, SIMPLE_EDGE_METADATA
 METADATA = NODE_METADATA, EDGE_METADATA

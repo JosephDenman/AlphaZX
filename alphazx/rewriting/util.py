@@ -8,6 +8,8 @@ FRightParameters = tuple[float, int, set[tuple[int, int]]]
 
 
 def rewrite(diagram: ZXDiagram, match: Match, f_right_params: FRightParameters | None = None) -> None:
+    print('match = ', match)
+    print('params = ', f_right_params)
     if isinstance(match, FLeftMatch):
         f_left_rewrite(match, diagram)
     elif isinstance(match, FRightMatch):

@@ -59,25 +59,57 @@ def float_phase_to_cat(float_phase: float, phase_denominator: int) -> torch.Tens
     return torch.tensor(int(normalized_position))
 
 
-def cat_new_edges_to_int(cat_new_edges: torch.Tensor) -> int:
-    if len(cat_new_edges.shape) != 0:
-        raise ValueError(f"The input tensor {cat_new_edges} is not a scalar.")
+def cat_new_edges_to_int(cat_new_edges: int) -> int:
     # The number of new edges is the category value plus one, since the new edge distribution is a categorical distribution
     # with categories 0, 1, 2, ..., n, where n + 1 is the max number of possible new edges.
-    return int(cat_new_edges) + 1
+    return cat_new_edges + 1
 
 
 def bernoulli_transfer_edges_to_set(node: int,
                                     data: pyg.data.Data,
                                     data_index: DataIndexToMatch,
-                                    transfer_edges_tensor: tuple) -> set[tuple[int, int]]:
+                                    transfer_edges: tuple) -> set[tuple[int, int]]:
+    # TODO: We're likely including the boundary node in the neighbor calculation, which is incorrect.
+    # TODO: Mask out the nodes that are not simple nodes
     subset, edge_index, _, _ = pyg.utils.k_hop_subgraph(node, 1, data.edge_index)
-    masked_edges = edge_index[torch.tensor(transfer_edges_tensor)]
+    edge_index = eliminate_columns_with_value(edge_index, 0)
+    print('data.node_type = ', data.node_type)
+    print('transfer_edges = ', transfer_edges)
+    print('edge_index = ', edge_index)
+    transfer_edges = torch.tensor(transfer_edges[0:edge_index.shape[1]], dtype=torch.bool)
+    transfer_edges = torch.stack([transfer_edges, transfer_edges], dim=0)
+    print('transfer_edges_mask = ', transfer_edges)
+    masked_edges = edge_index[transfer_edges]
+    print('masked_edges = ', masked_edges)
     edges = set()
     for e in masked_edges.tolist():
+        print('e = ', e)
         s, t = tuple(e)
         s_match, t_match = data_index[s], data_index[t]
         assert isinstance(s_match, FRightMatch), f'Expected {s_match} to be an FRightMatch'
         assert isinstance(t_match, FRightMatch), f'Expected {t_match} to be an FRightMatch'
         edges.add((s_match.node, t_match.node))
     return edges
+
+
+def eliminate_columns_with_value(matrix: torch.Tensor, value: int) -> torch.Tensor:
+    """
+    Eliminates columns from the input matrix that contain the specified value.
+
+    Parameters:
+        matrix (torch.Tensor): The input tensor from which columns are to be removed.
+        value (int): The value based on which columns will be removed.
+
+    Returns:
+        torch.Tensor: A tensor with the specified columns removed.
+    """
+    # Create a mask that is True where the element is not equal to the value
+    mask = matrix != value
+
+    # Use `all()` along the rows (dim=0) to find columns where all elements are True
+    # (i.e., columns that do not contain the value)
+    valid_columns = mask.all(dim=0)
+
+    # Use the mask to select valid columns
+    result = matrix[:, valid_columns]
+    return result

@@ -4,7 +4,8 @@ import torch_geometric as pyg
 from torch_geometric.typing import NodeType
 
 from alphazx.diagram.match import Match, CompoundMatch, BoundaryMatch, NODE_TYPE_TO_INDEX_METADATA, \
-    EDGE_TYPE_TO_INDEX_METADATA, NODE_METADATA, EDGE_METADATA, FRightMatch
+    EDGE_TYPE_TO_INDEX_METADATA, NODE_METADATA, EDGE_METADATA, FRightMatch, from_index_and_node_set, \
+    MAX_MATCH_SIZE_METADATA
 from alphazx.diagram.pyg_conv import compute_node_type_attr, compute_edge_size_attr, compute_edge_type_attr
 from alphazx.diagram.zx_diagram import ZXDiagram, base_match_from_node
 
@@ -50,12 +51,14 @@ class ZXMatchDiagram(nx.DiGraph):
             assert n >= 0, f'Node {n} is not non-negative'
         boundary_match = BoundaryMatch(-1)
         self.add_node(boundary_match,
+                      node_set=compute_node_set_attr(boundary_match),
                       node_type=compute_node_type_attr(boundary_match),
                       node_phase=compute_node_phase_attr(zx_diagram, boundary_match))
         for n in zx_diagram.nodes:
             if not zx_diagram.is_boundary(n):
                 base_match = base_match_from_node(zx_diagram, n)
                 self.add_node(base_match,
+                              node_set=compute_node_set_attr(base_match),
                               node_type=compute_node_type_attr(base_match),
                               node_phase=compute_node_phase_attr(zx_diagram, base_match))
         self.num_simple_nodes = self.number_of_nodes()
@@ -96,16 +99,18 @@ class ZXMatchDiagram(nx.DiGraph):
             return hdata, HeteroDataIndexToMatch(self)
         return hdata
 
-    def to_pyg_data(self, with_reverse_mapping: bool = False, sort_by_row: bool = False) -> pyg.data.Data | tuple[pyg.data.Data, 'DataIndexToMatch']:
+    def to_pyg_data(self, with_reverse_mapping: bool = False, sort_by_row: bool = False) -> pyg.data.Data | tuple[
+        pyg.data.Data, 'DataIndexToMatch']:
         data = self.to_pyg_hdata(with_reverse_mapping=False, sort_by_row=sort_by_row).to_homogeneous(
-            node_attrs=['node_phase'], edge_attrs=['edge_size'], add_node_type=True, add_edge_type=True, dummy_values=False).sort(
+            node_attrs=['node_phase', 'node_set'], edge_attrs=['edge_size'], add_node_type=True, add_edge_type=True,
+            dummy_values=False).sort(
             sort_by_row)
         data.x = torch.stack([data.node_type, data.node_phase], dim=-1)
         data.edge_attr = torch.stack([data.edge_type, data.edge_size], dim=-1)
         data.sort(sort_by_row)
         data.validate()
         if with_reverse_mapping:
-            return data, DataIndexToMatch(self)
+            return data, DataIndexToMatch(data)
         return data
 
 
@@ -129,6 +134,7 @@ def to_zx_match_diagram(zx_diagram: ZXDiagram) -> ZXMatchDiagram:
 
 def add_match(zx_match_diagram: ZXMatchDiagram, zx_diagram: ZXDiagram, match: Match) -> None:
     zx_match_diagram.add_node(match,
+                              node_set=compute_node_set_attr(match),
                               node_type=compute_node_type_attr(match),
                               node_phase=compute_node_phase_attr(zx_diagram, match))
     if isinstance(match, CompoundMatch):
@@ -147,6 +153,11 @@ def add_match(zx_match_diagram: ZXMatchDiagram, zx_diagram: ZXDiagram, match: Ma
                                                                        sub_match, match))
 
 
+def compute_node_set_attr(match: Match) -> torch.Tensor:
+    return torch.nn.functional.pad(torch.tensor([len(match.nodes)] + match.nodes, dtype=torch.long),
+                                   (0, MAX_MATCH_SIZE_METADATA - len(match.nodes)), mode='constant', value=0)
+
+
 def compute_node_phase_attr(zx_diagram: ZXDiagram, match: Match) -> torch.Tensor:
     if isinstance(match, FRightMatch):
         # Although the phase outputs of the GNN are categorical, we represent the input features as floats.
@@ -156,10 +167,12 @@ def compute_node_phase_attr(zx_diagram: ZXDiagram, match: Match) -> torch.Tensor
 
 
 class DataIndexToMatch:
-    def __init__(self, zx_match_diagram: ZXMatchDiagram):
+    def __init__(self, data: pyg.data.Data):
         self.indices = dict()
-        for i, match in enumerate(zx_match_diagram.nodes()):
-            self.indices[i] = match
+        for i, node_set in enumerate(data.node_set):
+            node_set = node_set.tolist()
+            node_set = node_set[1:node_set[0] + 1]
+            self.indices[i] = from_index_and_node_set(data.node_type[i].item(), node_set)
 
     def __getitem__(self, item: int):
         return self.indices[item]

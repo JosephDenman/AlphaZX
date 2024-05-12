@@ -64,7 +64,7 @@ class PolicyNetwork(nn.Module):
     def _compute_transfer_edge_probs(self, x: torch.Tensor, edge_index: torch.Tensor, node_types: torch.Tensor,
                                      batch: torch.Tensor) -> torch.Tensor:
         # Run transfer edge transformer
-        transfer_edge_params = self.transfer_edge_trans(x, edge_index, batch)
+        transfer_edge_params = self.transfer_edge_trans(x, edge_index, node_types, batch)
         # Gather node types according to batch
         node_type_batch = pyg.utils.to_dense_batch(node_types, batch, torch.nan)[0]
         # Mask out all non-simple nodes
