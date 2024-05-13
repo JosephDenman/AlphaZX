@@ -1,7 +1,8 @@
 import torch
 import torch_geometric as pyg
 
-from alphazx.diagram.match import FRightMatch
+from alphazx import mask_edges_by_type
+from alphazx.diagram.match import FRightMatch, BoundaryMatch, NON_SIMPLE_NODE_INDICES
 from alphazx.diagram.zx_match_diagram import ZXMatchDiagram, DataIndexToMatch
 
 
@@ -71,8 +72,8 @@ def bernoulli_transfer_edges_to_set(node: int,
                                     transfer_edges: tuple) -> set[tuple[int, int]]:
     # TODO: We're likely including the boundary node in the neighbor calculation, which is incorrect.
     # TODO: Mask out the nodes that are not simple nodes
-    subset, edge_index, _, _ = pyg.utils.k_hop_subgraph(node, 1, data.edge_index)
-    edge_index = eliminate_columns_with_value(edge_index, 0)
+    edge_index = mask_edges_by_type(data.edge_index, data.node_type, torch.tensor([BoundaryMatch.index] + NON_SIMPLE_NODE_INDICES))
+    subset, edge_index, _, _ = pyg.utils.k_hop_subgraph(node, 1, edge_index)
     print('data.node_type = ', data.node_type)
     print('transfer_edges = ', transfer_edges)
     print('edge_index = ', edge_index)

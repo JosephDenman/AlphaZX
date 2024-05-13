@@ -68,7 +68,7 @@ class PolicyNetwork(nn.Module):
         # Gather node types according to batch
         node_type_batch = pyg.utils.to_dense_batch(node_types, batch, torch.nan)[0]
         # Mask out all non-simple nodes
-        node_type_mask = torch.logical_or(node_type_batch == FRightZMatch.index, node_type_batch == FRightXMatch.index)
+        node_type_mask = (node_type_batch == FRightZMatch.index) | (node_type_batch == FRightXMatch.index)
         # Create the row to insert for each non-simple node
         replacement_row = torch.zeros(transfer_edge_params.shape[2], device=transfer_edge_params.device)
         # Transfer edge selection probabilities should be zero for all non-simple nodes
@@ -83,7 +83,7 @@ class PolicyNetwork(nn.Module):
         # Gather node types according to batch
         node_type_batch = pyg.utils.to_dense_batch(node_types, batch, torch.nan)[0]
         # Mask out all non-simple nodes
-        node_type_mask = torch.logical_or(node_type_batch == FRightZMatch.index, node_type_batch == FRightXMatch.index)
+        node_type_mask = (node_type_batch == FRightZMatch.index) | (node_type_batch == FRightXMatch.index)
         # Create the row to insert for each non-simple node
         replacement_row = torch.zeros(self.num_possible_new_edges, device=new_edge_probs.device)
         replacement_row[0] = 1
@@ -102,7 +102,7 @@ class PolicyNetwork(nn.Module):
         # Gather node types according to batch
         node_type_batch = pyg.utils.to_dense_batch(node_types, batch, torch.nan)[0]
         # Mask out all non-simple nodes
-        node_type_mask = torch.logical_or(node_type_batch == FRightZMatch.index, node_type_batch == FRightXMatch.index)
+        node_type_mask = (node_type_batch == FRightZMatch.index) | (node_type_batch == FRightXMatch.index)
         # Create the row to insert for each non-simple node
         replacement_row = torch.zeros(self.num_possible_phases, device=phase_probs.device)
         replacement_row[0] = 1
@@ -153,7 +153,6 @@ class PolicyNetwork(nn.Module):
         else:
             pad_length = self.num_node_types - len(mixture_params)
             mixture_params = F.pad(mixture_params, (0, pad_length), mode='constant', value=-torch.inf)
-
         # Reshape the tensor to have the batch dimension
         mixture_params = mixture_params.view(-1, self.num_node_types)
         # Probability of selecting a boundary node should be zero

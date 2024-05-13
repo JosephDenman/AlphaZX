@@ -3,7 +3,8 @@ from typing import Callable, Any, Optional
 import torch
 import torch_geometric as pyg
 
-from alphazx import concatenate_neighbor_features
+from alphazx import concatenate_neighbor_features, mask_edges_by_type, mask_batch_by_type
+from alphazx.diagram.match import BoundaryMatch, NON_SIMPLE_NODE_INDICES
 
 
 class TransferEdgeTransformer(torch.nn.Module):
@@ -40,16 +41,16 @@ class TransferEdgeTransformer(torch.nn.Module):
         self.gmt.reset_parameters()
         self.mlp.reset_parameters()
 
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, node_type: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, node_types: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
         neighbor_x = torch.index_select(x, 0, edge_index[0])
         neighbor_x = self.gmt(neighbor_x, edge_index[1])
-        src_node_types = torch.index_select(node_type, 0, edge_index[0])
-        tgt_node_types = torch.index_select(node_type, 0, edge_index[1])
-
-        print('masked_edge_index = ', masked_edge_index)
+        # edge_index = mask_edges_by_type(edge_index, node_types, torch.tensor([BoundaryMatch.index] + NON_SIMPLE_NODE_INDICES))
         neighbor_x = concatenate_neighbor_features(neighbor_x, edge_index)
+        # batch = mask_batch_by_type(batch, node_types)
         neighbor_x = self.mlp(neighbor_x, batch)
         neighbor_x[neighbor_x.isnan()] = -torch.inf
         neighbor_x = torch.sigmoid(neighbor_x).squeeze(dim=-1)
+        print('neighbor_x = ', neighbor_x)
+        print('batch = ', batch)
         neighbor_x = pyg.utils.to_dense_batch(neighbor_x, batch)[0]
         return neighbor_x

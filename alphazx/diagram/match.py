@@ -348,7 +348,7 @@ def _count_match_types() -> int:
 
 Metadata = tuple[
     list[NodeType], list[NodeType], dict[NodeType, int], list[EdgeType], dict[EdgeType, int], list[EdgeType], dict[
-        EdgeType, int], dict[tuple[int, tuple[float, float]], int], list[Type[Match]]]
+        EdgeType, int], dict[tuple[int, tuple[float, float]], int], list[Type[Match]], int, list[int]]
 
 POSSIBLE_PHASES = [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1., 1.125, 1.25, 1.375, 1.5, 1.625, 1.75, 1.875]
 
@@ -366,6 +366,7 @@ def _compute_metadata() -> Metadata:
                     edge_metadata.append((a, I_ETYPE_NAME, b))
     simple_leaf_classes = list(filter(lambda lc: lc.is_simple_match(), leaf_classes))
     simple_node_metadata = [leaf_class.abbrev for leaf_class in simple_leaf_classes]
+    non_simple_node_indices = [leaf_class.index for leaf_class in list(filter(lambda lc: not lc.is_simple_match(), leaf_classes))]
     simple_edge_metadata = []
     for a, b in itertools.product(simple_node_metadata, simple_node_metadata):
         simple_edge_metadata.append((a, S_ETYPE_NAME, b))
@@ -387,7 +388,8 @@ def _compute_metadata() -> Metadata:
             simple_edge_type_to_index_metadata,
             node_feature_pair_to_index_metadata,
             index_to_constructor_metadata,
-            max_match_size_metadata)
+            max_match_size_metadata,
+            non_simple_node_indices)
 
 
 MATCH_TYPE_COUNT = _count_match_types()
@@ -401,7 +403,8 @@ MATCH_TYPE_COUNT = _count_match_types()
  SIMPLE_EDGE_TYPE_TO_INDEX_METADATA,
  NODE_FEATURE_PAIR_TO_INDEX_METADATA,
  INDEX_TO_CONSTRUCTOR_METADATA,
- MAX_MATCH_SIZE_METADATA) = _compute_metadata()
+ MAX_MATCH_SIZE_METADATA,
+ NON_SIMPLE_NODE_INDICES) = _compute_metadata()
 
 SIMPLE_METADATA = SIMPLE_NODE_METADATA, SIMPLE_EDGE_METADATA
 METADATA = NODE_METADATA, EDGE_METADATA

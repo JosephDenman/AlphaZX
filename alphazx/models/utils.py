@@ -3,6 +3,8 @@ import torch_geometric as pyg
 from torch_geometric.nn.to_hetero_with_bases_transformer import split_output
 from torch_geometric.typing import NodeType
 
+from alphazx.diagram.match import FRightZMatch, FRightXMatch
+
 
 def concatenate_by_group(x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
     index_count = torch.bincount(index)
@@ -58,3 +60,31 @@ def pad_and_stack(tensors: list[torch.Tensor], pad_value=0.) -> torch.Tensor:
     # Stack all the padded tensors
     result = torch.stack(padded_tensors)
     return result
+
+
+def mask_edges_by_type(edge_index: torch.Tensor, node_types: torch.Tensor, node_types_to_mask: torch.Tensor) -> torch.Tensor:
+    """
+    Masks out all columns of `edge_index` which contain a node with a type in `node_types`.
+    :param edge_index: Two-dimensional 2 x N tensor where N is the number of nodes in the graph. Each column corresponds
+                       to an edge with the top item of the column being the source node of the edge the bottom item of the
+                       column being the target node of the edge.
+    :param node_types: One-dimensional N-length tensor where each item represents the type of the node.
+    :param node_types_to_mask: One-dimensional L-length tensor containing the node types used to mask out `edge_index`.
+    :return: Two-dimensional 2 x M tensor which is identical to `edge_index` except that every column in which the bottom
+             or top item has a node type in `node_types_to_mask` is omitted.
+    """
+    # Get the node types for the source and target nodes of each edge
+    source_types = node_types[edge_index[0]]
+    target_types = node_types[edge_index[1]]
+    # Create a mask to determine which edges have node types to mask
+    mask_source = source_types.unsqueeze(1) == node_types_to_mask.unsqueeze(0)
+    mask_target = target_types.unsqueeze(1) == node_types_to_mask.unsqueeze(0)
+    # Determine the final mask by checking if any source or target node needs to be masked
+    mask_edges = mask_source.any(dim=1) | mask_target.any(dim=1)
+    # Use the mask to filter out edges
+    filtered_edges = edge_index[:, ~mask_edges]
+    return filtered_edges
+
+
+def mask_batch_by_type(batch: torch.Tensor, node_types: torch.Tensor) -> torch.Tensor:
+    return batch[(node_types == FRightZMatch.index) | (node_types == FRightXMatch.index)]
