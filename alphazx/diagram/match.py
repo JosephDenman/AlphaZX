@@ -27,7 +27,7 @@ class Match(abc.ABC):
             raise Exception(f'Unexpected argument {match} to match constructor')
         assert len(
             self.original_match) == self.expected_size, \
-            f'Expected {self.expected_size} nodes but received {len(self.original_match)}'
+            f'Constructor for {self.__class__} expected {self.expected_size} nodes but received {len(self.original_match)}'
         self._match = dict(sorted(self.original_match.items(), key=lambda item: item[1]))
         self._nodes = tuple(self._match.keys())
 
@@ -60,6 +60,10 @@ class Match(abc.ABC):
     @classmethod
     def is_simple_match(cls) -> bool:
         return issubclass(cls, SimpleMatch)
+
+    @classmethod
+    def is_basis_match(cls) -> bool:
+        return issubclass(cls, FRightMatch)
 
     @property
     def is_compound_match(self) -> bool:
@@ -347,7 +351,7 @@ def _count_match_types() -> int:
 
 
 Metadata = tuple[
-    list[NodeType], list[NodeType], dict[NodeType, int], list[EdgeType], dict[EdgeType, int], list[EdgeType], dict[
+    list[NodeType], list[int], list[NodeType], dict[NodeType, int], list[EdgeType], dict[EdgeType, int], list[EdgeType], dict[
         EdgeType, int], dict[tuple[int, tuple[float, float]], int], list[Type[Match]], int, list[int]]
 
 POSSIBLE_PHASES = [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1., 1.125, 1.25, 1.375, 1.5, 1.625, 1.75, 1.875]
@@ -366,7 +370,7 @@ def _compute_metadata() -> Metadata:
                     edge_metadata.append((a, I_ETYPE_NAME, b))
     simple_leaf_classes = list(filter(lambda lc: lc.is_simple_match(), leaf_classes))
     simple_node_metadata = [leaf_class.abbrev for leaf_class in simple_leaf_classes]
-    non_simple_node_indices = [leaf_class.index for leaf_class in list(filter(lambda lc: not lc.is_simple_match(), leaf_classes))]
+    non_basis_type_indices = [leaf_class.index for leaf_class in list(filter(lambda lc: not lc.is_basis_match(), leaf_classes))]
     simple_edge_metadata = []
     for a, b in itertools.product(simple_node_metadata, simple_node_metadata):
         simple_edge_metadata.append((a, S_ETYPE_NAME, b))
@@ -380,6 +384,7 @@ def _compute_metadata() -> Metadata:
     index_to_constructor_metadata = [leaf_class for leaf_class in leaf_classes]
     max_match_size_metadata = max([leaf_class.expected_size for leaf_class in leaf_classes])
     return (node_metadata,
+            node_type_indices,
             simple_node_metadata,
             node_type_to_index_metadata,
             edge_metadata,
@@ -389,12 +394,13 @@ def _compute_metadata() -> Metadata:
             node_feature_pair_to_index_metadata,
             index_to_constructor_metadata,
             max_match_size_metadata,
-            non_simple_node_indices)
+            non_basis_type_indices)
 
 
 MATCH_TYPE_COUNT = _count_match_types()
 
 (NODE_METADATA,
+ NODE_TYPE_INDICES,
  SIMPLE_NODE_METADATA,
  NODE_TYPE_TO_INDEX_METADATA,
  EDGE_METADATA,
@@ -404,7 +410,7 @@ MATCH_TYPE_COUNT = _count_match_types()
  NODE_FEATURE_PAIR_TO_INDEX_METADATA,
  INDEX_TO_CONSTRUCTOR_METADATA,
  MAX_MATCH_SIZE_METADATA,
- NON_SIMPLE_NODE_INDICES) = _compute_metadata()
+ NON_BASIS_TYPE_INDICES) = _compute_metadata()
 
 SIMPLE_METADATA = SIMPLE_NODE_METADATA, SIMPLE_EDGE_METADATA
 METADATA = NODE_METADATA, EDGE_METADATA

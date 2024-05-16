@@ -1,9 +1,9 @@
 import torch
 import torch_geometric as pyg
 
-from alphazx import mask_edges_by_type
-from alphazx.diagram.match import FRightMatch, BoundaryMatch, NON_SIMPLE_NODE_INDICES
-from alphazx.diagram.zx_match_diagram import ZXMatchDiagram, DataIndexToMatch
+from alphazx import compute_basis_neighbors
+from alphazx.diagram.match import FRightMatch
+from alphazx.diagram.zx_match_diagram import DataIndexToMatch
 
 
 def is_integer_tensor(tensor: torch.Tensor) -> bool:
@@ -67,30 +67,17 @@ def cat_new_edges_to_int(cat_new_edges: int) -> int:
 
 
 def bernoulli_transfer_edges_to_set(node: int,
+                                    bernoulli_transfer_edges: tuple,
                                     data: pyg.data.Data,
-                                    data_index: DataIndexToMatch,
-                                    transfer_edges: tuple) -> set[tuple[int, int]]:
-    # TODO: We're likely including the boundary node in the neighbor calculation, which is incorrect.
-    # TODO: Mask out the nodes that are not simple nodes
-    edge_index = mask_edges_by_type(data.edge_index, data.node_type, torch.tensor([BoundaryMatch.index] + NON_SIMPLE_NODE_INDICES))
-    subset, edge_index, _, _ = pyg.utils.k_hop_subgraph(node, 1, edge_index)
-    print('data.node_type = ', data.node_type)
-    print('transfer_edges = ', transfer_edges)
-    print('edge_index = ', edge_index)
-    transfer_edges = torch.tensor(transfer_edges[0:edge_index.shape[1]], dtype=torch.bool)
-    transfer_edges = torch.stack([transfer_edges, transfer_edges], dim=0)
-    print('transfer_edges_mask = ', transfer_edges)
-    masked_edges = edge_index[transfer_edges]
-    print('masked_edges = ', masked_edges)
-    edges = set()
-    for e in masked_edges.tolist():
-        print('e = ', e)
-        s, t = tuple(e)
-        s_match, t_match = data_index[s], data_index[t]
-        assert isinstance(s_match, FRightMatch), f'Expected {s_match} to be an FRightMatch'
-        assert isinstance(t_match, FRightMatch), f'Expected {t_match} to be an FRightMatch'
-        edges.add((s_match.node, t_match.node))
-    return edges
+                                    data_index: DataIndexToMatch) -> set[int]:
+    basis_neighbors = compute_basis_neighbors(data.edge_index, node, data.node_type)
+    basis_neighbors = basis_neighbors[torch.tensor(bernoulli_transfer_edges[:len(basis_neighbors)], dtype=torch.bool)]
+    transfer_edges = []
+    for neighbor in basis_neighbors.tolist():
+        neighbor_match = data_index[neighbor]
+        assert isinstance(neighbor_match, FRightMatch), f'Expected {neighbor_match} to be an FRightMatch'
+        transfer_edges.append(neighbor_match.node)
+    return set(transfer_edges)
 
 
 def eliminate_columns_with_value(matrix: torch.Tensor, value: int) -> torch.Tensor:

@@ -2,15 +2,15 @@ from typing import Type
 
 import networkx as nx
 import torch
+from torch_geometric.data import Data
 
-from alphazx.diagram.feature_conversions import cat_phase_to_float, cat_new_edges_to_int, bernoulli_transfer_edges_to_set
+from alphazx.diagram.diagram_generators import clifford_zx_diagram
+from alphazx.diagram.feature_conversions import cat_phase_to_float, cat_new_edges_to_int, \
+    bernoulli_transfer_edges_to_set
 from alphazx.diagram.match import Match, FRightZMatch, FLeftZMatch, FRightXMatch, FLeftXMatch, \
     BRightMatch, BLeftMatch, YRightZMatch, YLeftZMatch, YRightXMatch, YLeftXMatch
 from alphazx.diagram.zx_diagram import ZXDiagram
 from alphazx.diagram.zx_match_diagram import ZXMatchDiagram, to_zx_match_diagram, DataIndexToMatch
-from torch_geometric.data import Data, HeteroData
-
-from alphazx.diagram.diagram_generators import clifford_zx_diagram
 from alphazx.models.pre_process import with_embeddable_feats, with_laplacian_pe
 from alphazx.rewriting.util import rewrite, FRightParameters
 
@@ -24,7 +24,8 @@ def assert_correct_match_instance(expected_class: Type[Match], match: Match) -> 
         raise ValueError(f'Expected {expected_class} but got {match}')
 
 
-def tuple_to_match(zx_match_diagram: ZXMatchDiagram, data: Data, action: tuple, data_index: DataIndexToMatch) -> tuple[Match, FRightParameters | None]:
+def tuple_to_match(zx_match_diagram: ZXMatchDiagram, data: Data, action: tuple, data_index: DataIndexToMatch) -> tuple[
+    Match, FRightParameters | None]:
     # In this function, the batch dimension of 'action' is always one.
     action_type = action[0]
     node = action[1]
@@ -33,7 +34,7 @@ def tuple_to_match(zx_match_diagram: ZXMatchDiagram, data: Data, action: tuple, 
         assert_correct_match_instance(FRightZMatch, match)
         phase = cat_phase_to_float(action[2], zx_match_diagram.phase_denominator)
         new_edges = cat_new_edges_to_int(action[3])
-        transfer_edges = bernoulli_transfer_edges_to_set(node, data, data_index, action[4:])
+        transfer_edges = bernoulli_transfer_edges_to_set(node, action[4:], data, data_index)
         return match, FRightParameters(phase, new_edges, transfer_edges)
     elif action_type == FLeftZMatch.index:
         assert_correct_match_instance(FLeftZMatch, match)
@@ -42,7 +43,7 @@ def tuple_to_match(zx_match_diagram: ZXMatchDiagram, data: Data, action: tuple, 
         assert_correct_match_instance(FRightXMatch, match)
         phase = cat_phase_to_float(action[2], zx_match_diagram.phase_denominator)
         new_edges = cat_new_edges_to_int(action[3])
-        transfer_edges = bernoulli_transfer_edges_to_set(node, data, data_index, action[4:])
+        transfer_edges = bernoulli_transfer_edges_to_set(node, action[4:], data, data_index)
         return match, FRightParameters(phase, new_edges, transfer_edges)
     elif action_type == FLeftXMatch.index:
         assert_correct_match_instance(FLeftXMatch, match)
@@ -101,6 +102,9 @@ class ZXGame:
         self.simplified_reward = simplified_reward
         self.step_penalty = step_penalty
         self.zx_diagram = clifford_zx_diagram(self.num_qubits, self.depth, self.t_gates)
+        self.__remove_isolated_nodes()
+        self.__remove_self_loop_edges()
+        self.__remove_isolated_components()
         self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram)
         self.previous_value = diagram_value(self.zx_diagram)
         self.data, self.data_index = self.zx_match_diagram.to_pyg_data(True, False)
@@ -146,6 +150,9 @@ class ZXGame:
         self.episode_return = 0.
         self.previous_reward = 0.
         self.zx_diagram = clifford_zx_diagram(self.num_qubits, self.depth, self.t_gates)
+        self.__remove_isolated_nodes()
+        self.__remove_self_loop_edges()
+        self.__remove_isolated_components()
         self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram)
         self.previous_value = diagram_value(self.zx_diagram)
         self.done = is_simplified(self.zx_diagram)

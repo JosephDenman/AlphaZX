@@ -17,8 +17,8 @@ def create_data_loader(num_diagrams: int, batch_size: int, num_qubits: int, dept
 
 
 def policy_network(num_qubits: int, depth: int):
-    # num_diagrams = 1
-    # batch_size = 1
+    # num_diagrams = 2
+    # batch_size = 2
     num_node_types = len(NODE_METADATA)
     num_possible_phases = len(POSSIBLE_PHASES)
     num_possible_new_edges = 10
@@ -57,11 +57,10 @@ def policy_network(num_qubits: int, depth: int):
                          num_pooling_heads,
                          pooling_layer_norm,
                          pooling_dropout)
-    #
     # dataloader = create_data_loader(num_diagrams, batch_size, num_qubits, depth)
     # for batch in dataloader:
     #     batch = batch.sort(False)
     #     azx_dist = AlphaZXDistribution(model(batch))
-    #     print('samples = ', azx_dist.prob(azx_dist.sample(8)))
+    #     print('samples = ', azx_dist.sample(8))
 
-# policy_network()
+# policy_network(10, 10)

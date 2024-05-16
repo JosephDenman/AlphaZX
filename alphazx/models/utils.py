@@ -1,9 +1,7 @@
 import torch
 import torch_geometric as pyg
-from torch_geometric.nn.to_hetero_with_bases_transformer import split_output
-from torch_geometric.typing import NodeType
 
-from alphazx.diagram.match import FRightZMatch, FRightXMatch
+from alphazx.diagram.match import NON_BASIS_TYPE_INDICES
 
 
 def concatenate_by_group(x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
@@ -19,8 +17,9 @@ def concatenate_by_group(x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
 
 def concatenate_neighbor_features(x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
     neighbor_x = torch.index_select(x, 0, edge_index[0])
-    x_, mask = pyg.utils.to_dense_batch(neighbor_x, edge_index[1])
-    x_[~mask] = -torch.inf
+    x_, mask = pyg.utils.to_dense_batch(neighbor_x, edge_index[1], -torch.inf)
+    mask = torch.any(mask, dim=1)
+    x_ = x_[mask]
     return x_
 
 
@@ -28,10 +27,6 @@ def concatenate_with_neighbor_features(x: torch.Tensor, edge_index: torch.Tensor
     neighbor_x = concatenate_neighbor_features(x, edge_index)
     x_ = torch.cat([x.unsqueeze(dim=1), neighbor_x], dim=1)
     return x_
-
-
-def split_features(x: torch.Tensor, offsets: dict[NodeType, int]) -> dict[NodeType, torch.Tensor]:
-    return split_output(x, offsets)
 
 
 def pad_and_stack(tensors: list[torch.Tensor], pad_value=0.) -> torch.Tensor:
@@ -62,7 +57,12 @@ def pad_and_stack(tensors: list[torch.Tensor], pad_value=0.) -> torch.Tensor:
     return result
 
 
-def mask_edges_by_type(edge_index: torch.Tensor, node_types: torch.Tensor, node_types_to_mask: torch.Tensor) -> torch.Tensor:
+def mask_non_basis_edges(edge_index: torch.Tensor, node_types: torch.Tensor) -> torch.Tensor:
+    return mask_edges_by_type(edge_index, node_types, torch.tensor(NON_BASIS_TYPE_INDICES))
+
+
+def mask_edges_by_type(edge_index: torch.Tensor, node_types: torch.Tensor,
+                       node_types_to_mask: torch.Tensor) -> torch.Tensor:
     """
     Masks out all columns of `edge_index` which contain a node with a type in `node_types`.
     :param edge_index: Two-dimensional 2 x N tensor where N is the number of nodes in the graph. Each column corresponds
@@ -73,18 +73,54 @@ def mask_edges_by_type(edge_index: torch.Tensor, node_types: torch.Tensor, node_
     :return: Two-dimensional 2 x M tensor which is identical to `edge_index` except that every column in which the bottom
              or top item has a node type in `node_types_to_mask` is omitted.
     """
-    # Get the node types for the source and target nodes of each edge
-    source_types = node_types[edge_index[0]]
-    target_types = node_types[edge_index[1]]
-    # Create a mask to determine which edges have node types to mask
-    mask_source = source_types.unsqueeze(1) == node_types_to_mask.unsqueeze(0)
-    mask_target = target_types.unsqueeze(1) == node_types_to_mask.unsqueeze(0)
-    # Determine the final mask by checking if any source or target node needs to be masked
-    mask_edges = mask_source.any(dim=1) | mask_target.any(dim=1)
-    # Use the mask to filter out edges
-    filtered_edges = edge_index[:, ~mask_edges]
-    return filtered_edges
+    column_mask = compute_column_mask_for_values(edge_index_as_node_types(edge_index, node_types), node_types_to_mask)
+    filtered_edge_index = edge_index[:, column_mask]
+    return filtered_edge_index
 
 
-def mask_batch_by_type(batch: torch.Tensor, node_types: torch.Tensor) -> torch.Tensor:
-    return batch[(node_types == FRightZMatch.index) | (node_types == FRightXMatch.index)]
+def edge_index_as_node_types(edge_index: torch.Tensor, node_types: torch.Tensor) -> torch.Tensor:
+    src_node_types = torch.index_select(node_types, 0, edge_index[0])
+    tgt_node_types = torch.index_select(node_types, 0, edge_index[1])
+    edge_indexed_node_types = torch.stack([src_node_types, tgt_node_types], dim=0)
+    return edge_indexed_node_types
+
+
+def compute_column_mask_for_values(t: torch.Tensor, values_to_mask: torch.Tensor) -> torch.Tensor:
+    """
+    Computes a mask indicating which columns of `t` have no elements of `values_to_mask`.
+
+    Parameters:
+        t (torch.Tensor): The input tensor from which columns are to be removed.
+        values_to_mask (torch.Tensor): A 1D tensor of values based on which columns will be removed.
+
+    Returns:
+        torch.Tensor: A mask indicating which columns of `t` should be kept.
+    """
+    assert len(t.shape) == 2, f"Expected `t` to be two-dimensional, got ${t.shape}."
+    assert len(
+        values_to_mask.shape) == 1, f"Expected `values_to_mask` to be one-dimensional, got ${values_to_mask.shape}."
+    if len(values_to_mask) == 0:
+        return t
+    # Check each element if it is in `values` and create a mask
+    # This results in a mask of shape [rows, columns, values.size(0)]
+    mask = t.unsqueeze(-1) == values_to_mask.unsqueeze(0).unsqueeze(0)
+    # Reduce across the last dimension to see if any value matches in the values tensor
+    # This collapses the mask to [rows, columns], being True where any match was found
+    any_match = mask.any(dim=-1)
+    # Use `all()` along the rows (dim=0) to find columns where no element matches any of the values
+    valid_columns = (~any_match).all(dim=0)
+    # Return the mask
+    return valid_columns
+
+
+def remove_all_nan_rows(x: torch.Tensor) -> torch.Tensor:
+    # Check if all elements in each row are equal to the specified value
+    mask = torch.all(torch.isnan(x), dim=1)
+    # Invert the mask to keep rows that do not meet the condition
+    filtered_tensor = x[~mask]
+    return filtered_tensor
+
+
+def compute_basis_neighbors(edge_index: torch.Tensor, node: int, node_types: torch.Tensor) -> torch.Tensor:
+    edge_index = mask_non_basis_edges(edge_index, node_types)
+    return edge_index[0][edge_index[1] == node]
