@@ -6,25 +6,6 @@ from alphazx.diagram.match import FRightMatch
 from alphazx.diagram.zx_match_diagram import DataIndexToMatch
 
 
-def is_integer_tensor(tensor: torch.Tensor) -> bool:
-    """
-    Checks if a 0D PyTorch tensor represents an integer.
-
-    :param tensor: A 0D PyTorch tensor to be checked.
-    :return: A boolean indicating if the tensor represents an integer. True if the tensor is of an integer type or is
-             a floating-point number that represents an integer value (e.g., 2.0), and False otherwise.
-    :raises ValueError: If the input is not a 0D PyTorch tensor representing an integer.
-    """
-    # Check if tensor is already of integer type
-    if tensor.dim() == 0:
-        if tensor.dtype in (torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8):
-            return True
-        # Check if it's a floating point but represents an integer
-        return float(tensor) == float(tensor.floor())
-    else:
-        raise ValueError("Input must be a 0D PyTorch tensor")
-
-
 def cat_phase_to_float(cat_phase: torch.Tensor, phase_denominator: int) -> float:
     """
     Converts a tensor phase representation back into a float value based on the unit circle position,

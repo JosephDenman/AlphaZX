@@ -30,8 +30,11 @@ def tuple_to_match(zx_match_diagram: ZXMatchDiagram, data: Data, action: tuple, 
     action_type = action[0]
     node = action[1]
     match = data_index[node]
-    if action_type == FRightZMatch.index:
-        assert_correct_match_instance(FRightZMatch, match)
+    if action_type == FRightZMatch.index or action_type == FRightXMatch.index:
+        if action_type == FRightZMatch:
+            assert_correct_match_instance(FRightZMatch, match)
+        elif action_type == FRightXMatch:
+            assert_correct_match_instance(FRightXMatch, match)
         phase = cat_phase_to_float(action[2], zx_match_diagram.phase_denominator)
         new_edges = cat_new_edges_to_int(action[3])
         transfer_edges = bernoulli_transfer_edges_to_set(node, action[4:], data, data_index)
@@ -39,12 +42,6 @@ def tuple_to_match(zx_match_diagram: ZXMatchDiagram, data: Data, action: tuple, 
     elif action_type == FLeftZMatch.index:
         assert_correct_match_instance(FLeftZMatch, match)
         return match, None
-    elif action_type == FRightXMatch.index:
-        assert_correct_match_instance(FRightXMatch, match)
-        phase = cat_phase_to_float(action[2], zx_match_diagram.phase_denominator)
-        new_edges = cat_new_edges_to_int(action[3])
-        transfer_edges = bernoulli_transfer_edges_to_set(node, action[4:], data, data_index)
-        return match, FRightParameters(phase, new_edges, transfer_edges)
     elif action_type == FLeftXMatch.index:
         assert_correct_match_instance(FLeftXMatch, match)
         return match, None
@@ -102,6 +99,7 @@ class ZXGame:
         self.simplified_reward = simplified_reward
         self.step_penalty = step_penalty
         self.zx_diagram = clifford_zx_diagram(self.num_qubits, self.depth, self.t_gates)
+        self.num_nodes = self.zx_diagram.number_of_nodes()
         self.__remove_isolated_nodes()
         self.__remove_self_loop_edges()
         self.__remove_isolated_components()
@@ -129,6 +127,7 @@ class ZXGame:
         self.__remove_isolated_nodes()
         self.__remove_self_loop_edges()
         self.__remove_isolated_components()
+        self.num_nodes = self.zx_diagram.number_of_nodes()
         self.done = is_simplified(self.zx_diagram)
         current_value = diagram_value(self.zx_diagram)
         self.previous_reward = self.previous_value - current_value + (0 if self.done else -self.step_penalty)
@@ -153,6 +152,7 @@ class ZXGame:
         self.__remove_isolated_nodes()
         self.__remove_self_loop_edges()
         self.__remove_isolated_components()
+        self.num_nodes = self.zx_diagram.number_of_nodes()
         self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram)
         self.previous_value = diagram_value(self.zx_diagram)
         self.done = is_simplified(self.zx_diagram)

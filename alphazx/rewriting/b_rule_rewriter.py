@@ -60,8 +60,12 @@ def b_right_rewrite(b_right_match: BRightMatch, diagram: ZXDiagram) -> None:
     validate_node('z', z, diagram)
     assert_neighbors(x, z, diagram)
 
-    [bl, br] = non_match_neighbors(x, b_right_match, diagram)
-    [tl, tr] = non_match_neighbors(x, b_right_match, diagram)
+    b_nmn = non_match_neighbors(x, b_right_match, diagram)
+    [bl, br] = b_nmn if len(b_nmn) == 2 else [b_nmn[0], b_nmn[0]]
+
+    t_nmn = non_match_neighbors(z, b_right_match, diagram)
+    [tl, tr] = t_nmn if len(t_nmn) == 2 else [t_nmn[0], t_nmn[0]]
+
     z0, z1, x2, x3 = diagram.add_z_node(0), diagram.add_z_node(0), diagram.add_x_node(0), diagram.add_x_node(0)
 
     diagram.add_s_edges_from([(bl, z0), (br, z1)])

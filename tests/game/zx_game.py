@@ -11,6 +11,7 @@ while True:
     model = policy_network(num_qubits, depth)
     zx_game = ZXGame(num_qubits, depth)
     data, reward, done = zx_game.reset()
+    print('num_nodes = ', zx_game.num_nodes)
     while not done:
         params = model(data)
         azx_dist = AlphaZXDistribution(params)
@@ -23,5 +24,5 @@ while True:
         done = step_result['done']
         print('done = ', done)
         print('episode_return = ', zx_game.episode_return)
-        print('num_nodes = ', data.num_nodes)
+        print('num_nodes = ', zx_game.num_nodes)
 
