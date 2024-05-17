@@ -1,5 +1,3 @@
-import torch
-
 from alphazx.distributions.alpha_zx_dist import AlphaZXDistribution
 from alphazx.game.zx_game import ZXGame
 from tests.models.policy_network import policy_network
