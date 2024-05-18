@@ -5,7 +5,8 @@ from alphazx.diagram.match import NODE_FEATURE_PAIR_TO_INDEX_METADATA
 
 
 def with_laplacian_pe(data: pyg.data.Data, pe_dimension: int) -> pyg.data.Data:
-    return pyg.transforms.AddLaplacianEigenvectorPE(k=pe_dimension, attr_name='pe', is_undirected=data.is_undirected())(data)
+    return pyg.transforms.AddLaplacianEigenvectorPE(k=pe_dimension, attr_name='pe', is_undirected=data.is_undirected())(
+        data)
 
 
 def with_embeddable_feats(data: pyg.data.Data) -> pyg.data.Data:
@@ -18,6 +19,7 @@ def with_embeddable_feats(data: pyg.data.Data) -> pyg.data.Data:
     return data
 
 
-# TODO: Implement
-def with_one_hot_types(data: pyg.data.Data) -> pyg.data.Data:
-    pass
+def pre_process(data: pyg.data.Data, pe_dimension: int = 2) -> pyg.data.Data:
+    data = with_embeddable_feats(data)
+    data = with_laplacian_pe(data, pe_dimension)
+    return data

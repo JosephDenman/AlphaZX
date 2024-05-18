@@ -4,7 +4,7 @@ import torch_geometric as pyg
 
 from alphazx.diagram.match import METADATA
 from alphazx.distributions.alpha_zx_dist import AZXDistributionParams
-from alphazx.models.hgt import HGT
+from alphazx.models.heterogeneous.hgt import HGT
 
 
 # TODO: The critical question is how to apply global attention to a heterogeneous graph

@@ -4,7 +4,7 @@ import torch
 import torch_geometric as pyg
 
 from alphazx import mask_non_basis_edges, concatenate_neighbor_features
-from alphazx.models.aggregation.neighbor_multiset_transformer import NeighborMultisetTransformer
+from alphazx.models.homogeneous.neighbor_multiset_transformer import NeighborMultisetTransformer
 
 
 class TransferEdgeSelector(torch.nn.Module):

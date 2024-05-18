@@ -5,12 +5,12 @@ import torch.nn as nn
 import torch_geometric as pyg
 
 from alphazx.distributions.alpha_zx_dist import AlphaZXDistributionParams
-from alphazx.models.azx_modules.new_edge_selection_module import NewEdgeSelector
-from alphazx.models.azx_modules.new_phase_selection_module import NewPhaseSelector
-from alphazx.models.azx_modules.node_selection_module import NodeSelector
-from alphazx.models.azx_modules.rewrite_type_selector import RewriteTypeSelector
-from alphazx.models.azx_modules.transfer_edge_selection_module import TransferEdgeSelector
-from alphazx.models.gps import GPS
+from alphazx.models.homogeneous.new_edge_selector import NewEdgeSelector
+from alphazx.models.homogeneous.new_phase_selector import NewPhaseSelector
+from alphazx.models.homogeneous.node_selector import NodeSelector
+from alphazx.models.homogeneous.rewrite_type_selector import RewriteTypeSelector
+from alphazx.models.homogeneous.transfer_edge_selector import TransferEdgeSelector
+from alphazx.models.homogeneous.gps import GPS
 
 
 class PolicyNetwork(nn.Module):

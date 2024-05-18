@@ -3,7 +3,7 @@ from typing import Any
 import torch
 import torch.nn as nn
 import torch_geometric as pyg
-from alphazx.models.gps import GPS
+from alphazx.models.homogeneous.gps import GPS
 
 
 class RepresentationNetwork(nn.Module):
@@ -39,4 +39,5 @@ class RepresentationNetwork(nn.Module):
                        gps_mlp_hidden_channels)
 
     def forward(self, data: pyg.data.Data) -> torch.Tensor:
-        return self.gps(data.x, data.pe, data.edge_index, data.edge_attr, data.batch)
+        x = self.gps(data.x, data.pe, data.edge_index, data.batch)
+        return x
