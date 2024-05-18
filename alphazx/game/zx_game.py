@@ -5,14 +5,14 @@ import torch
 from torch_geometric.data import Data
 
 from alphazx.diagram.diagram_generators import clifford_zx_diagram
-from alphazx.diagram.feature_conversions import cat_phase_to_float, cat_new_edges_to_int, \
-    bernoulli_transfer_edges_to_set
+from alphazx.diagram.action_decoder import compute_new_phase, compute_num_new_edges, \
+    compute_transfer_edges, compute_f_right_params
 from alphazx.diagram.match import Match, FRightZMatch, FLeftZMatch, FRightXMatch, FLeftXMatch, \
     BRightMatch, BLeftMatch, YRightZMatch, YLeftZMatch, YRightXMatch, YLeftXMatch
 from alphazx.diagram.zx_diagram import ZXDiagram
 from alphazx.diagram.zx_match_diagram import ZXMatchDiagram, to_zx_match_diagram, DataIndexToMatch
-from alphazx.models.pre_process import with_embeddable_feats, with_laplacian_pe
-from alphazx.rewriting.util import rewrite, FRightParameters
+from alphazx.models.pre_process import with_embeddable_feats, with_laplacian_pe, pre_process
+from alphazx.rewriting.utils import rewrite, FRightParameters
 
 
 def node_index_to_match(node_index: int, match_diagram: ZXMatchDiagram) -> Match:
@@ -28,17 +28,13 @@ def tuple_to_match(zx_match_diagram: ZXMatchDiagram, data: Data, action: tuple, 
     Match, FRightParameters | None]:
     # In this function, the batch dimension of 'action' is always one.
     action_type = action[0]
-    node = action[1]
-    match = data_index[node]
+    match = data_index[action[1]]
     if action_type == FRightZMatch.index or action_type == FRightXMatch.index:
         if action_type == FRightZMatch:
             assert_correct_match_instance(FRightZMatch, match)
         elif action_type == FRightXMatch:
             assert_correct_match_instance(FRightXMatch, match)
-        phase = cat_phase_to_float(action[2], zx_match_diagram.phase_denominator)
-        new_edges = cat_new_edges_to_int(action[3])
-        transfer_edges = bernoulli_transfer_edges_to_set(node, action[4:], data, data_index)
-        return match, FRightParameters(phase, new_edges, transfer_edges)
+        return match, compute_f_right_params(action, data, data_index, zx_match_diagram)
     elif action_type == FLeftZMatch.index:
         assert_correct_match_instance(FLeftZMatch, match)
         return match, None
@@ -105,7 +101,10 @@ class ZXGame:
         self.__remove_isolated_components()
         self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram)
         self.previous_value = diagram_value(self.zx_diagram)
-        self.data, self.data_index = self.zx_match_diagram.to_pyg_data(True, False)
+        data, self.data_index = self.zx_match_diagram.to_pyg_data(True, False)
+        data = pre_process(data)
+        data.batch = torch.zeros_like(data.node_type)
+        self.data = data
 
     def __remove_isolated_nodes(self) -> None:
         self.zx_diagram.remove_nodes_from(list(nx.isolates(self.zx_diagram)))
@@ -135,8 +134,7 @@ class ZXGame:
         self.previous_value = current_value
         self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram)
         data, self.data_index = self.zx_match_diagram.to_pyg_data(True, False)
-        data = with_embeddable_feats(data)
-        data = with_laplacian_pe(data, 2)
+        data = pre_process(data)
         data.batch = torch.zeros_like(data.node_type)
         self.data = data
         return {
@@ -157,8 +155,7 @@ class ZXGame:
         self.previous_value = diagram_value(self.zx_diagram)
         self.done = is_simplified(self.zx_diagram)
         data, self.data_index = self.zx_match_diagram.to_pyg_data(True, False)
-        data = with_embeddable_feats(data)
-        data = with_laplacian_pe(data, 2)
+        data = pre_process(data)
         data.batch = torch.zeros_like(data.node_type)
         self.data = data
         return self.data, 0, self.done
