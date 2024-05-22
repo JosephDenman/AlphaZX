@@ -39,5 +39,4 @@ class RepresentationNetwork(nn.Module):
                        gps_mlp_hidden_channels)
 
     def forward(self, data: pyg.data.Data) -> torch.Tensor:
-        x = self.gps(data.x, data.pe, data.edge_index, data.batch)
-        return x
+        return self.gps(data.x, data.pe, data.edge_index, data.batch)

@@ -1,5 +1,3 @@
-from typing import Any
-
 import torch
 import torch.nn as nn
 import torch_geometric as pyg
@@ -10,7 +8,6 @@ from alphazx.models.homogeneous.new_phase_selector import NewPhaseSelector
 from alphazx.models.homogeneous.node_selector import NodeSelector
 from alphazx.models.homogeneous.rewrite_type_selector import RewriteTypeSelector
 from alphazx.models.homogeneous.transfer_edge_selector import TransferEdgeSelector
-from alphazx.models.homogeneous.gps import GPS
 
 
 class PolicyNetwork(nn.Module):
@@ -19,17 +16,6 @@ class PolicyNetwork(nn.Module):
                  num_possible_phases: int,
                  num_possible_new_edges: int,
                  node_embedding_channels: int,
-                 gps_channels: int,
-                 gps_edge_in_channels: int,
-                 gps_edge_out_channels: int,
-                 gps_pe_in_channels: int,
-                 gps_pe_out_channels: int,
-                 gps_num_layers: int,
-                 gps_bias: bool,
-                 gps_num_attn_heads: int,
-                 gps_attn_type: str,
-                 gps_attn_kwargs: dict[str, Any],
-                 gps_mlp_hidden_channels: int,
                  num_pooling_encoder_blocks: int,
                  num_pooling_heads: int,
                  pooling_layer_norm: bool,
@@ -38,19 +24,6 @@ class PolicyNetwork(nn.Module):
         self.num_node_types = num_node_types
         self.num_possible_phases = num_possible_phases
         self.num_possible_new_edges = num_possible_new_edges
-        self.gps = GPS(num_node_types * num_possible_phases,
-                       gps_channels,
-                       node_embedding_channels,
-                       gps_edge_in_channels,
-                       gps_edge_out_channels,
-                       gps_pe_in_channels,
-                       gps_pe_out_channels,
-                       gps_num_layers,
-                       gps_bias,
-                       gps_num_attn_heads,
-                       gps_attn_type,
-                       gps_attn_kwargs,
-                       gps_mlp_hidden_channels)
         self.rewrite_type_selector = RewriteTypeSelector(node_embedding_channels, num_node_types,
                                                          num_pooling_encoder_blocks, num_pooling_heads,
                                                          pooling_layer_norm, pooling_dropout)
@@ -67,12 +40,11 @@ class PolicyNetwork(nn.Module):
         :param data: The pyg.data.Data object representing the ZX match diagram.
         :return: Parameters for the AlphaZXDistribution.
         """
-        x = self.gps(data.x, data.pe, data.edge_index, data.batch)
-        mixture_probs = self.rewrite_type_selector(x, data.node_type, data.batch)
-        node_probs = self.node_selector(x, data.node_type, data.batch)
-        phase_probs = self.new_phase_selector(x, data.node_type, data.batch)
-        edge_probs = self.new_edge_selector(x, data.node_type, data.batch)
-        transfer_edge_probs = self.transfer_edge_selector(x, data.edge_index, data.node_type, data.batch)
+        mixture_probs = self.rewrite_type_selector(data.x, data.node_type, data.batch)
+        node_probs = self.node_selector(data.x, data.node_type, data.batch)
+        phase_probs = self.new_phase_selector(data.x, data.node_type, data.batch)
+        edge_probs = self.new_edge_selector(data.x, data.node_type, data.batch)
+        transfer_edge_probs = self.transfer_edge_selector(data.x, data.edge_index, data.node_type, data.batch)
         return AlphaZXDistributionParams(mixture_probs,
                                          node_probs,
                                          phase_probs,

@@ -64,3 +64,5 @@ def policy_network(num_qubits: int, depth: int):
     #     print('samples = ', azx_dist.sample(8))
 
 # policy_network(10, 10)
+
+def

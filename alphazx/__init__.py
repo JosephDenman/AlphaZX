@@ -1,5 +1,5 @@
-from alphazx.diagram import *
-from alphazx.distributions import *
-from alphazx.game import *
-from alphazx.rewriting import *
-from alphazx.models import *
+import alphazx.diagram
+import alphazx.distributions
+import alphazx.game
+import alphazx.rewriting
+import alphazx.models
