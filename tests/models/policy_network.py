@@ -22,18 +22,7 @@ def policy_network(num_qubits: int, depth: int):
     num_node_types = len(NODE_METADATA)
     num_possible_phases = len(POSSIBLE_PHASES)
     num_possible_new_edges = 10
-    gps_channels = 1 + num_possible_phases + num_possible_new_edges + 2
     node_embedding_channels = 1 + num_possible_phases + num_possible_new_edges
-    gps_edge_in_channels = 2
-    gps_edge_out_channels = 2
-    gps_pe_in_channels = 2
-    gps_pe_out_channels = 2
-    gps_num_layers = 5
-    gps_bias = False
-    gps_num_attn_heads = 1
-    gps_attn_type = 'multihead'
-    gps_attn_kwargs = {}
-    gps_mlp_hidden_channels = 5
     num_pooling_encoder_blocks = 2
     num_pooling_heads = 1
     pooling_layer_norm = True
@@ -42,17 +31,6 @@ def policy_network(num_qubits: int, depth: int):
                          num_possible_phases,
                          num_possible_new_edges,
                          node_embedding_channels,
-                         gps_channels,
-                         gps_edge_in_channels,
-                         gps_edge_out_channels,
-                         gps_pe_in_channels,
-                         gps_pe_out_channels,
-                         gps_num_layers,
-                         gps_bias,
-                         gps_num_attn_heads,
-                         gps_attn_type,
-                         gps_attn_kwargs,
-                         gps_mlp_hidden_channels,
                          num_pooling_encoder_blocks,
                          num_pooling_heads,
                          pooling_layer_norm,
@@ -64,5 +42,3 @@ def policy_network(num_qubits: int, depth: int):
     #     print('samples = ', azx_dist.sample(8))
 
 # policy_network(10, 10)
-
-def

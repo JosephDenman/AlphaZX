@@ -13,6 +13,9 @@ class ValueNetwork(nn.Module):
         super(ValueNetwork, self).__init__()
         self.pool = pyg.nn.GraphMultisetTransformer(node_embedding_channels, 1, gmt_num_encoder_blocks, gmt_num_heads,
                                                     gmt_layer_norm, gmt_dropout)
+        self.mlp = pyg.nn.MLP([node_embedding_channels, 1])
 
     def forward(self, data: pyg.data.Data) -> torch.Tensor:
-        return self.pool(data.x, data.batch)
+        x = self.pool(data.x, data.batch)
+        res = self.mlp(x, data.batch)
+        return res
