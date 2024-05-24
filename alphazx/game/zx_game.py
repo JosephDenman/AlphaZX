@@ -4,14 +4,13 @@ import networkx as nx
 import torch
 from torch_geometric.data import Data
 
+from alphazx.diagram.action_decoder import compute_f_right_params
 from alphazx.diagram.diagram_generators import clifford_zx_diagram
-from alphazx.diagram.action_decoder import compute_new_phase, compute_num_new_edges, \
-    compute_transfer_edges, compute_f_right_params
 from alphazx.diagram.match import Match, FRightZMatch, FLeftZMatch, FRightXMatch, FLeftXMatch, \
     BRightMatch, BLeftMatch, YRightZMatch, YLeftZMatch, YRightXMatch, YLeftXMatch
 from alphazx.diagram.zx_diagram import ZXDiagram
 from alphazx.diagram.zx_match_diagram import ZXMatchDiagram, to_zx_match_diagram, DataIndexToMatch
-from alphazx.models.pre_process import with_embeddable_feats, with_laplacian_pe, pre_process
+from alphazx.models.pre_process import pre_process
 from alphazx.rewriting.utils import rewrite, FRightParameters
 
 
@@ -26,6 +25,8 @@ def assert_correct_match_instance(expected_class: Type[Match], match: Match) -> 
 
 def tuple_to_match(zx_match_diagram: ZXMatchDiagram, data: Data, action: tuple, data_index: DataIndexToMatch) -> tuple[
     Match, FRightParameters | None]:
+    print('tuple_to_match.action = ', action)
+    print('tuple_to_match.data_index = ', data_index.indices)
     # In this function, the batch dimension of 'action' is always one.
     action_type = action[0]
     match = data_index[action[1]]
@@ -95,13 +96,12 @@ class ZXGame:
         self.simplified_reward = simplified_reward
         self.step_penalty = step_penalty
         self.zx_diagram = clifford_zx_diagram(self.num_qubits, self.depth, self.t_gates)
-        self.num_nodes = self.zx_diagram.number_of_nodes()
         self.__remove_isolated_nodes()
         self.__remove_self_loop_edges()
         self.__remove_isolated_components()
         self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram)
         self.previous_value = diagram_value(self.zx_diagram)
-        data, self.data_index = self.zx_match_diagram.to_pyg_data(True, False)
+        data, self.data_index = self.zx_match_diagram.to_pyg_data(True)
         data = pre_process(data)
         data.batch = torch.zeros_like(data.node_type)
         self.data = data
@@ -126,36 +126,42 @@ class ZXGame:
         self.__remove_isolated_nodes()
         self.__remove_self_loop_edges()
         self.__remove_isolated_components()
-        self.num_nodes = self.zx_diagram.number_of_nodes()
         self.done = is_simplified(self.zx_diagram)
         current_value = diagram_value(self.zx_diagram)
         self.previous_reward = self.previous_value - current_value + (0 if self.done else -self.step_penalty)
         self.episode_return += self.previous_reward
         self.previous_value = current_value
         self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram)
-        data, self.data_index = self.zx_match_diagram.to_pyg_data(True, False)
+        data, self.data_index = self.zx_match_diagram.to_pyg_data(True)
         data = pre_process(data)
         data.batch = torch.zeros_like(data.node_type)
         self.data = data
         return {
             'observation': self.data,
+            'diagram': self.zx_diagram.copy(),
             'reward': self.previous_reward,
             'done': self.done,
         }
 
-    def reset(self) -> tuple[Data, int, bool]:
+    def reset(self, start_state: ZXDiagram = None):
         self.episode_return = 0.
         self.previous_reward = 0.
-        self.zx_diagram = clifford_zx_diagram(self.num_qubits, self.depth, self.t_gates)
+        self.zx_diagram = start_state.copy() if start_state is not None else clifford_zx_diagram(self.num_qubits,
+                                                                                                 self.depth,
+                                                                                                 self.t_gates)
         self.__remove_isolated_nodes()
         self.__remove_self_loop_edges()
         self.__remove_isolated_components()
-        self.num_nodes = self.zx_diagram.number_of_nodes()
         self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram)
         self.previous_value = diagram_value(self.zx_diagram)
         self.done = is_simplified(self.zx_diagram)
-        data, self.data_index = self.zx_match_diagram.to_pyg_data(True, False)
+        data, self.data_index = self.zx_match_diagram.to_pyg_data(True)
         data = pre_process(data)
         data.batch = torch.zeros_like(data.node_type)
         self.data = data
-        return self.data, 0, self.done
+        return {
+            'observation': self.data,
+            'diagram': self.zx_diagram.copy(),
+            'reward': 0,
+            'done': self.done,
+        }

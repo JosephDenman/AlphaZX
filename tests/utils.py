@@ -5,7 +5,7 @@ from hypothesis.strategies import composite
 from alphazx.diagram.match import NODE_TYPE_INDICES
 
 
-def zx_match_diagram_st(max_num_qubits: int = 80, max_depth: int = 80):
+def zx_diagram_config_st(max_num_qubits: int = 80, max_depth: int = 80):
     @composite
     def inner_zx_match_diagram_st(draw):
         num_qubits = draw(st.integers(2, max_num_qubits))
