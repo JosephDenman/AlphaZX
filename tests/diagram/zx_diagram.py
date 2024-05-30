@@ -26,3 +26,4 @@ class TestZXDiagram(unittest.TestCase):
             self.assertEqual(t, t_copy)
             self.assertEqual(k, k_copy)
             self.assertDictEqual(edata, edata_copy)
+        self.assertEquals(d.id, d_copy.id)

@@ -16,13 +16,13 @@ def create_data_loader(num_diagrams: int, batch_size: int, num_qubits: int, dept
     return pyg.loader.DataLoader(dataset, batch_size)
 
 
-def policy_network(num_qubits: int, depth: int):
+def policy_network():
     # num_diagrams = 2
     # batch_size = 2
     num_node_types = len(NODE_METADATA)
     num_possible_phases = len(POSSIBLE_PHASES)
     num_possible_new_edges = 10
-    node_embedding_channels = 1 + num_possible_phases + num_possible_new_edges
+    node_embedding_channels = 1
     num_pooling_encoder_blocks = 2
     num_pooling_heads = 1
     pooling_layer_norm = True

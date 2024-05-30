@@ -50,7 +50,7 @@ def disconnected_test_graph(basis: Basis) -> ZXDiagram:
     return ZXDiagram(PD, nx_graph)
 
 
-class TestFLeftMatch:
+class TestFLeftMatch(unittest.TestCase):
 
     def test_self_match_z(self):
         assert list(f_left_z_pattern(PD).f_left_z_matches()) == [FLeftZMatch(0, 1)]
@@ -169,10 +169,10 @@ class TestBLeftMatch(unittest.TestCase):
                 X
         b5---z1---x3---b7
         """
-        diagram = b_left_pattern(PD, 15, 4, 2, 8)
+        diagram = b_left_pattern(PD)
         b4, b5, b6, b7 = diagram.add_b_nodes(4)
-        diagram.add_s_edges_from([(b4, 15), (b5, 4), (2, b6), (8, b7)])
-        assert list(diagram.b_left_matches()) == [BLeftMatch(4, 8, 15, 2)]
+        diagram.add_s_edges_from([(b4, 0), (b5, 1), (2, b6), (3, b7)])
+        assert list(diagram.b_left_matches()) == [BLeftMatch(0, 2, 1, 3)]
 
     def test_self_match_connected_left_right(self):
         """

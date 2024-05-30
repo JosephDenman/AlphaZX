@@ -1,6 +1,7 @@
 from collections.abc import Iterable
 from typing import Iterator
 
+import uuid
 import networkx as nx
 import torch
 import torch_geometric as pyg
@@ -23,6 +24,7 @@ class ZXDiagram(nx.MultiGraph):
         self.phase_denominator = phase_denominator
         super().__init__(incoming_graph_data=nx_graph, multigraph_input=True)
         self.next_node_index = max(nx_graph.nodes()) + 1 if self.number_of_nodes() > 0 else 0
+        self.id = uuid.uuid4().int
         self._z_nodes_set = set()
         self._x_nodes_set = set()
         self._b_nodes_set = set()
@@ -381,6 +383,7 @@ class ZXDiagram(nx.MultiGraph):
         diagram_copy = self.__class__(self.phase_denominator, self)
         diagram_copy.add_nodes_from(self.nodes)
         diagram_copy.add_edges_from(self.edges)
+        diagram_copy.id = self.id
         return diagram_copy
 
 

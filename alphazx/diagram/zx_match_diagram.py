@@ -93,6 +93,7 @@ class ZXMatchDiagram(nx.DiGraph):
                                                                                          NODE_METADATA,
                                                                                          EDGE_METADATA).sort(
             sort_by_row)
+        hdata['id'] = self.zx_diagram.id
         add_attr_dicts(hdata)
         hdata.validate()
         if with_reverse_mapping:

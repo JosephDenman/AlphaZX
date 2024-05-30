@@ -105,4 +105,7 @@ Decisions:
 
     D1: Use https://arxiv.org/pdf/2108.13650.pdf as a HGNN-specific feature encoder with hetero-transformed GPSModule.
 
+    D2: Eliminate self-loops after each rewrite. This simplifies the f_right (fission) rules, but it means that b-right
+        matches with top or bottom identities are not able to be converted back into b-left matches.
+
 """

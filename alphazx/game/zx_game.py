@@ -2,8 +2,6 @@ from typing import Type
 
 import networkx as nx
 import torch
-from torch_geometric.data import Data
-
 from alphazx.diagram.action_decoder import compute_f_right_params
 from alphazx.diagram.diagram_generators import clifford_zx_diagram
 from alphazx.diagram.match import Match, FRightZMatch, FLeftZMatch, FRightXMatch, FLeftXMatch, \
@@ -12,6 +10,7 @@ from alphazx.diagram.zx_diagram import ZXDiagram
 from alphazx.diagram.zx_match_diagram import ZXMatchDiagram, to_zx_match_diagram, DataIndexToMatch
 from alphazx.models.pre_process import pre_process
 from alphazx.rewriting.utils import rewrite, FRightParameters
+from torch_geometric.data import Data
 
 
 def node_index_to_match(node_index: int, match_diagram: ZXMatchDiagram) -> Match:
@@ -25,8 +24,8 @@ def assert_correct_match_instance(expected_class: Type[Match], match: Match) -> 
 
 def tuple_to_match(zx_match_diagram: ZXMatchDiagram, data: Data, action: tuple, data_index: DataIndexToMatch) -> tuple[
     Match, FRightParameters | None]:
-    print('tuple_to_match.action = ', action)
-    print('tuple_to_match.data_index = ', data_index.indices)
+    # print('tuple_to_match.action = ', action)
+    # print('tuple_to_match.data_index = ', data_index.indices)
     # In this function, the batch dimension of 'action' is always one.
     action_type = action[0]
     match = data_index[action[1]]
@@ -120,7 +119,7 @@ class ZXGame:
             if b_nodes.isdisjoint(c):
                 self.zx_diagram.remove_nodes_from(c)
 
-    def step(self, action: tuple):
+    def step(self, action: tuple) -> tuple[dict[str, ZXDiagram | Data], int, bool]:
         match, params = tuple_to_match(self.zx_match_diagram, self.data, action, self.data_index)
         rewrite(self.zx_diagram, match, params)
         self.__remove_isolated_nodes()
@@ -136,14 +135,12 @@ class ZXGame:
         data = pre_process(data)
         data.batch = torch.zeros_like(data.node_type)
         self.data = data
-        return {
+        return ({
             'observation': self.data,
-            'diagram': self.zx_diagram.copy(),
-            'reward': self.previous_reward,
-            'done': self.done,
-        }
+            'diagram': self.zx_diagram.copy()
+        }, self.previous_reward, self.done)
 
-    def reset(self, start_state: ZXDiagram = None):
+    def reset(self, start_state: ZXDiagram = None) -> tuple[dict[str, ZXDiagram | Data], int, bool]:
         self.episode_return = 0.
         self.previous_reward = 0.
         self.zx_diagram = start_state.copy() if start_state is not None else clifford_zx_diagram(self.num_qubits,
@@ -159,9 +156,8 @@ class ZXGame:
         data = pre_process(data)
         data.batch = torch.zeros_like(data.node_type)
         self.data = data
-        return {
+        return ({
             'observation': self.data,
-            'diagram': self.zx_diagram.copy(),
-            'reward': 0,
-            'done': self.done,
-        }
+            'diagram': self.zx_diagram.copy()
+        }, 0, self.done)
+

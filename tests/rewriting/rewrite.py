@@ -109,11 +109,51 @@ class TestBRightRewrite(unittest.TestCase):
 class TestBLeftRewrite(unittest.TestCase):
 
     def test_simple_b_left_rewrite(self):
+        """
+        b4---z0---x2---b6
+                X
+        b5---z1---x3---b7
+        """
         diagram = b_left_pattern(PD)
-        b4, b5, b6, b7 = diagram.add_b_node(), diagram.add_b_node(), diagram.add_b_node(), diagram.add_b_node()
+        b4, b5, b6, b7 = diagram.add_b_nodes(4)
         diagram.add_s_edges_from([(b4, 0), (b5, 1), (2, b6), (3, b7)])
         b_left_rewrite(list(diagram.b_left_matches())[0], diagram)
         assert list(diagram.b_right_matches())[0] == BRightMatch(9, 8)
+
+    def test_self_match_connected_left_right(self):
+        """
+         z0---x2
+        (   X   )
+         z1---x3
+        """
+        diagram = b_left_pattern(PD)
+        diagram.add_s_edges_from([(0, 1), (2, 3)])
+        b_left_rewrite(list(diagram.b_left_matches())[0], diagram)
+        assert list(diagram.b_right_matches())[0] == BRightMatch(5, 4)
+
+    def test_self_match_connected_right_end(self):
+        """
+         b4---z0---x2
+                 X   )
+         b5---z1---x3
+        """
+        diagram = b_left_pattern(PD)
+        b4, b5 = diagram.add_b_nodes(2)
+        diagram.add_s_edges_from([(b4, 0), (b5, 1), (2, 3)])
+        b_left_rewrite(list(diagram.b_left_matches())[0], diagram)
+        assert list(diagram.b_right_matches()) == [BRightMatch(7, 6)]
+
+    def test_self_match_connected_left_end(self):
+        """
+          z0---x2---b4
+         (   X
+          z1---x3---b5
+        """
+        diagram = b_left_pattern(PD)
+        b4, b5 = diagram.add_b_nodes(2)
+        diagram.add_s_edges_from([(0, 1), (2, b4), (3, b5)])
+        b_left_rewrite(list(diagram.b_left_matches())[0], diagram)
+        assert list(diagram.b_right_matches()) == [BRightMatch(7, 6)]
 
 
 class TestYLeftRewrite(unittest.TestCase):
