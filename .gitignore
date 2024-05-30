@@ -2,3 +2,4 @@
 /tests/diagram/.hypothesis/
 /tests/models/.hypothesis/
 /__pycache__/
+dist
