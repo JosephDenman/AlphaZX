@@ -3,8 +3,8 @@ import torch.nn as nn
 import torch_geometric as pyg
 
 from alphazx.distributions.alpha_zx_dist import AlphaZXDistributionParams
-from alphazx.models.homogeneous.policy_network import PolicyNetwork
-from alphazx.models.homogeneous.value_network import ValueNetwork
+from alphazx.models.homogeneous.mcts.policy_network import PolicyNetwork
+from alphazx.models.homogeneous.mcts.value_network import ValueNetwork
 
 
 class PredictionNetwork(nn.Module):

@@ -174,4 +174,20 @@ class AlphaZXDistribution:
         return torch.cat((torch.stack((action_types, nodes, phases, new_edges), dim=-1), transfer_edges), dim=-1).long()
 
     def entropy(self) -> torch.Tensor:
+        """
+        It isn't obvious how to calculate the exact entropy for the entire distribution. We need to take a tractable
+        upper bound. Calculating the exact entropy for just the Bernoulli component is also intractable, since the
+        support can't easily be enumerated as n grows. So, we need to make two concessions:
+
+        1. Use a mixture of independent multivariate bernoulli distributions instead of a non-independent single
+           multi-variate bernoulli mixture.
+        2. Optimize an upper bound of the entropy instead of the exact entropy.
+
+        Those concessions, along with the following facts:
+
+        1. H(A, B) <= H(A) + H(B)
+        2. H(m1 * A + (1 - m1) * B) <= m1 * H(A) + m2 * H(B)
+
+        will allow us to optimize an upper bound on the distribution.
+        """
         raise NotImplementedError

@@ -84,13 +84,15 @@ def is_simplified(zx_diagram: ZXDiagram) -> bool:
 
 class ZXGame:
     def __init__(self, num_qubits: int, depth: int, t_gates: bool = True, one_hot_types: bool = False,
-                 step_penalty: int = 1, simplified_reward: int = 1):
+                 step_penalty: int = 1, max_num_steps: int = 100, simplified_reward: int = 1):
         self.episode_return = 0.
         self.previous_reward = 0.
+        self.step_count = 0
         self.done = False
         self.num_qubits = num_qubits
         self.depth = depth
         self.t_gates = t_gates
+        self.max_num_steps = max_num_steps
         self.one_hot_types = one_hot_types
         self.simplified_reward = simplified_reward
         self.step_penalty = step_penalty
@@ -125,7 +127,8 @@ class ZXGame:
         self.__remove_isolated_nodes()
         self.__remove_self_loop_edges()
         self.__remove_isolated_components()
-        self.done = is_simplified(self.zx_diagram)
+        self.step_count += 1
+        self.done = is_simplified(self.zx_diagram) or self.step_count == self.max_num_steps
         current_value = diagram_value(self.zx_diagram)
         self.previous_reward = self.previous_value - current_value + (0 if self.done else -self.step_penalty)
         self.episode_return += self.previous_reward
@@ -136,13 +139,14 @@ class ZXGame:
         data.batch = torch.zeros_like(data.node_type)
         self.data = data
         return ({
-            'observation': self.data,
-            'diagram': self.zx_diagram.copy()
-        }, self.previous_reward, self.done)
+                    'observation': self.data,
+                    'diagram': self.zx_diagram.copy()
+                }, self.previous_reward, self.done)
 
     def reset(self, start_state: ZXDiagram = None) -> tuple[dict[str, ZXDiagram | Data], int, bool]:
         self.episode_return = 0.
         self.previous_reward = 0.
+        self.step_count = 0
         self.zx_diagram = start_state.copy() if start_state is not None else clifford_zx_diagram(self.num_qubits,
                                                                                                  self.depth,
                                                                                                  self.t_gates)
@@ -157,7 +161,6 @@ class ZXGame:
         data.batch = torch.zeros_like(data.node_type)
         self.data = data
         return ({
-            'observation': self.data,
-            'diagram': self.zx_diagram.copy()
-        }, 0, self.done)
-
+                    'observation': self.data,
+                    'diagram': self.zx_diagram.copy()
+                }, 0, self.done)

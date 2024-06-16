@@ -30,7 +30,7 @@ class GPS(torch.nn.Module):
         super().__init__()
         self.pe_norm = BatchNorm1d(pe_in_channels)
         self.node_emb = Embedding(num_node_embeddings, channels - pe_out_channels, dtype=torch.float)
-        self.pe_lin = Linear(pe_in_channels, pe_out_channels)
+        self.pe_lin = Linear(pe_in_channels, pe_out_channels, bias=bias)
         self.edge_lin = Linear(edge_in_channels, edge_out_channels)
         self.convs = ModuleList()
         for _ in range(num_layers):
@@ -39,9 +39,7 @@ class GPS(torch.nn.Module):
                         TransformerConv(channels,
                                         channels,
                                         heads=num_attn_heads),
-                        heads=num_attn_heads,
-                        attn_type=attn_type,
-                        attn_kwargs=attn_kwargs))
+                        heads=num_attn_heads))
         self.mlp = Sequential(
             Linear(channels, mlp_hidden_channels),
             ReLU(),

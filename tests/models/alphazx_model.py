@@ -2,7 +2,7 @@ import torch_geometric as pyg
 
 from alphazx.diagram import NODE_METADATA, POSSIBLE_PHASES, clifford_pyg_zx_match_diagram
 from alphazx.models import with_embeddable_feats, with_laplacian_pe
-from alphazx.models.homogeneous.alphazx_model import AlphaZXModel
+from alphazx.models.homogeneous.mcts.alphazx_model import AlphaZXModel
 
 num_node_types = len(NODE_METADATA)
 num_possible_phases = len(POSSIBLE_PHASES)
