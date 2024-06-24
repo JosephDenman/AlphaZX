@@ -3,3 +3,5 @@
 /tests/models/.hypothesis/
 /__pycache__/
 dist
+AlphaZX.iml
+misc.xml
