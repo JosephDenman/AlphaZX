@@ -31,7 +31,7 @@ class AlphaZXDistribution:
     For simplicity, T is always fixed to the maximum (two in this case).
     """
 
-    def __init__(self, params: AlphaZXDistributionParams):
+    def __init__(self, params: AlphaZXDistributionParams, device: torch.device = 'cpu'):
         """
         :param params: A dictionary of tensors representing the parameters of the distribution. It contains the following keys:
         mixture_dist_params: B x T tensor of mixture probabilities. mixture_dist_params[b] is the mixture probabilities
@@ -48,11 +48,11 @@ class AlphaZXDistribution:
                                    in the top left corner of the innermost 2D tensor. All other entries in the innermost 2D tensor are 0.
                                    Samples drawn from this distribution are all zeros (no edges are selected to be transferred).
         """
-        self.mixture_dist_params = params.mixture_dist_probs
-        self.node_dist_params = params.node_dist_probs
-        self.phase_dist_params = params.phase_dist_probs
-        self.new_edge_dist_params = params.new_edge_dist_probs
-        self.transfer_edge_dist_params = params.transfer_edge_dist_probs
+        self.mixture_dist_params = params.mixture_dist_probs.to(device)
+        self.node_dist_params = params.node_dist_probs.to(device)
+        self.phase_dist_params = params.phase_dist_probs.to(device)
+        self.new_edge_dist_params = params.new_edge_dist_probs.to(device)
+        self.transfer_edge_dist_params = params.transfer_edge_dist_probs.to(device)
 
     def _sample_action_types(self, k: int) -> torch.Tensor:
         return Categorical(probs=self.mixture_dist_params).sample(torch.Size([k])).T
@@ -173,7 +173,8 @@ class AlphaZXDistribution:
         # print('sampled_transfer_edges = ', transfer_edges)
         return torch.cat((torch.stack((action_types, nodes, phases, new_edges), dim=-1), transfer_edges), dim=-1).long()
 
-    def entropy(self) -> torch.Tensor:
+    @staticmethod
+    def entropy(device: torch.device = 'cpu') -> torch.Tensor:
         """
         It isn't obvious how to calculate the exact entropy for the entire distribution. We need to take a tractable
         upper bound. Calculating the exact entropy for just the Bernoulli component is also intractable, since the
@@ -190,4 +191,4 @@ class AlphaZXDistribution:
 
         will allow us to optimize an upper bound on the distribution.
         """
-        raise NotImplementedError
+        return torch.tensor(0.0).to(device)

@@ -121,7 +121,7 @@ class ZXGame:
             if b_nodes.isdisjoint(c):
                 self.zx_diagram.remove_nodes_from(c)
 
-    def step(self, action: tuple) -> tuple[dict[str, ZXDiagram | Data], int, bool]:
+    def step(self, action: tuple) -> tuple[Data, int, bool]:
         match, params = tuple_to_match(self.zx_match_diagram, self.data, action, self.data_index)
         rewrite(self.zx_diagram, match, params)
         self.__remove_isolated_nodes()
@@ -138,12 +138,9 @@ class ZXGame:
         data = pre_process(data)
         data.batch = torch.zeros_like(data.node_type)
         self.data = data
-        return ({
-                    'observation': self.data,
-                    'diagram': self.zx_diagram.copy()
-                }, self.previous_reward, self.done)
+        return self.data, self.previous_reward, self.done
 
-    def reset(self, start_state: ZXDiagram = None) -> tuple[dict[str, ZXDiagram | Data], int, bool]:
+    def reset(self, start_state: ZXDiagram = None) -> tuple[Data, int, bool]:
         self.episode_return = 0.
         self.previous_reward = 0.
         self.step_count = 0
@@ -160,7 +157,4 @@ class ZXGame:
         data = pre_process(data)
         data.batch = torch.zeros_like(data.node_type)
         self.data = data
-        return ({
-                    'observation': self.data,
-                    'diagram': self.zx_diagram.copy()
-                }, 0, self.done)
+        return self.data, 0, self.done
