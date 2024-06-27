@@ -5,7 +5,7 @@ from torch_geometric.typing import NodeType
 
 from alphazx.diagram.match import Match, CompoundMatch, BoundaryMatch, NODE_TYPE_TO_INDEX_METADATA, \
     EDGE_TYPE_TO_INDEX_METADATA, NODE_METADATA, EDGE_METADATA, FRightMatch, from_index_and_node_set, \
-    MAX_MATCH_SIZE_METADATA
+    MAX_MATCH_SIZE_METADATA, BRightMatch
 from alphazx.diagram.pyg_conv import compute_node_type_attr, compute_edge_size_attr, compute_edge_type_attr
 from alphazx.diagram.zx_diagram import ZXDiagram, base_match_from_node
 
@@ -77,6 +77,14 @@ class ZXMatchDiagram(nx.DiGraph):
                           edge_size=compute_edge_size_attr(zx_diagram.number_of_edges(match_n.node, match_m.node),
                                                            match_n,
                                                            match_m))
+        self.__num_b_right_matches = None
+
+    def num_matches(self, match_type: str):
+        num_matches_prop = f'__num_{match_type}_matches'
+        if num_matches_prop not in self.__dict__.keys():
+            num_matches = sum([1 for n, ndata in self.nodes(data=True) if ndata['node_type'] == match_type])
+            self.__dict__[num_matches_prop] = num_matches
+        return self.__dict__[num_matches_prop]
 
     def to_pyg_hdata(self, with_reverse_mapping: bool = False, sort_by_row: bool = False) -> pyg.data.HeteroData | \
                                                                                              tuple[
@@ -93,7 +101,7 @@ class ZXMatchDiagram(nx.DiGraph):
                                                                                          NODE_METADATA,
                                                                                          EDGE_METADATA).sort(
             sort_by_row)
-        hdata['id'] = self.zx_diagram.id
+        # hdata['id'] = self.zx_diagram.id
         add_attr_dicts(hdata)
         hdata.validate()
         if with_reverse_mapping:

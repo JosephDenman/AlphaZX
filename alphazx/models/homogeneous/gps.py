@@ -54,7 +54,7 @@ class GPS(torch.nn.Module):
                 edge_index: torch.Tensor,
                 batch: torch.Tensor) -> torch.Tensor:
         x_pe = self.pe_norm(pe)
-        x = torch.cat((self.node_emb(x.squeeze(-1)), self.pe_lin(x_pe)), 1)
+        x = torch.cat((self.node_emb(x.long().squeeze(-1)), self.pe_lin(x_pe)), 1)
         for conv in self.convs:
             x = conv(x, edge_index, batch)
         return self.mlp(x)

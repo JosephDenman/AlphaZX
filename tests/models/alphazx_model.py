@@ -1,6 +1,7 @@
 import torch_geometric as pyg
 
 from alphazx.diagram import NODE_METADATA, POSSIBLE_PHASES, clifford_pyg_zx_match_diagram
+from alphazx.distributions import AlphaZXDistribution
 from alphazx.models import with_embeddable_feats, with_laplacian_pe
 from alphazx.models.homogeneous.mcts.alphazx_model import AlphaZXModel
 
@@ -71,3 +72,6 @@ dataloader = create_data_loader(num_diagrams, batch_size, num_qubits, depth)
 for batch in dataloader:
     batch = batch.sort(False)
     azx_dist_params, value = model(batch)
+    print('azx_dist_params = ', azx_dist_params)
+    azx_dist = AlphaZXDistribution(azx_dist_params)
+    print('sample = ', azx_dist.sample(1))
