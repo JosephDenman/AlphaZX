@@ -24,8 +24,6 @@ def assert_correct_match_instance(expected_class: Type[Match], match: Match) -> 
 
 def tuple_to_match(zx_match_diagram: ZXMatchDiagram, data: Data, action: tuple, data_index: DataIndexToMatch) -> tuple[
     Match, FRightParameters | None]:
-    print('tuple_to_match.action = ', action)
-    # print('tuple_to_match.data_index = ', data_index.indices)
     # In this function, the batch dimension of 'action' is always one.
     action_type = action[0]
     match = data_index[action[1]]

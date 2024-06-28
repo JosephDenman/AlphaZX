@@ -1,9 +1,8 @@
 from typing import Literal, NamedTuple
 
 import torch
-from torch.distributions.categorical import Categorical
-
 from alphazx.distributions.bernoulli_mixture import MultivariateBernoulli
+from torch.distributions.categorical import Categorical
 
 
 class AlphaZXDistributionParams(NamedTuple):
@@ -89,7 +88,8 @@ class AlphaZXDistribution:
         node_log_probs = selected_node_dist_params.log()[batch_indices, torch.arange(num_nodes), nodes]
         return node_log_probs
 
-    def _select_feature_dist_params(self, nodes: torch.Tensor,
+    def _select_feature_dist_params(self,
+                                    nodes: torch.Tensor,
                                     feature_type: Literal['phase'] | Literal['new_edge'] | Literal[
                                         'transfer_edge']) -> torch.Tensor:
         """
@@ -113,11 +113,13 @@ class AlphaZXDistribution:
     def _feature_log_probs(self, feature_type: Literal['phase'] | Literal['new_edge'], nodes: torch.Tensor,
                            features: torch.Tensor) -> torch.Tensor:
         selected_feature_dist_params = self._select_feature_dist_params(nodes, feature_type)
+        print('selected_feature_dist_params = ', selected_feature_dist_params)
         batch_size, num_nodes = features.shape
         # Generate a tensor of batch indices to pair with each node index
         batch_indices = torch.arange(batch_size).view(-1, 1).expand_as(features)
         # Select the corresponding distribution parameters for each node
         feature_log_probs = selected_feature_dist_params.log()[batch_indices, torch.arange(num_nodes), features]
+        print('feature_log_probs = ', feature_log_probs)
         return feature_log_probs
 
     def _sample_transfer_edges(self, nodes: torch.Tensor) -> torch.Tensor:
