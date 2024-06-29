@@ -2,6 +2,8 @@ import torch.nn
 import torch.nn.functional as F
 import torch_geometric as pyg
 
+from alphazx.models import throw_on_nan
+
 
 class RewriteTypeSelector(torch.nn.Module):
     def __init__(self,
@@ -22,6 +24,7 @@ class RewriteTypeSelector(torch.nn.Module):
                                                              pooling_dropout)
 
     def forward(self, x: torch.Tensor, node_type: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
+        throw_on_nan(x)
         # We need to compute the mixture probabilities for each batch separately, so we modify node types so that the
         # same node type in different batches is represented by a different index
         index = node_type + self.num_node_types * batch

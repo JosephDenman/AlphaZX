@@ -5,7 +5,8 @@ from torch_geometric.typing import NodeType
 
 from alphazx.diagram.match import Match, CompoundMatch, BoundaryMatch, NODE_TYPE_TO_INDEX_METADATA, \
     EDGE_TYPE_TO_INDEX_METADATA, NODE_METADATA, EDGE_METADATA, FRightMatch, from_index_and_node_set, \
-    MAX_MATCH_SIZE_METADATA, BRightMatch
+    MAX_MATCH_SIZE_METADATA, BRightMatch, FRightZMatch, FRightXMatch, FLeftZMatch, FLeftXMatch, BLeftMatch, \
+    YRightZMatch, YLeftZMatch, YLeftXMatch, YRightXMatch
 from alphazx.diagram.pyg_conv import compute_node_type_attr, compute_edge_size_attr, compute_edge_type_attr
 from alphazx.diagram.zx_diagram import ZXDiagram, base_match_from_node
 
@@ -24,12 +25,12 @@ def add_attr_dicts(hdata: pyg.data.HeteroData) -> None:
         if hdata[ntype].x.shape[0] == 0:
             del hdata[ntype]
         else:
-            hdata[ntype].node_phase = hdata[ntype].x[:, 0]
+            hdata[ntype].node_phase = hdata[ntype].x[:, 0].to(torch.float64)
     for etype in EDGE_METADATA:
         if hdata[etype].edge_index.shape[1] == 0:
             del hdata[etype]
         else:
-            hdata[etype].edge_size = hdata[etype].edge_attr[:, 0]
+            hdata[etype].edge_size = hdata[etype].edge_attr[:, 0].to(torch.float64)
 
 
 class ZXMatchDiagram(nx.DiGraph):
@@ -47,6 +48,17 @@ class ZXMatchDiagram(nx.DiGraph):
         self.node_attrs = self.zx_diagram.node_attrs
         self.edge_attrs = self.zx_diagram.edge_attrs
         super().__init__(nx.DiGraph())
+        self.boundary_nodes = set()
+        self.f_right_z_nodes = set()
+        self.f_right_x_nodes = set()
+        self.f_left_z_nodes = set()
+        self.f_left_x_nodes = set()
+        self.b_right_nodes = set()
+        self.b_left_nodes = set()
+        self.y_right_z_nodes = set()
+        self.y_left_z_nodes = set()
+        self.y_right_x_nodes = set()
+        self.y_left_x_nodes = set()
         for n in self.zx_diagram.nodes():
             assert n >= 0, f'Node {n} is not non-negative'
         boundary_match = BoundaryMatch(-1)
@@ -54,6 +66,7 @@ class ZXMatchDiagram(nx.DiGraph):
                       node_set=compute_node_set_attr(boundary_match),
                       node_type=compute_node_type_attr(boundary_match),
                       node_phase=compute_node_phase_attr(zx_diagram, boundary_match))
+        self.boundary_nodes.add(boundary_match)
         for n in zx_diagram.nodes:
             if not zx_diagram.is_boundary(n):
                 base_match = base_match_from_node(zx_diagram, n)
@@ -61,6 +74,10 @@ class ZXMatchDiagram(nx.DiGraph):
                               node_set=compute_node_set_attr(base_match),
                               node_type=compute_node_type_attr(base_match),
                               node_phase=compute_node_phase_attr(zx_diagram, base_match))
+                if base_match.abbrev == FRightZMatch.abbrev:
+                    self.f_right_z_nodes.add(base_match)
+                else:
+                    self.f_right_x_nodes.add(base_match)
         self.num_simple_nodes = self.number_of_nodes()
         for m, n in set(zx_diagram.edges()):
             match_m = base_match_from_node(zx_diagram, n)
@@ -77,14 +94,39 @@ class ZXMatchDiagram(nx.DiGraph):
                           edge_size=compute_edge_size_attr(zx_diagram.number_of_edges(match_n.node, match_m.node),
                                                            match_n,
                                                            match_m))
-        self.__num_b_right_matches = None
 
-    def num_matches(self, match_type: str):
-        num_matches_prop = f'__num_{match_type}_matches'
-        if num_matches_prop not in self.__dict__.keys():
-            num_matches = sum([1 for n, ndata in self.nodes(data=True) if ndata['node_type'] == match_type])
-            self.__dict__[num_matches_prop] = num_matches
-        return self.__dict__[num_matches_prop]
+    def num_boundary_nodes(self) -> int:
+        return len(self.boundary_nodes)
+
+    def num_f_right_z_nodes(self) -> int:
+        return len(self.f_right_z_nodes)
+
+    def num_f_right_x_nodes(self) -> int:
+        return len(self.f_right_x_nodes)
+
+    def num_f_left_z_nodes(self) -> int:
+        return len(self.f_left_z_nodes)
+
+    def num_f_left_x_nodes(self) -> int:
+        return len(self.f_left_x_nodes)
+
+    def num_b_right_nodes(self) -> int:
+        return len(self.b_right_nodes)
+
+    def num_b_left_nodes(self) -> int:
+        return len(self.b_left_nodes)
+
+    def num_y_right_z_nodes(self) -> int:
+        return len(self.y_right_z_nodes)
+
+    def num_y_left_z_nodes(self) -> int:
+        return len(self.y_left_z_nodes)
+
+    def num_y_right_x_nodes(self) -> int:
+        return len(self.y_right_x_nodes)
+
+    def num_y_left_x_nodes(self) -> int:
+        return len(self.y_left_x_nodes)
 
     def to_pyg_hdata(self, with_reverse_mapping: bool = False, sort_by_row: bool = False) -> pyg.data.HeteroData | \
                                                                                              tuple[
@@ -146,6 +188,31 @@ def add_match(zx_match_diagram: ZXMatchDiagram, zx_diagram: ZXDiagram, match: Ma
                               node_set=compute_node_set_attr(match),
                               node_type=compute_node_type_attr(match),
                               node_phase=compute_node_phase_attr(zx_diagram, match))
+    # gross...
+    if match.abbrev == BoundaryMatch.abbrev:
+        zx_match_diagram.boundary_nodes.add(match)
+    elif match.abbrev == FRightZMatch.abbrev:
+        zx_match_diagram.f_right_z_nodes.add(match)
+    elif match.abbrev == FRightXMatch.abbrev:
+        zx_match_diagram.f_right_x_nodes.add(match)
+    elif match.abbrev == FLeftZMatch.abbrev:
+        zx_match_diagram.f_left_z_nodes.add(match)
+    elif match.abbrev == FLeftXMatch.abbrev:
+        zx_match_diagram.f_left_x_nodes.add(match)
+    elif match.abbrev == BRightMatch.abbrev:
+        zx_match_diagram.b_right_nodes.add(match)
+    elif match.abbrev == BLeftMatch.abbrev:
+        zx_match_diagram.b_left_nodes.add(match)
+    elif match.abbrev == YRightZMatch.abbrev:
+        zx_match_diagram.y_right_z_nodes.add(match)
+    elif match.abbrev == YLeftZMatch.abbrev:
+        zx_match_diagram.y_left_z_nodes.add(match)
+    elif match.abbrev == YRightXMatch.abbrev:
+        zx_match_diagram.y_right_x_nodes.add(match)
+    elif match.abbrev == YLeftXMatch.abbrev:
+        zx_match_diagram.y_left_x_nodes.add(match)
+    else:
+        raise Exception(f"Unexpected match type '{match.abbrev}'")
     if isinstance(match, CompoundMatch):
         for sub_match in match.sub_matches:
             add_match(zx_match_diagram, zx_diagram, sub_match)

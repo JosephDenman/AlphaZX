@@ -5,6 +5,11 @@ from alphazx.distributions.bernoulli_mixture import MultivariateBernoulli
 from torch.distributions.categorical import Categorical
 
 
+def safe_log(t: torch.Tensor) -> torch.Tensor:
+    eps = torch.finfo(t.dtype).eps
+    return torch.log(torch.clamp(t, min=eps))
+
+
 class AlphaZXDistributionParams(NamedTuple):
     mixture_dist_probs: torch.Tensor
     node_dist_probs: torch.Tensor
@@ -57,7 +62,7 @@ class AlphaZXDistribution:
         return Categorical(probs=self.mixture_dist_params).sample(torch.Size([k])).T
 
     def _action_type_log_probs(self, action_types: torch.Tensor) -> torch.Tensor:
-        return torch.gather(self.mixture_dist_params.log(), 1, action_types)
+        return torch.gather(safe_log(self.mixture_dist_params), 1, action_types)
 
     def _select_node_dist_params(self, action_types: torch.Tensor) -> torch.Tensor:
         # Reshape action_types for broadcasting over the distributions
@@ -85,7 +90,7 @@ class AlphaZXDistribution:
         # Generate a tensor of batch indices to pair with each node index
         batch_indices = torch.arange(batch_size).view(-1, 1).expand_as(nodes)
         # Select the distribution parameters for each node
-        node_log_probs = selected_node_dist_params.log()[batch_indices, torch.arange(num_nodes), nodes]
+        node_log_probs = safe_log(selected_node_dist_params)[batch_indices, torch.arange(num_nodes), nodes]
         return node_log_probs
 
     def _select_feature_dist_params(self,
@@ -113,13 +118,11 @@ class AlphaZXDistribution:
     def _feature_log_probs(self, feature_type: Literal['phase'] | Literal['new_edge'], nodes: torch.Tensor,
                            features: torch.Tensor) -> torch.Tensor:
         selected_feature_dist_params = self._select_feature_dist_params(nodes, feature_type)
-        print('selected_feature_dist_params = ', selected_feature_dist_params)
         batch_size, num_nodes = features.shape
         # Generate a tensor of batch indices to pair with each node index
         batch_indices = torch.arange(batch_size).view(-1, 1).expand_as(features)
         # Select the corresponding distribution parameters for each node
-        feature_log_probs = selected_feature_dist_params.log()[batch_indices, torch.arange(num_nodes), features]
-        print('feature_log_probs = ', feature_log_probs)
+        feature_log_probs = safe_log(selected_feature_dist_params)[batch_indices, torch.arange(num_nodes), features]
         return feature_log_probs
 
     def _sample_transfer_edges(self, nodes: torch.Tensor) -> torch.Tensor:

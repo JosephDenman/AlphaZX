@@ -1,6 +1,8 @@
 import torch
 import torch_geometric as pyg
 
+from alphazx.models import throw_on_nan
+
 
 class NeighborMultisetTransformer(torch.nn.Module):
     def __init__(self,
@@ -17,6 +19,7 @@ class NeighborMultisetTransformer(torch.nn.Module):
         self.gmt.reset_parameters()
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
+        throw_on_nan(x)
         # Get neighbor features
         x = torch.index_select(x, 0, edge_index[0])
         # Aggregate neighbor features according to the central node

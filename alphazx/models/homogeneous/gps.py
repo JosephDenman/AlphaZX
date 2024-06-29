@@ -11,6 +11,8 @@ from torch.nn import (
 )
 from torch_geometric.nn import GPSConv, TransformerConv
 
+from alphazx.models import throw_on_nan
+
 
 class GPS(torch.nn.Module):
     def __init__(self,
@@ -53,6 +55,7 @@ class GPS(torch.nn.Module):
                 pe: torch.Tensor,
                 edge_index: torch.Tensor,
                 batch: torch.Tensor) -> torch.Tensor:
+        throw_on_nan(x)
         x_pe = self.pe_norm(pe)
         x = torch.cat((self.node_emb(x.long().squeeze(-1)), self.pe_lin(x_pe)), 1)
         for conv in self.convs:

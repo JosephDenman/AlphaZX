@@ -15,12 +15,13 @@ def concatenate_by_group(x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
     return x_
 
 
-def concatenate_neighbor_features(x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
+def concatenate_neighbor_features(x: torch.Tensor, edge_index: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     neighbor_x = torch.index_select(x, 0, edge_index[0])
-    x_, mask = pyg.utils.to_dense_batch(neighbor_x, edge_index[1], -torch.inf)
-    mask = torch.any(mask, dim=1)
-    x_ = x_[mask]
-    return x_
+    x_, mask = pyg.utils.to_dense_batch(neighbor_x, edge_index[1])
+    row_mask = torch.any(mask, dim=1)
+    x_ = x_[row_mask]
+    mask = mask[row_mask]
+    return x_, mask
 
 
 def concatenate_with_neighbor_features(x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
@@ -124,3 +125,12 @@ def remove_all_nan_rows(x: torch.Tensor) -> torch.Tensor:
 def compute_basis_neighbors(edge_index: torch.Tensor, node: int, node_types: torch.Tensor) -> torch.Tensor:
     edge_index = mask_non_basis_edges(edge_index, node_types)
     return edge_index[0][edge_index[1] == node]
+
+
+def throw_on_nan(x: torch.Tensor) -> None:
+    if torch.isnan(x).any():
+        raise Exception(f'Input tensor {x} contains NaN values')
+    if (x == torch.inf).any():
+        raise Exception(f'Input tensor {x} contains NaN values')
+    if (x == -torch.inf).any():
+        raise Exception(f'Input tensor {x} contains NaN values')

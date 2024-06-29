@@ -1,6 +1,8 @@
 import torch.nn
 import torch_geometric as pyg
 
+from alphazx.models import throw_on_nan
+
 
 class NodeSelector(torch.nn.Module):
     def __init__(self, node_embedding_channels: int, num_node_types: int):
@@ -9,6 +11,7 @@ class NodeSelector(torch.nn.Module):
         self.mlp = pyg.nn.MLP([node_embedding_channels, 1])
 
     def forward(self, x: torch.Tensor, node_types: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
+        throw_on_nan(x)
         # TODO: Add a neighbor aggregation
         # Gather node embeddings according to batch
         x, batch_mask = pyg.utils.to_dense_batch(x, batch)
