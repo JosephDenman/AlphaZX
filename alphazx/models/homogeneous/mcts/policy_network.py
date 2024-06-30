@@ -32,6 +32,13 @@ class PolicyNetwork(nn.Module):
         self.new_edge_selector = NewEdgeSelector(node_embedding_channels, num_possible_new_edges)
         self.transfer_edge_selector = TransferEdgeSelector(node_embedding_channels, num_node_types)
 
+    def reset_parameters(self):
+        self.rewrite_type_selector.reset_parameters()
+        self.node_selector.reset_parameters()
+        self.new_phase_selector.reset_parameters()
+        self.new_edge_selector.reset_parameters()
+        self.transfer_edge_selector.reset_parameters()
+
     def forward(self, data: pyg.data.Data) -> AlphaZXDistributionParams:
         """
         TODO: Have the node, phase, and edge prob computations be autoregressive. Compute mixture probabilities last
@@ -40,11 +47,11 @@ class PolicyNetwork(nn.Module):
         :param data: The pyg.data.Data object representing the ZX match diagram.
         :return: Parameters for the AlphaZXDistribution.
         """
-        mixture_probs = self.rewrite_type_selector(data.x, data.node_type, data.batch)
         node_probs = self.node_selector(data.x, data.node_type, data.batch)
         phase_probs = self.new_phase_selector(data.x, data.node_type, data.batch)
         edge_probs = self.new_edge_selector(data.x, data.node_type, data.batch)
         transfer_edge_probs = self.transfer_edge_selector(data.x, data.edge_index, data.node_type, data.batch)
+        mixture_probs = self.rewrite_type_selector(data.x, data.node_type, data.batch)
         return AlphaZXDistributionParams(mixture_probs,
                                          node_probs,
                                          phase_probs,

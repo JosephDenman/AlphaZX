@@ -41,7 +41,10 @@ class GPS(torch.nn.Module):
                         TransformerConv(channels,
                                         channels,
                                         heads=num_attn_heads),
-                        heads=num_attn_heads))
+                        attn_type=attn_type,
+                        attn_kwargs=attn_kwargs,
+                        heads=num_attn_heads,
+                        norm='layer_norm'))
         self.mlp = Sequential(
             Linear(channels, mlp_hidden_channels),
             ReLU(),
@@ -49,6 +52,15 @@ class GPS(torch.nn.Module):
             ReLU(),
             Linear(mlp_hidden_channels, node_out_channels),
         )
+
+    def reset_parameters(self):
+        self.pe_norm.reset_parameters()
+        self.node_emb.reset_parameters()
+        self.pe_lin.reset_parameters()
+        self.edge_lin.reset_parameters()
+        for conv in self.convs:
+            conv.reset_parameters()
+        self.mlp.reset_parameters()
 
     def forward(self,
                 x: torch.Tensor,

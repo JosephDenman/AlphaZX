@@ -165,7 +165,7 @@ class ZXMatchDiagram(nx.DiGraph):
         return data
 
 
-def to_zx_match_diagram(zx_diagram: ZXDiagram) -> ZXMatchDiagram:
+def to_zx_match_diagram(zx_diagram: ZXDiagram, one_hot_types: bool) -> ZXMatchDiagram:
     zx_match_diagram = ZXMatchDiagram(zx_diagram)
     matches = set(zx_diagram.compute_matches())
     for match in matches:

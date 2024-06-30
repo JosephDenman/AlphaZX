@@ -11,6 +11,9 @@ class NewPhaseSelector(torch.nn.Module):
         self.num_possible_phases = num_possible_phases
         self.mlp = pyg.nn.MLP([node_embedding_channels, num_possible_phases])
 
+    def reset_parameters(self):
+        self.mlp.reset_parameters()
+
     def forward(self, x: torch.Tensor, node_types: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
         throw_on_nan(x)
         # Exact same computation as the new edge probs computation

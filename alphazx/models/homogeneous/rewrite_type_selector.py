@@ -23,6 +23,10 @@ class RewriteTypeSelector(torch.nn.Module):
                                                              pooling_layer_norm,
                                                              pooling_dropout)
 
+    def reset_parameters(self):
+        self.mixture_mlp.reset_parameters()
+        self.mixture_trans.reset_parameters()
+
     def forward(self, x: torch.Tensor, node_type: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
         throw_on_nan(x)
         # We need to compute the mixture probabilities for each batch separately, so we modify node types so that the

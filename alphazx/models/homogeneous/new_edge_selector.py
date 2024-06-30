@@ -11,6 +11,9 @@ class NewEdgeSelector(torch.nn.Module):
         self.num_possible_new_edges = num_possible_new_edges
         self.mlp = pyg.nn.MLP([node_embedding_channels, num_possible_new_edges])
 
+    def reset_parameters(self):
+        self.mlp.reset_parameters()
+
     def forward(self, x: torch.Tensor, node_types: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
         throw_on_nan(x)
         # Gather node embeddings according to batch

@@ -38,5 +38,8 @@ class RepresentationNetwork(nn.Module):
                        gps_attn_kwargs,
                        gps_mlp_hidden_channels)
 
+    def reset_parameters(self):
+        self.gps.reset_parameters()
+
     def forward(self, data: pyg.data.Data) -> torch.Tensor:
         return self.gps(data.x, data.pe, data.edge_index, data.batch)

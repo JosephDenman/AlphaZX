@@ -131,6 +131,7 @@ class ZXGame:
                  num_qubits: int,
                  depth: int,
                  t_gates: bool = True,
+                 one_hot_types: bool = False,
                  step_penalty: int = 1,
                  max_episode_length: int = 100,
                  simplified_reward: int = 1):
@@ -138,6 +139,7 @@ class ZXGame:
         self.num_qubits = num_qubits
         self.depth = depth
         self.t_gates = t_gates
+        self.one_hot_types = one_hot_types
         self.step_penalty = step_penalty
         self.max_episode_length = max_episode_length
         self.simplified_reward = simplified_reward
@@ -151,7 +153,7 @@ class ZXGame:
         self.__remove_isolated_nodes()
         self.__remove_self_loop_edges()
         self.__remove_isolated_components()
-        self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram)
+        self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram, self.one_hot_types)
         self.diagram_stats = DiagramStats(self.zx_match_diagram)
         self.previous_value = diagram_value(self.diagram_stats)
         data, self.data_index = self.zx_match_diagram.to_pyg_data(True)
@@ -179,7 +181,7 @@ class ZXGame:
         self.__remove_isolated_nodes()
         self.__remove_self_loop_edges()
         self.__remove_isolated_components()
-        self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram)
+        self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram, self.one_hot_types)
         self.diagram_stats = DiagramStats(self.zx_match_diagram)
 
         self.episode_length += 1
@@ -205,7 +207,7 @@ class ZXGame:
         self.__remove_isolated_nodes()
         self.__remove_self_loop_edges()
         self.__remove_isolated_components()
-        self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram)
+        self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram, self.one_hot_types)
         self.diagram_stats = DiagramStats(self.zx_match_diagram)
 
         self.done = is_simplified(self.zx_diagram)

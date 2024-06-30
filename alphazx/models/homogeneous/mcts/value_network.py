@@ -15,6 +15,10 @@ class ValueNetwork(nn.Module):
                                                     gmt_layer_norm, gmt_dropout)
         self.mlp = pyg.nn.MLP([node_embedding_channels, 1])
 
+    def reset_parameters(self):
+        self.pool.reset_parameters()
+        self.mlp.reset_parameters()
+
     def forward(self, data: pyg.data.Data) -> torch.Tensor:
         x = self.pool(data.x, data.batch)
         res = self.mlp(x, data.batch)

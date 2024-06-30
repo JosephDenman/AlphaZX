@@ -36,6 +36,10 @@ class PredictionNetwork(nn.Module):
                                             policy_pooling_layer_norm,
                                             policy_pooling_dropout)
 
+    def reset_parameters(self):
+        self.value_network.reset_parameters()
+        self.policy_network.reset_parameters()
+
     def forward(self, data: pyg.data.Data) -> tuple[AlphaZXDistributionParams, torch.Tensor]:
         policy = self.policy_network(data)
         value = self.value_network(data)

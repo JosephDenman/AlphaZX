@@ -10,6 +10,9 @@ class NodeSelector(torch.nn.Module):
         self.num_node_types = num_node_types
         self.mlp = pyg.nn.MLP([node_embedding_channels, 1])
 
+    def reset_parameters(self):
+        self.mlp.reset_parameters()
+
     def forward(self, x: torch.Tensor, node_types: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
         throw_on_nan(x)
         # TODO: Add a neighbor aggregation
