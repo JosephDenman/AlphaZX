@@ -16,10 +16,10 @@ class NodeSelector(torch.nn.Module):
     def forward(self, x: torch.Tensor, node_types: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
         throw_on_nan(x)
         # TODO: Add a neighbor aggregation
-        # Gather node embeddings according to batch
-        x, batch_mask = pyg.utils.to_dense_batch(x, batch)
         # Project node embeddings to a scalar representing an un-normalized probability of selecting the node
         x = self.mlp(x).squeeze(dim=-1)
+        # Gather node embeddings according to batch
+        x, batch_mask = pyg.utils.to_dense_batch(x, batch)
         # Mask padding nodes from to_dense_batch with negative infinity
         x[~batch_mask] = -torch.inf
         # Gather node types according to batch
@@ -34,4 +34,6 @@ class NodeSelector(torch.nn.Module):
         node_probs[torch.isnan(node_probs)] = 0.
         # Zero out boundary probabilities
         node_probs[:, 0, 0] = 0.
+        # print('ns.batch = ', batch)
+        # print('ns.node_probs = ', node_probs)
         return node_probs

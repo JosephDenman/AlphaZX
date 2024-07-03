@@ -44,7 +44,6 @@ class TransferEdgeSelector(torch.nn.Module):
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor, node_types: torch.Tensor,
                 batch: torch.Tensor) -> torch.Tensor:
         throw_on_nan(x)
-        print('x = ', x)
         # We only want to aggregate along edges between basis nodes
         edge_index = mask_non_basis_edges(edge_index, node_types)
         # Aggregate along edges between basis nodes
