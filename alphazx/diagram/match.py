@@ -32,14 +32,16 @@ class Match(abc.ABC):
         self._match = dict(sorted(self.original_match.items(), key=lambda item: item[1]))
         self._nodes = tuple(self._match.keys())
 
+    @staticmethod
     @property
     @abc.abstractmethod
-    def index(self) -> int:
+    def index() -> int:
         pass
 
+    @staticmethod
     @property
     @abc.abstractmethod
-    def name(self) -> str:
+    def name() -> str:
         pass
 
     @staticmethod
@@ -48,14 +50,16 @@ class Match(abc.ABC):
     def abbrev() -> str:
         pass
 
+    @staticmethod
     @property
     @abc.abstractmethod
-    def expected_size(self) -> int:
+    def expected_size() -> int:
         pass
 
     @staticmethod
+    @property
     @abc.abstractmethod
-    def sub_match_types() -> list[Type['Match']]:
+    def meta_neighbors() -> list[Type['Match']]:
         pass
 
     @classmethod
@@ -66,9 +70,13 @@ class Match(abc.ABC):
     def is_basis_match(cls) -> bool:
         return issubclass(cls, FRightMatch)
 
-    @property
-    def is_compound_match(self) -> bool:
-        return not self.is_simple_match
+    @classmethod
+    def is_compound_match(cls) -> bool:
+        return issubclass(cls, CompoundMatch)
+
+    @classmethod
+    def is_super_match(cls) -> bool:
+        return issubclass(cls, SuperMatch)
 
     @property
     def nodes(self) -> list[int]:
@@ -322,6 +330,90 @@ class YLeftXMatch(YLeftMatch):
         return [FRightZMatch(node) if i == 1 else FRightXMatch(node) for i, node in enumerate(self.nodes)]
 
 
+# super_match -> [super_match, compound_match, simple_match]
+# compound_match -> [super_match, compound_match, simple_match]
+# simple_match -> [super_match, compound_match, simple_match]
+
+
+class SuperMatch(Match, abc.ABC):
+    expected_size = 0
+    sub_match_types = []
+
+    @property
+    def sub_matches(self) -> list[Match]:
+        return []
+
+    @classmethod
+    def meta_neighbors(cls) -> list[Type['Match']]:
+        pass
+
+
+class BoundarySuperMatch(SuperMatch):
+    name = 'boundary_super'
+    abbrev = 'b_super'
+    index = 11
+
+
+class FRightZSuperMatch(SuperMatch):
+    name = 'f_right_z_super'
+    abbrev = 'z_super'
+    index = 12
+
+
+class FLeftZSuperMatch(SuperMatch):
+    name = 'f_left_z_super'
+    abbrev = 'flz_super'
+    index = 13
+
+
+class FRightXSuperMatch(SuperMatch):
+    name = 'f_right_x_super'
+    abbrev = 'x_super'
+    index = 14
+
+
+class FLeftXSuperMatch(SuperMatch):
+    name = 'f_left_x_super'
+    abbrev = 'flx_super'
+    index = 15
+
+
+class BRightSuperMatch(SuperMatch):
+    name = 'b_right_super'
+    abbrev = 'br_super'
+    index = 16
+
+
+class BLeftSuperMatch(SuperMatch):
+    name = 'b_left_super'
+    abbrev = 'bl_super'
+    index = 17
+
+
+class YRightZSuperMatch(SuperMatch):
+    name = 'y_right_z_super'
+    abbrev = 'yrz_super'
+    index = 18
+
+
+class YLeftZSuperMatch(SuperMatch):
+    name = 'y_left_z_super'
+    abbrev = 'ylz_super'
+    index = 19
+
+
+class YRightXSuperMatch(SuperMatch):
+    name = 'y_right_x_super'
+    abbrev = 'yrx'
+    index = 20
+
+
+class YLeftXSuperMatch(SuperMatch):
+    name = 'y_left_x_super'
+    abbrev = 'ylx_super'
+    index = 21
+
+
 def from_index_and_node_set(node_type: int, node_set: tuple[int] | list[int] | int) -> Match:
     constructor = INDEX_TO_CONSTRUCTOR_METADATA[node_type]
     if isinstance(constructor, SimpleMatch):
@@ -353,13 +445,17 @@ def _count_match_types() -> int:
     return len(_leaf_classes())
 
 
-Metadata = tuple[
-    list[NodeType], list[int], list[NodeType], dict[NodeType, int], list[EdgeType], dict[EdgeType, int], list[EdgeType],
-    dict[
-        EdgeType, int], dict[tuple[int, tuple[float, float]], int], list[Type[Match]], int, list[int]]
+# Metadata = tuple[
+#     list[NodeType], list[int], list[NodeType], dict[NodeType, int], list[EdgeType], dict[EdgeType, int], list[EdgeType],
+#     dict[
+#         EdgeType, int], dict[tuple[int, tuple[float, float]], int], list[Type[Match]], int, list[int]]
 
 POSSIBLE_PHASES = [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1., 1.125, 1.25, 1.375, 1.5, 1.625, 1.75, 1.875]
 NUM_POSSIBLE_PHASES = len(POSSIBLE_PHASES)
+
+MetadataItemName = Literal['abbrevs'] | Literal['indices'] | Literal['abbrev_to_index']
+MetadataItem = dict | set
+Metadata = dict[MetadataItemName, MetadataItem]
 
 
 def _compute_metadata() -> Metadata:
@@ -367,7 +463,7 @@ def _compute_metadata() -> Metadata:
     leaf_classes = sorted(_leaf_classes(), key=lambda lc: lc.index)
     node_type_to_index_metadata = {leaf_class.abbrev: leaf_class.index for leaf_class in leaf_classes}
     for leaf_class in leaf_classes:
-        sub_match_class_names = [sub_match_class.abbrev for sub_match_class in leaf_class.sub_match_types]
+        sub_match_class_names = [sub_match_class.abbrev for sub_match_class in leaf_class.meta_neighbors]
         if len(sub_match_class_names) != 0:
             for sub_match_class_name in sub_match_class_names:
                 for a, b in itertools.permutations([leaf_class.abbrev, sub_match_class_name]):
@@ -387,10 +483,10 @@ def _compute_metadata() -> Metadata:
     node_feature_pair_to_index_metadata = {tuple(pair): i for i, pair in
                                            enumerate(list(itertools.product(node_type_indices, POSSIBLE_PHASES)))}
     max_match_size_metadata = max([leaf_class.expected_size for leaf_class in leaf_classes])
-    return (node_metadata,
-            node_type_indices,
+    return (node_metadata, # in
+            node_type_indices, # in
             simple_node_metadata,
-            node_type_to_index_metadata,
+            node_type_to_index_metadata, # in
             edge_metadata,
             edge_type_to_index_metadata,
             simple_edge_metadata,
