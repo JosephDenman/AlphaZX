@@ -3,30 +3,29 @@ import torch
 import torch_geometric as pyg
 from torch_geometric.typing import NodeType
 
-from alphazx.diagram.match import Match, CompoundMatch, BoundaryMatch, NODE_TYPE_TO_INDEX_METADATA, \
-    EDGE_TYPE_TO_INDEX_METADATA, NODE_METADATA, EDGE_METADATA, FRightMatch, from_index_and_node_set, \
-    MAX_MATCH_SIZE_METADATA, BRightMatch, FRightZMatch, FRightXMatch, FLeftZMatch, FLeftXMatch, BLeftMatch, \
-    YRightZMatch, YLeftZMatch, YLeftXMatch, YRightXMatch
+from alphazx.diagram.match import MatchNode, CompoundMatchNode, BoundaryMatch, FRightMatch, from_index_and_node_set, \
+    BRightMatch, FRightZMatch, FRightXMatch, FLeftZMatch, FLeftXMatch, BLeftMatch, \
+    YRightZMatch, YLeftZMatch, YLeftXMatch, YRightXMatch, METADATA
 from alphazx.diagram.pyg_conv import compute_node_type_attr, compute_edge_size_attr, compute_edge_type_attr
 from alphazx.diagram.zx_diagram import ZXDiagram, base_match_from_node
 
 
 def add_type_masks(data: pyg.data.Data) -> None:
     data['node_mask_dict'] = {}
-    for ntype in NODE_METADATA:
-        data['node_mask_dict'][ntype] = data.x[:, 0].int().eq(NODE_TYPE_TO_INDEX_METADATA[ntype])
+    for ntype in METADATA.node_type_abbrevs:
+        data['node_mask_dict'][ntype] = data.x[:, 0].int().eq(METADATA.node_feat_to_index_dict[ntype])
     data['edge_mask_dict'] = {}
-    for etype in EDGE_METADATA:
-        data['edge_mask_dict'][etype] = data.edge_attr[:, 0].int().eq(EDGE_TYPE_TO_INDEX_METADATA[etype])
+    for etype in METADATA.edge_types:
+        data['edge_mask_dict'][etype] = data.edge_attr[:, 0].int().eq(METADATA.edge_type_to_index_dict[etype])
 
 
 def add_attr_dicts(hdata: pyg.data.HeteroData) -> None:
-    for ntype in NODE_METADATA:
+    for ntype in METADATA.node_type_abbrevs:
         if hdata[ntype].x.shape[0] == 0:
             del hdata[ntype]
         else:
             hdata[ntype].node_phase = hdata[ntype].x[:, 0].to(torch.float64)
-    for etype in EDGE_METADATA:
+    for etype in METADATA.edge_types:
         if hdata[etype].edge_index.shape[1] == 0:
             del hdata[etype]
         else:
@@ -85,15 +84,11 @@ class ZXMatchDiagram(nx.DiGraph):
             self.add_edge(match_m,
                           match_n,
                           edge_type=compute_edge_type_attr(match_m, match_n),
-                          edge_size=compute_edge_size_attr(zx_diagram.number_of_edges(match_m.node, match_n.node),
-                                                           match_m,
-                                                           match_n))
+                          edge_size=zx_diagram.number_of_edges(m, n))
             self.add_edge(match_n,
                           match_m,
                           edge_type=compute_edge_type_attr(match_n, match_m),
-                          edge_size=compute_edge_size_attr(zx_diagram.number_of_edges(match_n.node, match_m.node),
-                                                           match_n,
-                                                           match_m))
+                          edge_size=zx_diagram.number_of_edges(n, m))
 
     def num_boundary_nodes(self) -> int:
         return len(self.boundary_nodes)
@@ -131,17 +126,17 @@ class ZXMatchDiagram(nx.DiGraph):
     def to_pyg_hdata(self, with_reverse_mapping: bool = False, sort_by_row: bool = False) -> pyg.data.HeteroData | \
                                                                                              tuple[
                                                                                                  pyg.data.HeteroData, 'HeteroDataIndexToMatch']:
-        n_types = torch.tensor([NODE_TYPE_TO_INDEX_METADATA[ndata['node_type']] for _, ndata in self.nodes(data=True)],
+        n_types = torch.tensor([METADATA.node_type_abbrev_index_dict[ndata['node_type']] for _, ndata in self.nodes(data=True)],
                                dtype=torch.long)
         e_types = torch.tensor(
-            [EDGE_TYPE_TO_INDEX_METADATA[edata['edge_type']] for _, _, edata in self.edges(data=True)],
+            [METADATA.edge_type_to_index_dict[edata['edge_type']] for _, _, edata in self.edges(data=True)],
             dtype=torch.long)
         hdata = pyg.utils.from_networkx(self,
                                         group_node_attrs=['node_phase'],
                                         group_edge_attrs=['edge_size']).to_heterogeneous(n_types,
                                                                                          e_types,
-                                                                                         NODE_METADATA,
-                                                                                         EDGE_METADATA).sort(
+                                                                                         METADATA.node_type_abbrevs,
+                                                                                         METADATA.edge_types).sort(
             sort_by_row)
         # hdata['id'] = self.zx_diagram.id
         add_attr_dicts(hdata)
@@ -165,7 +160,7 @@ class ZXMatchDiagram(nx.DiGraph):
         return data
 
 
-def to_zx_match_diagram(zx_diagram: ZXDiagram, one_hot_types: bool) -> ZXMatchDiagram:
+def to_zx_match_diagram(zx_diagram: ZXDiagram) -> ZXMatchDiagram:
     zx_match_diagram = ZXMatchDiagram(zx_diagram)
     matches = set(zx_diagram.compute_matches())
     for match in matches:
@@ -183,7 +178,7 @@ def to_zx_match_diagram(zx_diagram: ZXDiagram, one_hot_types: bool) -> ZXMatchDi
     return zx_match_diagram
 
 
-def add_match(zx_match_diagram: ZXMatchDiagram, zx_diagram: ZXDiagram, match: Match) -> None:
+def add_match(zx_match_diagram: ZXMatchDiagram, zx_diagram: ZXDiagram, match: MatchNode) -> None:
     zx_match_diagram.add_node(match,
                               node_set=compute_node_set_attr(match),
                               node_type=compute_node_type_attr(match),
@@ -213,7 +208,7 @@ def add_match(zx_match_diagram: ZXMatchDiagram, zx_diagram: ZXDiagram, match: Ma
         zx_match_diagram.y_left_x_nodes.add(match)
     else:
         raise Exception(f"Unexpected match type '{match.abbrev}'")
-    if isinstance(match, CompoundMatch):
+    if isinstance(match, CompoundMatchNode):
         for sub_match in match.sub_matches:
             add_match(zx_match_diagram, zx_diagram, sub_match)
             zx_match_diagram.add_edge(match,
@@ -229,12 +224,12 @@ def add_match(zx_match_diagram: ZXMatchDiagram, zx_diagram: ZXDiagram, match: Ma
                                                                        sub_match, match))
 
 
-def compute_node_set_attr(match: Match) -> torch.Tensor:
+def compute_node_set_attr(match: MatchNode) -> torch.Tensor:
     return torch.nn.functional.pad(torch.tensor([len(match.nodes)] + match.nodes, dtype=torch.long),
-                                   (0, MAX_MATCH_SIZE_METADATA - len(match.nodes)), mode='constant', value=0)
+                                   (0, METADATA.max_match_size - len(match.nodes)), mode='constant', value=0)
 
 
-def compute_node_phase_attr(zx_diagram: ZXDiagram, match: Match) -> torch.Tensor:
+def compute_node_phase_attr(zx_diagram: ZXDiagram, match: MatchNode) -> torch.Tensor:
     if isinstance(match, FRightMatch):
         # Although the phase outputs of the GNN are categorical, we represent the input features as floats.
         return torch.tensor(zx_diagram.phase(match.nodes[0]), dtype=torch.float)
@@ -257,7 +252,7 @@ class DataIndexToMatch:
 class HeteroDataIndexToMatch:
     def __init__(self, zx_match_diagram: ZXMatchDiagram):
         self.indices = dict()
-        self.node_metadata = set(NODE_METADATA)
+        self.node_metadata = set(METADATA.node_type_abbrevs)
         for node_type in self.node_metadata:
             self.indices[node_type] = []
         for match, ndata in zx_match_diagram.nodes(data=True):

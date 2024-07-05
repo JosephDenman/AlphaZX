@@ -4,7 +4,7 @@ import networkx as nx
 import torch
 from alphazx.diagram.action_decoder import compute_f_right_params
 from alphazx.diagram.diagram_generators import clifford_zx_diagram
-from alphazx.diagram.match import Match, FRightZMatch, FLeftZMatch, FRightXMatch, FLeftXMatch, \
+from alphazx.diagram.match import MatchNode, FRightZMatch, FLeftZMatch, FRightXMatch, FLeftXMatch, \
     BRightMatch, BLeftMatch, YRightZMatch, YLeftZMatch, YRightXMatch, YLeftXMatch
 from alphazx.diagram.zx_diagram import ZXDiagram
 from alphazx.diagram.zx_match_diagram import ZXMatchDiagram, to_zx_match_diagram, DataIndexToMatch
@@ -13,17 +13,17 @@ from alphazx.rewriting.utils import rewrite, FRightParameters
 from torch_geometric.data import Data
 
 
-def node_index_to_match(node_index: int, match_diagram: ZXMatchDiagram) -> Match:
+def node_index_to_match(node_index: int, match_diagram: ZXMatchDiagram) -> MatchNode:
     return list(match_diagram.nodes)[node_index]
 
 
-def assert_correct_match_instance(expected_class: Type[Match], match: Match) -> None:
+def assert_correct_match_instance(expected_class: Type[MatchNode], match: MatchNode) -> None:
     if not isinstance(match, expected_class):
         raise ValueError(f'Expected {expected_class} but got {match}')
 
 
 def tuple_to_match(zx_match_diagram: ZXMatchDiagram, data: Data, action: tuple, data_index: DataIndexToMatch) -> tuple[
-    Match, FRightParameters | None]:
+    MatchNode, FRightParameters | None]:
     # In this function, the batch dimension of 'action' is always one.
     action_type = action[0]
     match = data_index[action[1]]
@@ -153,7 +153,7 @@ class ZXGame:
         self.__remove_isolated_nodes()
         self.__remove_self_loop_edges()
         self.__remove_isolated_components()
-        self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram, self.one_hot_types)
+        self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram)
         self.diagram_stats = DiagramStats(self.zx_match_diagram)
         self.previous_value = diagram_value(self.diagram_stats)
         data, self.data_index = self.zx_match_diagram.to_pyg_data(True)
@@ -181,7 +181,7 @@ class ZXGame:
         self.__remove_isolated_nodes()
         self.__remove_self_loop_edges()
         self.__remove_isolated_components()
-        self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram, self.one_hot_types)
+        self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram)
         self.diagram_stats = DiagramStats(self.zx_match_diagram)
 
         self.episode_length += 1
@@ -207,7 +207,7 @@ class ZXGame:
         self.__remove_isolated_nodes()
         self.__remove_self_loop_edges()
         self.__remove_isolated_components()
-        self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram, self.one_hot_types)
+        self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram)
         self.diagram_stats = DiagramStats(self.zx_match_diagram)
 
         self.done = is_simplified(self.zx_diagram)

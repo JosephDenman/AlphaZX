@@ -1,17 +1,53 @@
 import abc
 import itertools
-from typing import Type
+from typing import Type, NamedTuple
 
-from torch_geometric.typing import NodeType, EdgeType
-import torch_geometric as pyg
+import networkx as nx
 from typing_extensions import Literal
 
-from alphazx.diagram.constants import S_ETYPE_NAME, I_ETYPE_NAME
+from alphazx.diagram.constants import S_ETYPE_NAME, I_ETYPE_NAME, SS_ETYPE_NAME, SI_ETYPE_NAME
 
 Basis = Literal['z', 'x']
 
 
-class Match(abc.ABC):
+class ZXMatchDiagramNode(abc.ABC):
+    def __hash__(self):
+        return hash(self.name)
+
+    @staticmethod
+    @property
+    @abc.abstractmethod
+    def index() -> int:
+        pass
+
+    @staticmethod
+    @property
+    @abc.abstractmethod
+    def name() -> str:
+        pass
+
+    @staticmethod
+    @property
+    @abc.abstractmethod
+    def abbrev() -> str:
+        pass
+
+    @staticmethod
+    @property
+    @abc.abstractmethod
+    def meta_neighbors() -> list[Type['ZXMatchDiagramNode']]:
+        pass
+
+    @classmethod
+    def is_super_node(cls) -> bool:
+        return issubclass(cls, SuperNode)
+
+    @classmethod
+    def is_match_node(cls) -> bool:
+        return issubclass(cls, MatchNode)
+
+
+class MatchNode(ZXMatchDiagramNode, abc.ABC):
 
     def __init__(self, *match: tuple[int] | list[int] | int):
         """
@@ -35,48 +71,20 @@ class Match(abc.ABC):
     @staticmethod
     @property
     @abc.abstractmethod
-    def index() -> int:
-        pass
-
-    @staticmethod
-    @property
-    @abc.abstractmethod
-    def name() -> str:
-        pass
-
-    @staticmethod
-    @property
-    @abc.abstractmethod
-    def abbrev() -> str:
-        pass
-
-    @staticmethod
-    @property
-    @abc.abstractmethod
     def expected_size() -> int:
         pass
 
-    @staticmethod
-    @property
-    @abc.abstractmethod
-    def meta_neighbors() -> list[Type['Match']]:
-        pass
+    @classmethod
+    def is_simple_match_node(cls) -> bool:
+        return issubclass(cls, SimpleMatchNode)
 
     @classmethod
-    def is_simple_match(cls) -> bool:
-        return issubclass(cls, SimpleMatch)
-
-    @classmethod
-    def is_basis_match(cls) -> bool:
+    def is_basis_match_node(cls) -> bool:
         return issubclass(cls, FRightMatch)
 
     @classmethod
-    def is_compound_match(cls) -> bool:
-        return issubclass(cls, CompoundMatch)
-
-    @classmethod
-    def is_super_match(cls) -> bool:
-        return issubclass(cls, SuperMatch)
+    def is_compound_match_node(cls) -> bool:
+        return issubclass(cls, CompoundMatchNode)
 
     @property
     def nodes(self) -> list[int]:
@@ -88,7 +96,7 @@ class Match(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def sub_matches(self) -> list['Match']:
+    def sub_matches(self) -> list['MatchNode']:
         pass
 
     def __getitem__(self, item):
@@ -98,7 +106,7 @@ class Match(abc.ABC):
         return hash((self.name, *sorted(self.nodes)))
 
     def __eq__(self, other):
-        return isinstance(other, Match) and self.name == other.name and self._nodes == other._nodes
+        return isinstance(other, MatchNode) and self.name == other.name and self._nodes == other._nodes
 
     def __repr__(self):
         return self.abbrev + str(list(self._nodes))
@@ -107,58 +115,33 @@ class Match(abc.ABC):
         yield from self._nodes
 
 
-class SimpleMatch(Match, abc.ABC):
+class SimpleMatchNode(MatchNode, abc.ABC):
     @property
     def node(self) -> int:
         return self.nodes[0]
 
     @property
-    def sub_matches(self) -> list[Match]:
+    def sub_matches(self) -> list[MatchNode]:
         return []
 
 
-class CompoundMatch(Match, abc.ABC):
+class CompoundMatchNode(MatchNode, abc.ABC):
     pass
 
 
-class BoundaryMatch(SimpleMatch):
-    name = 'boundary'
-    abbrev = 'b'
+class BoundaryMatch(SimpleMatchNode):
     index = 0
     expected_size = 1
-    sub_match_types = []
+    name = 'boundary'
+    abbrev = 'b'
+
+    @staticmethod
+    def meta_neighbors() -> list[Type[ZXMatchDiagramNode]]:
+        return [BoundarySuperNode, FRightZMatch, FRightXMatch, BoundaryMatch]
 
 
-def is_boundary(ntype: str | int) -> bool:
-    if isinstance(ntype, str):
-        return ntype == BoundaryMatch.abbrev
-    elif isinstance(ntype, int):
-        return ntype == BoundaryMatch.index
-    else:
-        raise Exception('Unexpected node type representation ' + str(ntype))
-
-
-class FRightMatch(SimpleMatch, abc.ABC):
+class FRightMatch(SimpleMatchNode, abc.ABC):
     expected_size = 1
-    sub_match_types = []
-
-    @property
-    @abc.abstractmethod
-    def rule_mode(self) -> Basis:
-        pass
-
-    @property
-    def is_z_basis(self) -> bool:
-        return self.rule_mode == 'z'
-
-    @property
-    def is_x_basis(self) -> bool:
-        return not self.is_z_basis
-
-
-class FLeftMatch(CompoundMatch, abc.ABC):
-    expected_size = 2
-    sub_match_types = []
 
     @property
     @abc.abstractmethod
@@ -175,10 +158,34 @@ class FLeftMatch(CompoundMatch, abc.ABC):
 
 
 class FRightZMatch(FRightMatch):
-    name = 'f_right_z'
-    abbrev = 'z'
     index = 1
     rule_mode = 'z'
+    name = 'f_right_z'
+    abbrev = 'frz'
+
+    @staticmethod
+    def meta_neighbors() -> list[Type[ZXMatchDiagramNode]]:
+        return [FRightZSuperNode, BoundaryMatch, FRightZMatch, FRightXMatch]
+
+
+class FRightXMatch(FRightMatch):
+    index = 2
+    rule_mode = 'x'
+    name = 'f_right_x'
+    abbrev = 'frx'
+
+    @staticmethod
+    def meta_neighbors() -> list[Type[ZXMatchDiagramNode]]:
+        return [FRightXSuperNode, BoundaryMatch, FRightZMatch, FRightXMatch]
+
+
+def is_boundary(ntype: str | int) -> bool:
+    if isinstance(ntype, str):
+        return ntype == BoundaryMatch.abbrev
+    elif isinstance(ntype, int):
+        return ntype == BoundaryMatch.index
+    else:
+        raise Exception('Unexpected node type representation ' + str(ntype))
 
 
 def is_z_basis(ntype: str | int) -> bool:
@@ -188,13 +195,6 @@ def is_z_basis(ntype: str | int) -> bool:
         return ntype == FRightZMatch.index
     else:
         raise Exception('Unexpected node type representation ' + str(ntype))
-
-
-class FRightXMatch(FRightMatch):
-    name = 'f_right_x'
-    abbrev = 'x'
-    index = 2
-    rule_mode = 'x'
 
 
 def is_x_basis(ntype: str | int) -> bool:
@@ -210,75 +210,93 @@ def is_basis(ntype: str | int) -> bool:
     return is_z_basis(ntype) or is_x_basis(ntype)
 
 
-class FLeftZMatch(FLeftMatch):
-    name = 'f_left_z'
-    abbrev = 'zl'
-    index = 3
-    rule_mode = 'z'
-    sub_match_types = [FRightZMatch]
-
-    @property
-    def sub_matches(self) -> list[Match]:
-        return [FRightZMatch(node) for node in self.nodes]
-
-
-class FLeftXMatch(FLeftMatch):
-    name = 'f_left_x'
-    abbrev = 'xl'
-    index = 4
-    rule_mode = 'x'
-    sub_match_types = [FRightXMatch]
-
-    @property
-    def sub_matches(self) -> list[Match]:
-        return [FRightXMatch(node) for node in self.nodes]
-
-
-class BRightMatch(CompoundMatch):
-    """
-    The nodes are ordered as z-x.
-    """
-    name = 'b_right'
-    abbrev = 'br'
-    index = 5
+class FLeftMatch(CompoundMatchNode, abc.ABC):
     expected_size = 2
-    sub_match_types = [FRightZMatch, FRightXMatch]
-
-    @property
-    def sub_matches(self) -> list[Match]:
-        return [FRightZMatch(self.nodes[0]), FRightXMatch(self.nodes[1])]
-
-
-class BLeftMatch(CompoundMatch):
-    """
-    The nodes are ordered as z-x-z-x.
-    """
-    name = 'b_left'
-    abbrev = 'bl'
-    index = 6
-    expected_size = 4
-    sub_match_types = [BRightMatch, FRightZMatch, FRightXMatch]
-
-    @property
-    def sub_matches(self) -> list[Match]:
-        z, x, m, n = self.nodes
-        return [BRightMatch(z, x), BRightMatch(z, n), BRightMatch(m, x), BRightMatch(m, n), FRightZMatch(z),
-                FRightXMatch(x), FRightZMatch(m), FRightXMatch(n)]
-
-
-class YRightMatch(CompoundMatch, abc.ABC):
-    expected_size = 4
-    sub_match_types = [FRightZMatch, FRightXMatch]
 
     @property
     @abc.abstractmethod
     def rule_mode(self) -> Basis:
         pass
 
+    @property
+    def is_z_basis(self) -> bool:
+        return self.rule_mode == 'z'
 
-class YLeftMatch(CompoundMatch, abc.ABC):
+    @property
+    def is_x_basis(self) -> bool:
+        return not self.is_z_basis
+
+
+class FLeftZMatch(FLeftMatch):
+    index = 3
+    rule_mode = 'z'
+    name = 'f_left_z'
+    abbrev = 'flz'
+
+    @property
+    def sub_matches(self) -> list[MatchNode]:
+        return [FRightZMatch(node) for node in self.nodes]
+
+    @staticmethod
+    def meta_neighbors() -> list[Type[ZXMatchDiagramNode]]:
+        return [FLeftZSuperNode, FRightZMatch]
+
+
+class FLeftXMatch(FLeftMatch):
+    index = 4
+    rule_mode = 'x'
+    name = 'f_left_x'
+    abbrev = 'flx'
+
+    @property
+    def sub_matches(self) -> list[MatchNode]:
+        return [FRightXMatch(node) for node in self.nodes]
+
+    @staticmethod
+    def meta_neighbors() -> list[Type[ZXMatchDiagramNode]]:
+        return [FLeftXSuperNode, FRightXMatch]
+
+
+class BRightMatch(CompoundMatchNode):
+    """
+    The nodes are ordered as z-x.
+    """
+    index = 5
+    expected_size = 2
+    name = 'b_right'
+    abbrev = 'br'
+
+    @property
+    def sub_matches(self) -> list[MatchNode]:
+        return [FRightZMatch(self.nodes[0]), FRightXMatch(self.nodes[1])]
+
+    @staticmethod
+    def meta_neighbors() -> list[Type[ZXMatchDiagramNode]]:
+        return [BRightSuperNode, FRightZMatch, FRightXMatch]
+
+
+class BLeftMatch(CompoundMatchNode):
+    """
+    The nodes are ordered as z-x-z-x.
+    """
+    index = 6
     expected_size = 4
-    sub_match_types = [FRightZMatch, FRightXMatch]
+    name = 'b_left'
+    abbrev = 'bl'
+
+    @property
+    def sub_matches(self) -> list[MatchNode]:
+        z, x, m, n = self.nodes
+        return [BRightMatch(z, x), BRightMatch(z, n), BRightMatch(m, x), BRightMatch(m, n), FRightZMatch(z),
+                FRightXMatch(x), FRightZMatch(m), FRightXMatch(n)]
+
+    @staticmethod
+    def meta_neighbors() -> list[Type[ZXMatchDiagramNode]]:
+        return [BLeftSuperNode, BRightMatch, FRightZMatch, FRightXMatch]
+
+
+class YRightMatch(CompoundMatchNode, abc.ABC):
+    expected_size = 4
 
     @property
     @abc.abstractmethod
@@ -287,136 +305,166 @@ class YLeftMatch(CompoundMatch, abc.ABC):
 
 
 class YRightZMatch(YRightMatch):
-    name = 'y_right_z'
-    abbrev = 'yrz'
     index = 7
     rule_mode = 'z'
+    name = 'y_right_z'
+    abbrev = 'yrz'
 
     @property
-    def sub_matches(self) -> list[Match]:
+    def sub_matches(self) -> list[MatchNode]:
         return [FRightXMatch(node) if i == 1 else FRightZMatch(node) for i, node in enumerate(self.nodes)]
 
-
-class YLeftZMatch(YLeftMatch):
-    name = 'y_left_z'
-    abbrev = 'ylz'
-    index = 8
-    rule_mode = 'z'
-
-    @property
-    def sub_matches(self) -> list[Match]:
-        return [FRightXMatch(node) if i == 1 else FRightZMatch(node) for i, node in enumerate(self.nodes)]
+    @staticmethod
+    def meta_neighbors() -> list[Type[ZXMatchDiagramNode]]:
+        return [YRightZSuperNode, FRightZMatch, FRightXMatch]
 
 
 class YRightXMatch(YRightMatch):
-    name = 'y_right_x'
-    abbrev = 'yrx'
     index = 9
     rule_mode = 'x'
+    name = 'y_right_x'
+    abbrev = 'yrx'
 
     @property
-    def sub_matches(self) -> list[Match]:
+    def sub_matches(self) -> list[MatchNode]:
         return [FRightZMatch(node) if i == 1 else FRightXMatch(node) for i, node in enumerate(self.nodes)]
 
-
-class YLeftXMatch(YLeftMatch):
-    name = 'y_left_x'
-    abbrev = 'ylx'
-    index = 10
-    rule_mode = 'x'
-
-    @property
-    def sub_matches(self) -> list[Match]:
-        return [FRightZMatch(node) if i == 1 else FRightXMatch(node) for i, node in enumerate(self.nodes)]
+    @staticmethod
+    def meta_neighbors() -> list[Type[ZXMatchDiagramNode]]:
+        return [YRightXSuperNode, FRightZMatch, FRightXMatch]
 
 
-# super_match -> [super_match, compound_match, simple_match]
-# compound_match -> [super_match, compound_match, simple_match]
-# simple_match -> [super_match, compound_match, simple_match]
-
-
-class SuperMatch(Match, abc.ABC):
-    expected_size = 0
-    sub_match_types = []
+class YLeftMatch(CompoundMatchNode, abc.ABC):
+    expected_size = 4
 
     @property
-    def sub_matches(self) -> list[Match]:
-        return []
-
-    @classmethod
-    def meta_neighbors(cls) -> list[Type['Match']]:
+    @abc.abstractmethod
+    def rule_mode(self) -> Basis:
         pass
 
 
-class BoundarySuperMatch(SuperMatch):
+class YLeftZMatch(YLeftMatch):
+    index = 8
+    rule_mode = 'z'
+    name = 'y_left_z'
+    abbrev = 'ylz'
+
+    @property
+    def sub_matches(self) -> list[MatchNode]:
+        return [FRightXMatch(node) if i == 1 else FRightZMatch(node) for i, node in enumerate(self.nodes)]
+
+    @staticmethod
+    def meta_neighbors() -> list[Type[ZXMatchDiagramNode]]:
+        return [YLeftZSuperNode, FRightZMatch, FRightXMatch]
+
+
+class YLeftXMatch(YLeftMatch):
+    index = 10
+    rule_mode = 'x'
+    name = 'y_left_x'
+    abbrev = 'ylx'
+
+    @property
+    def sub_matches(self) -> list[MatchNode]:
+        return [FRightZMatch(node) if i == 1 else FRightXMatch(node) for i, node in enumerate(self.nodes)]
+
+    @staticmethod
+    def meta_neighbors() -> list[Type[ZXMatchDiagramNode]]:
+        return [YLeftXSuperNode, FRightZMatch, FRightXMatch]
+
+
+class SuperNode(ZXMatchDiagramNode, abc.ABC):
+    @staticmethod
+    @property
+    @abc.abstractmethod
+    def sub_node() -> MatchNode:
+        pass
+
+    @classmethod
+    def meta_neighbors(cls) -> list[Type[ZXMatchDiagramNode]]:
+        return list(filter(lambda sub_class: sub_class.name != cls.name, SuperNode.__subclasses__())) + [cls.sub_node]
+
+
+class BoundarySuperNode(SuperNode):
+    index = 11
+    sub_node = BoundaryMatch
     name = 'boundary_super'
     abbrev = 'b_super'
-    index = 11
 
 
-class FRightZSuperMatch(SuperMatch):
-    name = 'f_right_z_super'
-    abbrev = 'z_super'
+class FRightZSuperNode(SuperNode):
     index = 12
+    sub_node = FRightZMatch
+    name = 'f_right_z_super'
+    abbrev = 'frz_super'
 
 
-class FLeftZSuperMatch(SuperMatch):
+class FRightXSuperNode(SuperNode):
+    index = 14
+    sub_node = FRightXMatch
+    name = 'f_right_x_super'
+    abbrev = 'frx_super'
+
+
+class FLeftZSuperNode(SuperNode):
+    index = 13
+    sub_node = FLeftZMatch
     name = 'f_left_z_super'
     abbrev = 'flz_super'
-    index = 13
 
 
-class FRightXSuperMatch(SuperMatch):
-    name = 'f_right_x_super'
-    abbrev = 'x_super'
-    index = 14
-
-
-class FLeftXSuperMatch(SuperMatch):
+class FLeftXSuperNode(SuperNode):
+    index = 15
+    sub_node = FLeftXMatch
     name = 'f_left_x_super'
     abbrev = 'flx_super'
-    index = 15
 
 
-class BRightSuperMatch(SuperMatch):
+class BRightSuperNode(SuperNode):
+    index = 16
+    sub_node = BRightMatch
     name = 'b_right_super'
     abbrev = 'br_super'
-    index = 16
 
 
-class BLeftSuperMatch(SuperMatch):
+class BLeftSuperNode(SuperNode):
+    index = 17
+    sub_node = BLeftMatch
     name = 'b_left_super'
     abbrev = 'bl_super'
-    index = 17
 
 
-class YRightZSuperMatch(SuperMatch):
+class YRightZSuperNode(SuperNode):
+    index = 18
+    sub_node = YRightZMatch
     name = 'y_right_z_super'
     abbrev = 'yrz_super'
-    index = 18
 
 
-class YLeftZSuperMatch(SuperMatch):
+class YRightXSuperNode(SuperNode):
+    index = 20
+    sub_node = YRightXMatch
+    name = 'y_right_x_super'
+    abbrev = 'yrx_super'
+
+
+class YLeftZSuperNode(SuperNode):
+    index = 19
+    sub_node = YLeftZMatch
     name = 'y_left_z_super'
     abbrev = 'ylz_super'
-    index = 19
 
 
-class YRightXSuperMatch(SuperMatch):
-    name = 'y_right_x_super'
-    abbrev = 'yrx'
-    index = 20
-
-
-class YLeftXSuperMatch(SuperMatch):
+class YLeftXSuperNode(SuperNode):
+    index = 21
+    sub_node = YLeftXMatch
     name = 'y_left_x_super'
     abbrev = 'ylx_super'
-    index = 21
 
 
-def from_index_and_node_set(node_type: int, node_set: tuple[int] | list[int] | int) -> Match:
+def from_index_and_node_set(node_type: int, node_set: tuple[int] | list[int] | int) -> MatchNode:
     constructor = INDEX_TO_CONSTRUCTOR_METADATA[node_type]
-    if isinstance(constructor, SimpleMatch):
+    if isinstance(constructor, SimpleMatchNode):
         if isinstance(node_set, tuple) or isinstance(node_set, list):
             assert len(node_set) == 1, f'Expected a single node but received node set {node_set}'
             return constructor(node_set[0])
@@ -426,10 +474,10 @@ def from_index_and_node_set(node_type: int, node_set: tuple[int] | list[int] | i
         return constructor(*node_set)
 
 
-def _leaf_classes() -> set[Type[Match]]:
+def _zx_match_diagram_node_leaf_classes() -> list[Type[ZXMatchDiagramNode]]:
     leaf_classes = set()
 
-    def _inner_leaf_classes(cls: Type[Match]) -> None:
+    def _inner_leaf_classes(cls: Type[ZXMatchDiagramNode]) -> None:
         # If there are no subclasses, this is a leaf
         if not cls.__subclasses__():
             leaf_classes.add(cls)
@@ -437,80 +485,144 @@ def _leaf_classes() -> set[Type[Match]]:
             for sub_cls in cls.__subclasses__():
                 _inner_leaf_classes(sub_cls)
 
-    _inner_leaf_classes(Match)
-    return leaf_classes
+    _inner_leaf_classes(ZXMatchDiagramNode)
+    return sorted(leaf_classes, key=lambda leaf_class: leaf_class.index)
 
 
-def _count_match_types() -> int:
-    return len(_leaf_classes())
+def _count_leaf_classes() -> int:
+    return len(_zx_match_diagram_node_leaf_classes())
 
-
-# Metadata = tuple[
-#     list[NodeType], list[int], list[NodeType], dict[NodeType, int], list[EdgeType], dict[EdgeType, int], list[EdgeType],
-#     dict[
-#         EdgeType, int], dict[tuple[int, tuple[float, float]], int], list[Type[Match]], int, list[int]]
 
 POSSIBLE_PHASES = [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1., 1.125, 1.25, 1.375, 1.5, 1.625, 1.75, 1.875]
 NUM_POSSIBLE_PHASES = len(POSSIBLE_PHASES)
 
-MetadataItemName = Literal['abbrevs'] | Literal['indices'] | Literal['abbrev_to_index']
-MetadataItem = dict | set
-Metadata = dict[MetadataItemName, MetadataItem]
+
+class Metadata(NamedTuple):
+    node_type_abbrevs: list[str]
+    node_type_indices: list[int]
+    edge_types: list[tuple[str, str, str]]
+    node_type_abbrev_index_dict: dict[str, int]
+    edge_type_to_index_dict: dict[tuple[str, str, str], int]
+
+    basis_node_type_indices: list[int]
+    non_basis_node_type_indices: list[int]
+
+    simple_node_indices: list[int]
+    simple_edges: list[tuple[str, str, str]]
+
+    super_node_type_indices: list[int]
+    match_node_type_indices: list[int]
+    node_feat_to_index_dict: dict[tuple[int, float], int]
+
+    max_match_size: int
+
+
+def _compute_meta_edge_type(a: Type[ZXMatchDiagramNode], b: Type[ZXMatchDiagramNode]) -> str:
+    if issubclass(a, SuperNode) and issubclass(b, SuperNode):
+        return SS_ETYPE_NAME
+    elif issubclass(a, SuperNode) and issubclass(b, MatchNode) or issubclass(a, MatchNode) and issubclass(b, SuperNode):
+        return SI_ETYPE_NAME
+    elif issubclass(a, SimpleMatchNode) and issubclass(b, SimpleMatchNode):
+        return S_ETYPE_NAME
+    elif issubclass(a, CompoundMatchNode) and issubclass(b, MatchNode) or issubclass(a, MatchNode) and issubclass(b,
+                                                                                                                  CompoundMatchNode):
+        return I_ETYPE_NAME
+    else:
+        raise Exception(f'Unexpected relation between node types {a} and {b}')
+
+
+def _compute_nx_metagraph() -> nx.DiGraph:
+    metagraph = nx.DiGraph()
+    leaf_classes = _zx_match_diagram_node_leaf_classes()
+    for leaf_class in leaf_classes:
+        metagraph.add_node(leaf_class, abbrev=leaf_class.abbrev, index=leaf_class.index)
+    for leaf_class in leaf_classes:
+        for meta_neighbor in leaf_class.meta_neighbors():
+            center_e_type = _compute_meta_edge_type(leaf_class, meta_neighbor)
+            metagraph.add_edge(leaf_class, meta_neighbor,
+                               e_type=(leaf_class.abbrev, center_e_type, meta_neighbor.abbrev))
+            metagraph.add_edge(meta_neighbor, leaf_class,
+                               e_type=(meta_neighbor.abbrev, center_e_type, leaf_class.abbrev))
+    return metagraph
+
+
+def _compute_metadata_from_metagraph(metagraph: nx.DiGraph) -> Metadata:
+    node_type_indices = []
+    node_type_abbrevs = []
+    edge_types = []
+    node_type_abbrev_index_dict = {}
+
+    simple_nodes = []
+    simple_edges = []
+
+    basis_node_type_indices = []
+    non_basis_node_type_indices = []
+    super_node_type_indices = []
+    match_node_type_indices = []
+
+    for n, ndata in metagraph.nodes(data=True):
+        node_type_abbrev = ndata['abbrev']
+        node_type_index = ndata['index']
+        node_type_abbrevs.append(node_type_abbrev)
+        node_type_indices.append(node_type_index)
+        node_type_abbrev_index_dict[node_type_abbrev] = node_type_index
+
+    for n, ndata in metagraph.nodes(data=True):
+        node_type_index = ndata['index']
+        if issubclass(n, SimpleMatchNode):
+            if issubclass(n, FRightMatch):
+                basis_node_type_indices.append(node_type_index)
+            else:
+                simple_nodes.append(node_type_index)
+                non_basis_node_type_indices.append(node_type_index)
+        else:
+            non_basis_node_type_indices.append(node_type_index)
+            if issubclass(n, SuperNode):
+                super_node_type_indices.append(node_type_index)
+            elif issubclass(n, MatchNode):
+                match_node_type_indices.append(node_type_index)
+
+    for a, b, edata in metagraph.edges(data=True):
+        edge_type = edata['e_type']
+        edge_types.append(edge_type)
+        if edge_type[1] == S_ETYPE_NAME:
+            simple_edges.append(edge_type)
+
+    edge_type_to_index_dict = {edge_type: i for i, edge_type in enumerate(edge_types)}
+
+    possible_node_feature_pairs = []
+    for n in metagraph.nodes:
+        if issubclass(n, FRightMatch):
+            for possible_phase in POSSIBLE_PHASES:
+                possible_node_feature_pairs.append((n.index, possible_phase))
+        else:
+            possible_node_feature_pairs.append((n.index, 0.))
+    node_feat_to_index_dict = {feature_pair: i for i, feature_pair in enumerate(possible_node_feature_pairs)}
+
+    match_sizes = []
+    for n in metagraph.nodes:
+        if issubclass(n, MatchNode):
+            match_sizes.append(n.expected_size)
+    max_match_size = max(match_sizes)
+
+    return Metadata(
+        node_type_abbrevs,
+        node_type_indices,
+        edge_types,
+        node_type_abbrev_index_dict,
+        edge_type_to_index_dict,
+        basis_node_type_indices,
+        non_basis_node_type_indices,
+        simple_nodes,
+        simple_edges,
+        super_node_type_indices,
+        match_node_type_indices,
+        node_feat_to_index_dict,
+        max_match_size)
 
 
 def _compute_metadata() -> Metadata:
-    edge_metadata = []
-    leaf_classes = sorted(_leaf_classes(), key=lambda lc: lc.index)
-    node_type_to_index_metadata = {leaf_class.abbrev: leaf_class.index for leaf_class in leaf_classes}
-    for leaf_class in leaf_classes:
-        sub_match_class_names = [sub_match_class.abbrev for sub_match_class in leaf_class.meta_neighbors]
-        if len(sub_match_class_names) != 0:
-            for sub_match_class_name in sub_match_class_names:
-                for a, b in itertools.permutations([leaf_class.abbrev, sub_match_class_name]):
-                    edge_metadata.append((a, I_ETYPE_NAME, b))
-    simple_leaf_classes = list(filter(lambda lc: lc.is_simple_match(), leaf_classes))
-    simple_node_metadata = [leaf_class.abbrev for leaf_class in simple_leaf_classes]
-    non_basis_type_indices = [leaf_class.index for leaf_class in
-                              list(filter(lambda lc: not lc.is_basis_match(), leaf_classes))]
-    simple_edge_metadata = []
-    for a, b in itertools.product(simple_node_metadata, simple_node_metadata):
-        simple_edge_metadata.append((a, S_ETYPE_NAME, b))
-    simple_edge_type_to_index_metadata = {value: index for index, value in enumerate(simple_edge_metadata)}
-    edge_metadata += simple_edge_metadata
-    edge_type_to_index_metadata = {value: index for index, value in enumerate(edge_metadata)}
-    node_metadata = [leaf_class.abbrev for leaf_class in leaf_classes]
-    node_type_indices = [leaf_class.index for leaf_class in leaf_classes]
-    node_feature_pair_to_index_metadata = {tuple(pair): i for i, pair in
-                                           enumerate(list(itertools.product(node_type_indices, POSSIBLE_PHASES)))}
-    max_match_size_metadata = max([leaf_class.expected_size for leaf_class in leaf_classes])
-    return (node_metadata, # in
-            node_type_indices, # in
-            simple_node_metadata,
-            node_type_to_index_metadata, # in
-            edge_metadata,
-            edge_type_to_index_metadata,
-            simple_edge_metadata,
-            simple_edge_type_to_index_metadata,
-            node_feature_pair_to_index_metadata,
-            leaf_classes,
-            max_match_size_metadata,
-            non_basis_type_indices)
+    return _compute_metadata_from_metagraph(_compute_nx_metagraph())
 
 
-MATCH_TYPE_COUNT = _count_match_types()
-
-(NODE_METADATA,
- NODE_TYPE_INDICES,
- SIMPLE_NODE_METADATA,
- NODE_TYPE_TO_INDEX_METADATA,
- EDGE_METADATA,
- EDGE_TYPE_TO_INDEX_METADATA,
- SIMPLE_EDGE_METADATA,
- SIMPLE_EDGE_TYPE_TO_INDEX_METADATA,
- NODE_FEATURE_PAIR_TO_INDEX_METADATA,
- INDEX_TO_CONSTRUCTOR_METADATA,
- MAX_MATCH_SIZE_METADATA,
- NON_BASIS_TYPE_INDICES) = _compute_metadata()
-
-SIMPLE_METADATA = SIMPLE_NODE_METADATA, SIMPLE_EDGE_METADATA
-METADATA = NODE_METADATA, EDGE_METADATA
+METADATA = _compute_metadata()

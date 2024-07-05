@@ -1,11 +1,11 @@
 import torch_geometric as pyg
 
-from alphazx.diagram import NODE_METADATA, POSSIBLE_PHASES, clifford_pyg_zx_match_diagram
+from alphazx.diagram import METADATA, POSSIBLE_PHASES, clifford_pyg_zx_match_diagram
 from alphazx.distributions import AlphaZXDistribution
 from alphazx.models import with_embeddable_feats, with_laplacian_pe
 from alphazx.models.homogeneous.mcts.alphazx_model import AlphaZXModel
 
-num_node_types = len(NODE_METADATA)
+num_node_types = len(METADATA.node_type_abbrevs)
 num_possible_phases = len(POSSIBLE_PHASES)
 num_possible_new_edges = 10
 node_embedding_channels = (1 + len(POSSIBLE_PHASES) + 10)

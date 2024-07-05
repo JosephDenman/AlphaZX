@@ -6,7 +6,7 @@ from hypothesis import given
 from alphazx.models.utils import concatenate_by_group, concatenate_neighbor_features, concatenate_with_neighbor_features, \
     mask_non_basis_edges, edge_index_as_node_types, compute_column_mask_for_values, mask_edges_by_type
 from alphazx.diagram.diagram_generators import clifford_zx_match_diagram
-from alphazx.diagram.match import NON_BASIS_TYPE_INDICES
+from alphazx.diagram.match import METADATA
 from tests.utils import zx_diagram_config_st, mask_columns_by_value_st, random_node_types_st, concatenate_by_group_st
 
 
@@ -36,7 +36,7 @@ def concatenate_neighbor_features_py(x: torch.Tensor, edge_index: torch.Tensor) 
         expected_list[node.item()].append(x[edge_index[0][i]].tolist())
     for i in range(num_groups):
         while len(expected_list[i]) < max_nodes:
-            expected_list[i].append([-torch.inf, -torch.inf])
+            expected_list[i].append([0., 0.])
     return torch.tensor(expected_list)
 
 
@@ -77,7 +77,7 @@ def mask_edges_by_type_py(edge_index: torch.Tensor, node_types: torch.Tensor,
 
 
 def mask_non_basis_edges_py(edge_index: torch.Tensor, node_types: torch.Tensor) -> torch.Tensor:
-    return mask_edges_by_type_py(edge_index, node_types, torch.tensor(NON_BASIS_TYPE_INDICES))
+    return mask_edges_by_type_py(edge_index, node_types, torch.tensor(METADATA.non_basis_node_type_indices))
 
 
 class UtilsTest(unittest.TestCase):

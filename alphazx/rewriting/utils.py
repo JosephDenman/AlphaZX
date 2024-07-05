@@ -1,6 +1,6 @@
 from typing import NamedTuple
 
-from alphazx.diagram.match import Match, FLeftMatch, FRightMatch, BLeftMatch, BRightMatch, YLeftMatch, YRightMatch
+from alphazx.diagram.match import MatchNode, FLeftMatch, FRightMatch, BLeftMatch, BRightMatch, YLeftMatch, YRightMatch
 from alphazx.diagram.zx_diagram import ZXDiagram
 from alphazx.rewriting.b_rule_rewriter import b_left_rewrite, b_right_rewrite
 from alphazx.rewriting.f_rule_rewriter import f_left_rewrite, f_right_rewrite
@@ -13,7 +13,7 @@ class FRightParameters(NamedTuple):
     transfer_edges: set[int]
 
 
-def rewrite(diagram: ZXDiagram, match: Match, f_right_params: FRightParameters | None = None) -> None:
+def rewrite(diagram: ZXDiagram, match: MatchNode, f_right_params: FRightParameters | None = None) -> None:
     if isinstance(match, FLeftMatch):
         f_left_rewrite(match, diagram)
     elif isinstance(match, FRightMatch):

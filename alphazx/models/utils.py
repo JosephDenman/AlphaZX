@@ -1,7 +1,7 @@
 import torch
 import torch_geometric as pyg
 
-from alphazx.diagram.match import NON_BASIS_TYPE_INDICES
+from alphazx.diagram.match import METADATA
 
 
 def concatenate_by_group(x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
@@ -15,13 +15,13 @@ def concatenate_by_group(x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
     return x_
 
 
-def concatenate_neighbor_features(x: torch.Tensor, edge_index: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+def concatenate_neighbor_features(x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
     neighbor_x = torch.index_select(x, 0, edge_index[0])
     x_, mask = pyg.utils.to_dense_batch(neighbor_x, edge_index[1])
     row_mask = torch.any(mask, dim=1)
     x_ = x_[row_mask]
     mask = mask[row_mask]
-    return x_, mask
+    return x_
 
 
 def concatenate_with_neighbor_features(x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
@@ -59,7 +59,7 @@ def pad_and_stack(tensors: list[torch.Tensor], pad_value=0.) -> torch.Tensor:
 
 
 def mask_non_basis_edges(edge_index: torch.Tensor, node_types: torch.Tensor) -> torch.Tensor:
-    return mask_edges_by_type(edge_index, node_types, torch.tensor(NON_BASIS_TYPE_INDICES))
+    return mask_edges_by_type(edge_index, node_types, torch.tensor(METADATA.non_basis_node_type_indices))
 
 
 def mask_edges_by_type(edge_index: torch.Tensor, node_types: torch.Tensor,

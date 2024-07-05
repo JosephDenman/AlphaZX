@@ -6,11 +6,9 @@ import networkx as nx
 import torch
 import torch_geometric as pyg
 
-from alphazx.diagram.match import Match, FRightMatch, FRightZMatch, FRightXMatch, FLeftZMatch, FLeftMatch, FLeftXMatch, \
-    BLeftMatch, BRightMatch, YLeftMatch, YRightMatch, YLeftXMatch, YLeftZMatch, YRightZMatch, YRightXMatch, \
-    NODE_TYPE_TO_INDEX_METADATA, EDGE_TYPE_TO_INDEX_METADATA, BoundaryMatch, is_boundary, \
-    is_basis, is_z_basis, is_x_basis, SimpleMatch, SIMPLE_NODE_METADATA, SIMPLE_EDGE_METADATA, \
-    SIMPLE_EDGE_TYPE_TO_INDEX_METADATA
+from alphazx.diagram.match import MatchNode, FRightMatch, FRightZMatch, FRightXMatch, FLeftZMatch, FLeftMatch, FLeftXMatch, \
+    BLeftMatch, BRightMatch, YLeftMatch, YRightMatch, YLeftXMatch, YLeftZMatch, YRightZMatch, YRightXMatch, BoundaryMatch, is_boundary, \
+    is_basis, is_z_basis, is_x_basis, SimpleMatchNode, METADATA
 from alphazx.diagram.pyg_conv import compute_edge_type_attr
 
 
@@ -349,7 +347,7 @@ class ZXDiagram(nx.MultiGraph):
         yield from self.y_right_z_matches()
         yield from self.y_right_x_matches()
 
-    def compute_matches(self) -> Iterator[Match]:
+    def compute_matches(self) -> Iterator[MatchNode]:
         yield from self.f_left_matches()
         yield from self.f_right_matches()
         yield from self.b_left_matches()
@@ -358,26 +356,26 @@ class ZXDiagram(nx.MultiGraph):
         yield from self.y_right_matches()
 
     def to_pyg_hdata(self, sort_by_row: bool = False) -> pyg.data.HeteroData:
-        n_types = torch.tensor([NODE_TYPE_TO_INDEX_METADATA[ndata['type']] for _, ndata in self.nodes(data=True)],
+        n_types = torch.tensor([METADATA.node_type_abbrev_index_dict[ndata['type']] for _, ndata in self.nodes(data=True)],
                                dtype=torch.long)
         e_types = torch.tensor(
-            [SIMPLE_EDGE_TYPE_TO_INDEX_METADATA[edata['type']] for _, _, edata in self.edges(data=True)],
+            [METADATA.edge_type_to_index_dict[edata['type']] for _, _, edata in self.edges(data=True)],
             dtype=torch.long)
         # TODO: This conversion still produces a 'HeteroData' object that has empty 'edge_index' for each edge type, but the
         #       'ZXMatchDiagram.to_pyg_hdata' works correctly. Get to the bottom of this.
         hdata = pyg.utils.from_networkx(self, group_node_attrs=['phase']).to_heterogeneous(n_types,
                                                                                            e_types,
-                                                                                           SIMPLE_NODE_METADATA,
-                                                                                           SIMPLE_EDGE_METADATA).sort(
+                                                                                           METADATA.simple_nodes,
+                                                                                           METADATA.simple_edges).sort(
             sort_by_row)
         hdata.validate()
         return hdata
 
     def to_pyg_data(self, sort_by_row: bool = False) -> pyg.data.Data:
         for _, ndata in self.nodes(data=True):
-            ndata['type'] = NODE_TYPE_TO_INDEX_METADATA[ndata['type']]
+            ndata['type'] = METADATA.node_type_abbrev_index_dict[ndata['type']]
         for _, _, edata in self.edges(data=True):
-            edata['type'] = EDGE_TYPE_TO_INDEX_METADATA[edata['type']]
+            edata['type'] = METADATA.edge_type_to_index_dict[edata['type']]
         data = pyg.utils.from_networkx(self, group_node_attrs=['phase', 'type']).sort(sort_by_row)
         data.validate()
         return data
@@ -415,7 +413,7 @@ def zx_compose_all(zx_diagrams: Iterable[ZXDiagram]) -> ZXDiagram:
     return composed_diagram
 
 
-def base_match_from_node(diagram: ZXDiagram, node: int) -> SimpleMatch:
+def base_match_from_node(diagram: ZXDiagram, node: int) -> SimpleMatchNode:
     if diagram.is_z_basis(node):
         return FRightZMatch(node)
     elif diagram.is_x_basis(node):

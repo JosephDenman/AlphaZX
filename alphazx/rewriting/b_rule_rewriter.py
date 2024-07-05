@@ -1,4 +1,4 @@
-from alphazx.diagram.match import BLeftMatch, BRightMatch, Basis, Match
+from alphazx.diagram.match import BLeftMatch, BRightMatch, Basis, MatchNode
 from alphazx.diagram.zx_diagram import ZXDiagram
 
 
@@ -20,7 +20,7 @@ def assert_degree(n: int, expected_degree: int, diagram: ZXDiagram) -> None:
     assert actual_degree == expected_degree, f'Expected degree {expected_degree} for node {n} but found {actual_degree}'
 
 
-def non_match_neighbors(a: int, match: Match, diagram: ZXDiagram) -> list[int]:
+def non_match_neighbors(a: int, match: MatchNode, diagram: ZXDiagram) -> list[int]:
     return [b for b in diagram.neighbors(a) if b not in match.nodes]
 
 

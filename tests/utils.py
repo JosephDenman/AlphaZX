@@ -2,7 +2,7 @@ import torch
 from hypothesis import strategies as st
 from hypothesis.strategies import composite
 
-from alphazx.diagram.match import NODE_TYPE_INDICES
+from alphazx.diagram.match import METADATA
 
 
 def zx_diagram_config_st(max_num_qubits: int = 80, max_depth: int = 80):
@@ -24,7 +24,7 @@ def mask_columns_by_value_st(draw):
 
 @composite
 def random_node_types_st(draw):
-    return torch.Tensor(draw(st.lists(st.sampled_from(NODE_TYPE_INDICES), unique=True, min_size=0, max_size=len(NODE_TYPE_INDICES))))
+    return torch.Tensor(draw(st.lists(st.sampled_from(METADATA.node_type_indices), unique=True, min_size=0, max_size=len(METADATA.node_type_indices))))
 
 
 @composite

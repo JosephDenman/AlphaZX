@@ -1,7 +1,7 @@
 import torch
 import torch_geometric as pyg
 
-from alphazx.diagram.match import NODE_FEATURE_PAIR_TO_INDEX_METADATA
+from alphazx.diagram.match import METADATA
 
 
 def with_laplacian_pe(data: pyg.data.Data, pe_dimension: int) -> pyg.data.Data:
@@ -14,7 +14,7 @@ def with_embeddable_feats(data: pyg.data.Data) -> pyg.data.Data:
     for feature in data.x:
         match_idx = int(feature[0].item())
         phase = feature[1].item()
-        feature_idxs.append(NODE_FEATURE_PAIR_TO_INDEX_METADATA[(match_idx, phase)])
+        feature_idxs.append(METADATA.node_feat_to_index_dict[(match_idx, phase)])
     data.x = torch.tensor(feature_idxs)
     return data
 

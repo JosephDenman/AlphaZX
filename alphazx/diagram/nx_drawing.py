@@ -2,7 +2,7 @@ from fractions import Fraction
 from typing import Tuple, List, Dict, Optional
 
 import networkx as nx
-from alphazx.diagram.match import Match, is_boundary, is_z_basis, is_x_basis
+from alphazx.diagram.match import MatchNode, is_boundary, is_z_basis, is_x_basis
 from alphazx.diagram.pyzx_nx_conv import PHASE, NTYPE, ROW, COLUMN
 
 Z_NTYPE_COLOR = '#d8f8d8'
@@ -53,12 +53,12 @@ def node_size(ndata: Dict) -> int:
         return len(str(Fraction(phase))) ** 2 * 60
 
 
-def subgraph_from_match(nx_graph: nx.MultiGraph, match: Match) -> nx.MultiGraph:
+def subgraph_from_match(nx_graph: nx.MultiGraph, match: MatchNode) -> nx.MultiGraph:
     return nx_graph.subgraph(match)
 
 
 # TODO: Adjust row offsets based on computed node size
-def node_styling(nx_graph: nx.MultiGraph, match: Optional[Match] = None) -> Tuple[Dict, Dict, List, List, List]:
+def node_styling(nx_graph: nx.MultiGraph, match: Optional[MatchNode] = None) -> Tuple[Dict, Dict, List, List, List]:
     labels = {}
     positions = {}
     sizes = []
@@ -80,7 +80,7 @@ EdgeList = List[Tuple[int, int]]
 
 # TODO: Fix to work with updated Match structure
 
-def edge_styling(nx_graph: nx.MultiGraph, match: Optional[Match] = None) -> Tuple[
+def edge_styling(nx_graph: nx.MultiGraph, match: Optional[MatchNode] = None) -> Tuple[
     EdgeList, EdgeList, EdgeList]:
     matched_subgraph = subgraph_from_match(nx_graph, match) if match is not None else None
     h_edge_list = []
@@ -96,7 +96,7 @@ def edge_styling(nx_graph: nx.MultiGraph, match: Optional[Match] = None) -> Tupl
 
 # TODO - Draw groups of edges between two nodes as a single edge with a number label indicating the true number of edges
 #        between the vertices.
-def draw_nx_zx_diagram(nx_graph: nx.MultiGraph, match: Optional[Match] = None,
+def draw_nx_zx_diagram(nx_graph: nx.MultiGraph, match: Optional[MatchNode] = None,
                        pos: Optional[Dict[int, Tuple[int, int]]] = None) -> None:
     node_labels, node_positions, node_sizes, node_colors, node_border_colors = node_styling(nx_graph, match)
     node_positions = pos if pos is not None else node_positions

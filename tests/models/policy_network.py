@@ -1,7 +1,7 @@
 import torch_geometric as pyg
 
 from alphazx.diagram.diagram_generators import clifford_pyg_zx_match_diagram
-from alphazx.diagram.match import NODE_METADATA, POSSIBLE_PHASES
+from alphazx.diagram.match import METADATA, POSSIBLE_PHASES
 from alphazx.models.homogeneous.mcts.policy_network import PolicyNetwork
 from alphazx.models.pre_process import with_embeddable_feats, with_laplacian_pe
 
@@ -19,7 +19,7 @@ def create_data_loader(num_diagrams: int, batch_size: int, num_qubits: int, dept
 def policy_network():
     # num_diagrams = 2
     # batch_size = 2
-    num_node_types = len(NODE_METADATA)
+    num_node_types = len(METADATA.node_type_abbrevs)
     num_possible_phases = len(POSSIBLE_PHASES)
     num_possible_new_edges = 10
     node_embedding_channels = 1
