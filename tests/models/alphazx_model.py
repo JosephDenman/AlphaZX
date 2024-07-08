@@ -56,11 +56,13 @@ model = AlphaZXModel(num_node_types,
 
 def create_data_loader(num_diagrams: int, batch_size: int, num_qubits: int, depth: int) -> pyg.loader.DataLoader:
     dataset = []
-    for _ in range(num_diagrams):
+    for i in range(num_diagrams):
         d = clifford_pyg_zx_match_diagram(num_qubits, depth)
+        print(f'created graph {i}')
         d = with_embeddable_feats(d)
         d = with_laplacian_pe(d, 2)
         dataset.append(d)
+        print(f'added graph {i} to dataset')
     return pyg.loader.DataLoader(dataset, batch_size)
 
 

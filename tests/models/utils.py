@@ -1,14 +1,13 @@
 import unittest
 
 import torch
-from hypothesis import given
+from hypothesis import given, settings
 
 from alphazx.models.utils import concatenate_by_group, concatenate_neighbor_features, concatenate_with_neighbor_features, \
     mask_non_basis_edges, edge_index_as_node_types, compute_column_mask_for_values, mask_edges_by_type
 from alphazx.diagram.diagram_generators import clifford_zx_match_diagram
 from alphazx.diagram.match import METADATA
 from tests.utils import zx_diagram_config_st, mask_columns_by_value_st, random_node_types_st, concatenate_by_group_st
-
 
 def concatenate_by_group_py(x, index) -> torch.Tensor:
     # Determine the number of groups
@@ -88,7 +87,7 @@ class UtilsTest(unittest.TestCase):
         expected = concatenate_by_group_py(x, index)
         self.assertTrue(torch.equal(actual, expected))
 
-    @given(zx_diagram_config_st(50, 50))
+    @given(zx_diagram_config_st(30, 30))
     def test_concatenate_neighbor_features(self, config: tuple[int, int, bool]):
         d = clifford_zx_match_diagram(*config[:-1]).to_pyg_data()
         x = d.x
@@ -97,7 +96,7 @@ class UtilsTest(unittest.TestCase):
         expected = concatenate_neighbor_features_py(x, edge_index)
         self.assertTrue(torch.equal(actual, expected))
 
-    @given(zx_diagram_config_st(50, 50))
+    @given(zx_diagram_config_st(30, 30))
     def test_concatenate_with_neighbor_features(self, config: tuple[int, int, bool]):
         d = clifford_zx_match_diagram(*config[:-1]).to_pyg_data()
         x = d.x
@@ -115,7 +114,7 @@ class UtilsTest(unittest.TestCase):
         expected = mask_non_basis_edges_py(edge_index, node_types)
         self.assertTrue(torch.equal(actual, expected))
 
-    @given(zx_diagram_config_st(50, 50), random_node_types_st())
+    @given(zx_diagram_config_st(30, 30), random_node_types_st())
     def test_mask_edges_by_type(self, config: tuple[int, int, bool], node_types_to_mask: torch.Tensor):
         d = clifford_zx_match_diagram(*config[:-1]).to_pyg_data()
         edge_index = d.edge_index

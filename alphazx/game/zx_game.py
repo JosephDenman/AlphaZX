@@ -81,7 +81,7 @@ class DiagramStats:
         self.num_x_nodes = zx_match_diagram.zx_diagram.num_x_nodes()
         self.num_non_clifford_gates = num_non_clifford_gates(zx_match_diagram.zx_diagram)
         self.num_edges = zx_match_diagram.zx_diagram.num_edges()
-        self.num_b_left_matches = zx_match_diagram.num_b_left_nodes()
+        self.num_b_left_matches = zx_match_diagram.num_bl_nodes()
 
     def to_dict(self) -> dict[str, int]:
         return {

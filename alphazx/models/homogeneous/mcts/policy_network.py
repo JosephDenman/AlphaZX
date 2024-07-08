@@ -47,7 +47,7 @@ class PolicyNetwork(nn.Module):
         :param data: The pyg.data.Data object representing the ZX match diagram.
         :return: Parameters for the AlphaZXDistribution.
         """
-        mixture_probs = self.rewrite_type_selector(data.x, data.node_type, data.batch)
+        mixture_probs = self.rewrite_type_selector(data.x, data.edge_index, data.node_type, data.batch)
         node_probs = self.node_selector(data.x, data.node_type, data.batch)
         phase_probs = self.new_phase_selector(data.x, data.node_type, data.batch)
         edge_probs = self.new_edge_selector(data.x, data.node_type, data.batch)

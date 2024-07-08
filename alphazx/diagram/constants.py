@@ -7,10 +7,10 @@ I_ETYPE_INDEX = 1
 I_ETYPE_NAME = 'inclusion'
 
 SS_ETYPE_INDEX = 2
-SS_ETYPE_NAME = 'super_simple'
+SS_ETYPE_NAME = 'simple_super'
 
 SI_ETYPE_INDEX = 3
-SI_ETYPE_NAME = 'super_inclusion'
+SI_ETYPE_NAME = 'inclusion_super'
 
 
 

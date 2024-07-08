@@ -18,4 +18,3 @@ class TestZXMatchDiagram(unittest.TestCase):
     def test_zx_match_diagram_to_data(self, config: tuple[int, int, bool]):
         result = clifford_zx_match_diagram(*config[:-1]).to_pyg_data()
         assert isinstance(result, pyg_data.Data)
-        assert torch.bincount(result.node_type)[0].item() == 1

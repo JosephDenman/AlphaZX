@@ -14,6 +14,7 @@ class NeighborMultisetTransformer(torch.nn.Module):
                  dropout: float = 0.0):
         super().__init__()
         self.gmt = pyg.nn.SetTransformerAggregation(in_channels, k, num_encoder_blocks, num_encoder_blocks, heads,
+                                                    # TODO: Reevaluate whether 'False' is correct.
                                                     False, layer_norm, dropout)
 
     def reset_parameters(self):

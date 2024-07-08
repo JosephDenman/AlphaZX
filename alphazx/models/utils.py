@@ -2,6 +2,7 @@ import torch
 import torch_geometric as pyg
 
 from alphazx.diagram.match import METADATA
+torch.set_printoptions(threshold=10_000)
 
 
 def concatenate_by_group(x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
@@ -59,7 +60,30 @@ def pad_and_stack(tensors: list[torch.Tensor], pad_value=0.) -> torch.Tensor:
 
 
 def mask_non_basis_edges(edge_index: torch.Tensor, node_types: torch.Tensor) -> torch.Tensor:
+    print('torch.tensor(METADATA.non_basis_node_type_indices) = ', torch.tensor(METADATA.non_basis_node_type_indices))
     return mask_edges_by_type(edge_index, node_types, torch.tensor(METADATA.non_basis_node_type_indices))
+
+
+def mask_non_super_nodes(x: torch.Tensor, edge_index: torch.Tensor, node_types: torch.Tensor, batch: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    mask = torch.full_like(node_types, False, dtype=torch.bool)
+    for super_node_index in METADATA.super_node_type_indices:
+        mask = mask | (node_types == super_node_index)
+    masked_x = x[mask]
+    masked_edge_index = mask_edges_by_type(edge_index, node_types, torch.tensor(METADATA.non_super_node_type_indices))
+    masked_node_types = node_types[mask]
+    masked_batch = batch[mask]
+    return masked_x, masked_edge_index, masked_node_types, masked_batch
+
+
+def mask_non_basis_nodes(x: torch.Tensor, edge_index: torch.Tensor, node_types: torch.Tensor, batch: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    mask = torch.full_like(node_types, False, dtype=torch.bool)
+    for super_node_index in METADATA.basis_node_type_indices:
+        mask = mask | (node_types == super_node_index)
+    masked_x = x[mask]
+    masked_edge_index = mask_edges_by_type(edge_index, node_types, torch.tensor(METADATA.non_super_node_type_indices))
+    masked_node_types = node_types[mask]
+    masked_batch = batch[mask]
+    return masked_x, masked_edge_index, masked_node_types, masked_batch
 
 
 def mask_edges_by_type(edge_index: torch.Tensor, node_types: torch.Tensor,
@@ -83,6 +107,7 @@ def edge_index_as_node_types(edge_index: torch.Tensor, node_types: torch.Tensor)
     src_node_types = torch.index_select(node_types, 0, edge_index[0])
     tgt_node_types = torch.index_select(node_types, 0, edge_index[1])
     edge_indexed_node_types = torch.stack([src_node_types, tgt_node_types], dim=0)
+    # print('edge_indexed_node_types = ', edge_indexed_node_types)
     return edge_indexed_node_types
 
 
@@ -112,14 +137,6 @@ def compute_column_mask_for_values(t: torch.Tensor, values_to_mask: torch.Tensor
     valid_columns = (~any_match).all(dim=0)
     # Return the mask
     return valid_columns
-
-
-def remove_all_nan_rows(x: torch.Tensor) -> torch.Tensor:
-    # Check if all elements in each row are equal to the specified value
-    mask = torch.all(torch.isnan(x), dim=1)
-    # Invert the mask to keep rows that do not meet the condition
-    filtered_tensor = x[~mask]
-    return filtered_tensor
 
 
 def compute_basis_neighbors(edge_index: torch.Tensor, node: int, node_types: torch.Tensor) -> torch.Tensor:

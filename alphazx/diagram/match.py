@@ -74,6 +74,12 @@ class MatchNode(ZXMatchDiagramNode, abc.ABC):
     def expected_size() -> int:
         pass
 
+    @staticmethod
+    @property
+    @abc.abstractmethod
+    def super_node() -> Type['SuperNode']:
+        pass
+
     @classmethod
     def is_simple_match_node(cls) -> bool:
         return issubclass(cls, SimpleMatchNode)
@@ -106,7 +112,7 @@ class MatchNode(ZXMatchDiagramNode, abc.ABC):
         return hash((self.name, *sorted(self.nodes)))
 
     def __eq__(self, other):
-        return isinstance(other, MatchNode) and self.name == other.name and self._nodes == other._nodes
+        return self.__hash__() == other.__hash__()
 
     def __repr__(self):
         return self.abbrev + str(list(self._nodes))
@@ -139,6 +145,10 @@ class BoundaryMatch(SimpleMatchNode):
     def meta_neighbors() -> list[Type[ZXMatchDiagramNode]]:
         return [BoundarySuperNode, FRightZMatch, FRightXMatch, BoundaryMatch]
 
+    @staticmethod
+    def super_node() -> Type[ZXMatchDiagramNode]:
+        return BoundarySuperNode
+
 
 class FRightMatch(SimpleMatchNode, abc.ABC):
     expected_size = 1
@@ -167,6 +177,10 @@ class FRightZMatch(FRightMatch):
     def meta_neighbors() -> list[Type[ZXMatchDiagramNode]]:
         return [FRightZSuperNode, BoundaryMatch, FRightZMatch, FRightXMatch]
 
+    @staticmethod
+    def super_node() -> Type[ZXMatchDiagramNode]:
+        return FRightZSuperNode
+
 
 class FRightXMatch(FRightMatch):
     index = 2
@@ -177,6 +191,10 @@ class FRightXMatch(FRightMatch):
     @staticmethod
     def meta_neighbors() -> list[Type[ZXMatchDiagramNode]]:
         return [FRightXSuperNode, BoundaryMatch, FRightZMatch, FRightXMatch]
+
+    @staticmethod
+    def super_node() -> Type[ZXMatchDiagramNode]:
+        return FRightXSuperNode
 
 
 def is_boundary(ntype: str | int) -> bool:
@@ -241,6 +259,10 @@ class FLeftZMatch(FLeftMatch):
     def meta_neighbors() -> list[Type[ZXMatchDiagramNode]]:
         return [FLeftZSuperNode, FRightZMatch]
 
+    @staticmethod
+    def super_node() -> Type[ZXMatchDiagramNode]:
+        return FLeftZSuperNode
+
 
 class FLeftXMatch(FLeftMatch):
     index = 4
@@ -255,6 +277,10 @@ class FLeftXMatch(FLeftMatch):
     @staticmethod
     def meta_neighbors() -> list[Type[ZXMatchDiagramNode]]:
         return [FLeftXSuperNode, FRightXMatch]
+
+    @staticmethod
+    def super_node() -> Type[ZXMatchDiagramNode]:
+        return FLeftXSuperNode
 
 
 class BRightMatch(CompoundMatchNode):
@@ -273,6 +299,10 @@ class BRightMatch(CompoundMatchNode):
     @staticmethod
     def meta_neighbors() -> list[Type[ZXMatchDiagramNode]]:
         return [BRightSuperNode, FRightZMatch, FRightXMatch]
+
+    @staticmethod
+    def super_node() -> Type[ZXMatchDiagramNode]:
+        return BRightSuperNode
 
 
 class BLeftMatch(CompoundMatchNode):
@@ -293,6 +323,10 @@ class BLeftMatch(CompoundMatchNode):
     @staticmethod
     def meta_neighbors() -> list[Type[ZXMatchDiagramNode]]:
         return [BLeftSuperNode, BRightMatch, FRightZMatch, FRightXMatch]
+
+    @staticmethod
+    def super_node() -> Type[ZXMatchDiagramNode]:
+        return BLeftSuperNode
 
 
 class YRightMatch(CompoundMatchNode, abc.ABC):
@@ -318,9 +352,13 @@ class YRightZMatch(YRightMatch):
     def meta_neighbors() -> list[Type[ZXMatchDiagramNode]]:
         return [YRightZSuperNode, FRightZMatch, FRightXMatch]
 
+    @staticmethod
+    def super_node() -> Type[ZXMatchDiagramNode]:
+        return YRightZSuperNode
+
 
 class YRightXMatch(YRightMatch):
-    index = 9
+    index = 8
     rule_mode = 'x'
     name = 'y_right_x'
     abbrev = 'yrx'
@@ -333,6 +371,10 @@ class YRightXMatch(YRightMatch):
     def meta_neighbors() -> list[Type[ZXMatchDiagramNode]]:
         return [YRightXSuperNode, FRightZMatch, FRightXMatch]
 
+    @staticmethod
+    def super_node() -> Type[ZXMatchDiagramNode]:
+        return YRightXSuperNode
+
 
 class YLeftMatch(CompoundMatchNode, abc.ABC):
     expected_size = 4
@@ -344,7 +386,7 @@ class YLeftMatch(CompoundMatchNode, abc.ABC):
 
 
 class YLeftZMatch(YLeftMatch):
-    index = 8
+    index = 9
     rule_mode = 'z'
     name = 'y_left_z'
     abbrev = 'ylz'
@@ -356,6 +398,10 @@ class YLeftZMatch(YLeftMatch):
     @staticmethod
     def meta_neighbors() -> list[Type[ZXMatchDiagramNode]]:
         return [YLeftZSuperNode, FRightZMatch, FRightXMatch]
+
+    @staticmethod
+    def super_node() -> Type[ZXMatchDiagramNode]:
+        return YLeftZSuperNode
 
 
 class YLeftXMatch(YLeftMatch):
@@ -372,8 +418,22 @@ class YLeftXMatch(YLeftMatch):
     def meta_neighbors() -> list[Type[ZXMatchDiagramNode]]:
         return [YLeftXSuperNode, FRightZMatch, FRightXMatch]
 
+    @staticmethod
+    def super_node() -> Type[ZXMatchDiagramNode]:
+        return YLeftXSuperNode
+
 
 class SuperNode(ZXMatchDiagramNode, abc.ABC):
+
+    def __eq__(self, other):
+        return self.__hash__() == other.__hash__()
+
+    def __hash__(self):
+        return hash(self.index)
+
+    def __repr__(self):
+        return self.abbrev
+
     @staticmethod
     @property
     @abc.abstractmethod
@@ -400,14 +460,14 @@ class FRightZSuperNode(SuperNode):
 
 
 class FRightXSuperNode(SuperNode):
-    index = 14
+    index = 13
     sub_node = FRightXMatch
     name = 'f_right_x_super'
     abbrev = 'frx_super'
 
 
 class FLeftZSuperNode(SuperNode):
-    index = 13
+    index = 14
     sub_node = FLeftZMatch
     name = 'f_left_z_super'
     abbrev = 'flz_super'
@@ -442,14 +502,14 @@ class YRightZSuperNode(SuperNode):
 
 
 class YRightXSuperNode(SuperNode):
-    index = 20
+    index = 19
     sub_node = YRightXMatch
     name = 'y_right_x_super'
     abbrev = 'yrx_super'
 
 
 class YLeftZSuperNode(SuperNode):
-    index = 19
+    index = 20
     sub_node = YLeftZMatch
     name = 'y_left_z_super'
     abbrev = 'ylz_super'
@@ -505,19 +565,24 @@ class Metadata(NamedTuple):
     edge_type_to_index_dict: dict[tuple[str, str, str], int]
 
     basis_node_type_indices: list[int]
+
     non_basis_node_type_indices: list[int]
 
-    simple_node_indices: list[int]
+    simple_node_type_indices: list[int]
     simple_edges: list[tuple[str, str, str]]
 
+    super_node_type_abbrevs: list[str]
     super_node_type_indices: list[int]
+    non_super_node_type_indices: list[int]
+
+    match_node_type_abbrevs: list[int]
     match_node_type_indices: list[int]
     node_feat_to_index_dict: dict[tuple[int, float], int]
 
     max_match_size: int
 
 
-def _compute_meta_edge_type(a: Type[ZXMatchDiagramNode], b: Type[ZXMatchDiagramNode]) -> str:
+def compute_meta_edge_type(a: Type[ZXMatchDiagramNode], b: Type[ZXMatchDiagramNode]) -> str:
     if issubclass(a, SuperNode) and issubclass(b, SuperNode):
         return SS_ETYPE_NAME
     elif issubclass(a, SuperNode) and issubclass(b, MatchNode) or issubclass(a, MatchNode) and issubclass(b, SuperNode):
@@ -538,7 +603,7 @@ def _compute_nx_metagraph() -> nx.DiGraph:
         metagraph.add_node(leaf_class, abbrev=leaf_class.abbrev, index=leaf_class.index)
     for leaf_class in leaf_classes:
         for meta_neighbor in leaf_class.meta_neighbors():
-            center_e_type = _compute_meta_edge_type(leaf_class, meta_neighbor)
+            center_e_type = compute_meta_edge_type(leaf_class, meta_neighbor)
             metagraph.add_edge(leaf_class, meta_neighbor,
                                e_type=(leaf_class.abbrev, center_e_type, meta_neighbor.abbrev))
             metagraph.add_edge(meta_neighbor, leaf_class,
@@ -552,12 +617,17 @@ def _compute_metadata_from_metagraph(metagraph: nx.DiGraph) -> Metadata:
     edge_types = []
     node_type_abbrev_index_dict = {}
 
-    simple_nodes = []
+    simple_node_type_indices = []
     simple_edges = []
 
     basis_node_type_indices = []
     non_basis_node_type_indices = []
+
+    super_node_type_abbrevs = []
     super_node_type_indices = []
+    non_super_node_type_indices = []
+
+    match_node_type_abbrevs = []
     match_node_type_indices = []
 
     for n, ndata in metagraph.nodes(data=True):
@@ -568,19 +638,38 @@ def _compute_metadata_from_metagraph(metagraph: nx.DiGraph) -> Metadata:
         node_type_abbrev_index_dict[node_type_abbrev] = node_type_index
 
     for n, ndata in metagraph.nodes(data=True):
-        node_type_index = ndata['index']
+        if issubclass(n, MatchNode):
+            node_type_abbrev = ndata['abbrev']
+            node_type_index = ndata['index']
+            match_node_type_abbrevs.append(node_type_abbrev)
+            match_node_type_indices.append(node_type_index)
+
+    for n, ndata in metagraph.nodes(data=True):
+        if issubclass(n, SuperNode):
+            node_type_abbrev = ndata['abbrev']
+            node_type_index = ndata['index']
+            super_node_type_abbrevs.append(node_type_abbrev)
+            super_node_type_indices.append(node_type_index)
+
+    for n, ndata in metagraph.nodes(data=True):
+        if not issubclass(n, SuperNode):
+            node_type_index = ndata['index']
+            non_super_node_type_indices.append(node_type_index)
+
+    for n, ndata in metagraph.nodes(data=True):
+        if issubclass(n, FRightMatch):
+            node_type_index = ndata['index']
+            basis_node_type_indices.append(node_type_index)
+
+    for n, ndata in metagraph.nodes(data=True):
         if issubclass(n, SimpleMatchNode):
-            if issubclass(n, FRightMatch):
-                basis_node_type_indices.append(node_type_index)
-            else:
-                simple_nodes.append(node_type_index)
-                non_basis_node_type_indices.append(node_type_index)
-        else:
+            node_type_index = ndata['index']
+            simple_node_type_indices.append(node_type_index)
+
+    for n, ndata in metagraph.nodes(data=True):
+        node_type_index = ndata['index']
+        if not issubclass(n, FRightMatch):
             non_basis_node_type_indices.append(node_type_index)
-            if issubclass(n, SuperNode):
-                super_node_type_indices.append(node_type_index)
-            elif issubclass(n, MatchNode):
-                match_node_type_indices.append(node_type_index)
 
     for a, b, edata in metagraph.edges(data=True):
         edge_type = edata['e_type']
@@ -611,12 +700,20 @@ def _compute_metadata_from_metagraph(metagraph: nx.DiGraph) -> Metadata:
         edge_types,
         node_type_abbrev_index_dict,
         edge_type_to_index_dict,
+
         basis_node_type_indices,
         non_basis_node_type_indices,
-        simple_nodes,
+
+        simple_node_type_indices,
         simple_edges,
+
+        super_node_type_abbrevs,
         super_node_type_indices,
+        non_super_node_type_indices,
+
+        match_node_type_abbrevs,
         match_node_type_indices,
+
         node_feat_to_index_dict,
         max_match_size)
 

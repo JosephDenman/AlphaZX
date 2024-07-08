@@ -6,10 +6,10 @@ import networkx as nx
 import torch
 import torch_geometric as pyg
 
+from alphazx.diagram.constants import S_ETYPE_INDEX
 from alphazx.diagram.match import MatchNode, FRightMatch, FRightZMatch, FRightXMatch, FLeftZMatch, FLeftMatch, FLeftXMatch, \
     BLeftMatch, BRightMatch, YLeftMatch, YRightMatch, YLeftXMatch, YLeftZMatch, YRightZMatch, YRightXMatch, BoundaryMatch, is_boundary, \
     is_basis, is_z_basis, is_x_basis, SimpleMatchNode, METADATA
-from alphazx.diagram.pyg_conv import compute_edge_type_attr
 
 
 class ZXDiagram(nx.MultiGraph):
@@ -28,7 +28,10 @@ class ZXDiagram(nx.MultiGraph):
         self._b_nodes_set = set()
         self.__initialize_graph_from_nx_graph(nx_graph)
         for s, t, edata in self.edges(data=True):
-            edata['type'] = compute_edge_type_attr(base_match_from_node(self, s), base_match_from_node(self, t))
+            edata['type'] = self.__compute_edge_type_attr(s, t)
+
+    def __compute_edge_type_attr(self, a, b) -> tuple[str, str, str]:
+        return base_match_from_node(self, a).abbrev, S_ETYPE_INDEX, base_match_from_node(self, b).abbrev
 
     def __initialize_graph_from_nx_graph(self, nx_graph: nx.MultiGraph = None):
         if nx_graph is not None:
@@ -194,7 +197,7 @@ class ZXDiagram(nx.MultiGraph):
         assert self.has_node(s), f'Node {s} does not exist'
         assert self.has_node(s), f'Node {t} does not exist'
         return self.add_edge(s, t,
-                             type=compute_edge_type_attr(base_match_from_node(self, s), base_match_from_node(self, t)))
+                             type=self.__compute_edge_type_attr(s, t))
 
     def add_s_edges_from(self, es: Iterable[tuple[int, int]]) -> list[int]:
         for s, t in es:
@@ -419,6 +422,6 @@ def base_match_from_node(diagram: ZXDiagram, node: int) -> SimpleMatchNode:
     elif diagram.is_x_basis(node):
         return FRightXMatch(node)
     elif diagram.is_boundary(node):
-        return BoundaryMatch(-1)
+        return BoundaryMatch(node)
     else:
         raise Exception(f'Unexpected node type {diagram.type(node)}')
