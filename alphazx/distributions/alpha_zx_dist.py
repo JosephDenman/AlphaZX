@@ -128,7 +128,9 @@ class AlphaZXDistribution:
         return feature_log_probs
 
     def _sample_transfer_edges(self, nodes: torch.Tensor) -> torch.Tensor:
-        return MultivariateBernoulli(self._select_feature_dist_params(nodes, 'transfer_edge')).sample()
+        params = self._select_feature_dist_params(nodes, 'transfer_edge')
+        print('selected_transfer_edge_params = ', params)
+        return MultivariateBernoulli(params).sample()
 
     def _transfer_edge_log_probs(self, nodes: torch.Tensor, transfer_edges: torch.Tensor) -> torch.Tensor:
         return MultivariateBernoulli(self._select_feature_dist_params(nodes, 'transfer_edge')).log_prob(

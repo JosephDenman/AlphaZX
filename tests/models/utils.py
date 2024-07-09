@@ -9,6 +9,7 @@ from alphazx.diagram.diagram_generators import clifford_zx_match_diagram
 from alphazx.diagram.match import METADATA
 from tests.utils import zx_diagram_config_st, mask_columns_by_value_st, random_node_types_st, concatenate_by_group_st
 
+
 def concatenate_by_group_py(x, index) -> torch.Tensor:
     # Determine the number of groups
     num_groups = max(index) + 1

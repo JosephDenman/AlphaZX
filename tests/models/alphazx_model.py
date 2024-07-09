@@ -1,12 +1,10 @@
 import torch_geometric as pyg
 
-from alphazx.diagram import METADATA, POSSIBLE_PHASES, clifford_pyg_zx_match_diagram, clifford_pyg_zx_diagram, \
-    clifford_zx_diagram, to_zx_match_diagram
+from alphazx.diagram import METADATA, POSSIBLE_PHASES, clifford_zx_diagram, to_zx_match_diagram
 from alphazx.distributions import AlphaZXDistribution
 from alphazx.game import remove_isolated_nodes, remove_self_loop_edges, remove_isolated_components
-from alphazx.models import with_embeddable_feats, with_laplacian_pe, assert_unique_elements
+from alphazx.models import pre_process
 from alphazx.models.homogeneous.mcts.alphazx_model import AlphaZXModel
-
 
 num_node_types = len(METADATA.node_type_abbrevs)
 num_possible_phases = len(POSSIBLE_PHASES)
@@ -24,7 +22,6 @@ repr_gps_num_attn_heads = 4
 repr_gps_attn_type = 'multihead'
 repr_gps_attn_kwargs = {}
 repr_gps_mlp_hidden_channels = 64
-
 policy_num_pooling_encoder_blocks = 4
 policy_num_pooling_heads = 4
 policy_pooling_layer_norm = True
@@ -67,19 +64,18 @@ def create_data_loader(num_diagrams: int, batch_size: int, num_qubits: int, dept
         remove_self_loop_edges(d)
         remove_isolated_components(d)
         md = to_zx_match_diagram(d).to_pyg_data()
-        md = with_embeddable_feats(md)
         dataset.append(md)
     return pyg.loader.DataLoader(dataset, batch_size)
 
 
 num_diagrams = 8
 batch_size = 4
-num_qubits = 10
-depth = 10
+num_qubits = 200
+depth = 200
 data_loader = create_data_loader(num_diagrams, batch_size, num_qubits, depth)
 for batch in data_loader:
     batch = batch.sort(False)
-    batch = with_laplacian_pe(batch, pe_dim)
+    batch = pre_process(batch, pe_dim)
     azx_dist_params, value = model(batch)
     azx_dist = AlphaZXDistribution(azx_dist_params)
     print(azx_dist.sample(1))

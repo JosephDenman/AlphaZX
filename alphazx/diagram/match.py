@@ -1,5 +1,4 @@
 import abc
-import itertools
 from typing import Type, NamedTuple
 
 import networkx as nx
@@ -565,11 +564,12 @@ class Metadata(NamedTuple):
     edge_type_to_index_dict: dict[tuple[str, str, str], int]
 
     basis_node_type_indices: list[int]
-
     non_basis_node_type_indices: list[int]
 
+    simple_node_type_abbrevs: list[str]
     simple_node_type_indices: list[int]
     simple_edges: list[tuple[str, str, str]]
+    non_simple_node_type_indices: list[int]
 
     super_node_type_abbrevs: list[str]
     super_node_type_indices: list[int]
@@ -617,8 +617,10 @@ def _compute_metadata_from_metagraph(metagraph: nx.DiGraph) -> Metadata:
     edge_types = []
     node_type_abbrev_index_dict = {}
 
+    simple_node_type_abbrevs = []
     simple_node_type_indices = []
     simple_edges = []
+    non_simple_node_type_indices = []
 
     basis_node_type_indices = []
     non_basis_node_type_indices = []
@@ -645,31 +647,29 @@ def _compute_metadata_from_metagraph(metagraph: nx.DiGraph) -> Metadata:
             match_node_type_indices.append(node_type_index)
 
     for n, ndata in metagraph.nodes(data=True):
+        node_type_abbrev = ndata['abbrev']
+        node_type_index = ndata['index']
         if issubclass(n, SuperNode):
-            node_type_abbrev = ndata['abbrev']
-            node_type_index = ndata['index']
             super_node_type_abbrevs.append(node_type_abbrev)
             super_node_type_indices.append(node_type_index)
-
-    for n, ndata in metagraph.nodes(data=True):
-        if not issubclass(n, SuperNode):
-            node_type_index = ndata['index']
+        else:
             non_super_node_type_indices.append(node_type_index)
 
     for n, ndata in metagraph.nodes(data=True):
-        if issubclass(n, FRightMatch):
-            node_type_index = ndata['index']
-            basis_node_type_indices.append(node_type_index)
-
-    for n, ndata in metagraph.nodes(data=True):
-        if issubclass(n, SimpleMatchNode):
-            node_type_index = ndata['index']
-            simple_node_type_indices.append(node_type_index)
-
-    for n, ndata in metagraph.nodes(data=True):
         node_type_index = ndata['index']
-        if not issubclass(n, FRightMatch):
+        if issubclass(n, FRightMatch):
+            basis_node_type_indices.append(node_type_index)
+        else:
             non_basis_node_type_indices.append(node_type_index)
+
+    for n, ndata in metagraph.nodes(data=True):
+        node_type_abbrev = ndata['abbrev']
+        node_type_index = ndata['index']
+        if issubclass(n, SimpleMatchNode):
+            simple_node_type_abbrevs.append(node_type_abbrev)
+            simple_node_type_indices.append(node_type_index)
+        else:
+            non_simple_node_type_indices.append(node_type_index)
 
     for a, b, edata in metagraph.edges(data=True):
         edge_type = edata['e_type']
@@ -704,8 +704,10 @@ def _compute_metadata_from_metagraph(metagraph: nx.DiGraph) -> Metadata:
         basis_node_type_indices,
         non_basis_node_type_indices,
 
+        simple_node_type_abbrevs,
         simple_node_type_indices,
         simple_edges,
+        non_simple_node_type_indices,
 
         super_node_type_abbrevs,
         super_node_type_indices,
