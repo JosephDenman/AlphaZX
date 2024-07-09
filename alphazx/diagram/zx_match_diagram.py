@@ -144,6 +144,23 @@ def check_super_node_edges(zx_match_diagram: ZXMatchDiagram) -> None:
                                                  super_node_a), f'Expected edge between {super_node_b.abbrev} and {super_node_a.abbrev}'
 
 
+def check_opposite_edges(zx_match_diagram: ZXMatchDiagram) -> None:
+    for a, b in zx_match_diagram.edges:
+        assert zx_match_diagram.has_edge(b, a), f'Edge from {a} to {b} has no opposite edge'
+
+
+def check_basis_node_counts(zx_diagram: ZXDiagram, zx_match_diagram: ZXMatchDiagram) -> None:
+    actual_num_b_nodes = len(zx_match_diagram.b_nodes)
+    expected_num_b_nodes = zx_diagram.num_b_nodes()
+    actual_num_z_nodes = len(zx_match_diagram.frz_nodes)
+    expected_num_z_nodes = zx_diagram.num_z_nodes()
+    actual_num_x_nodes = len(zx_match_diagram.frx_nodes)
+    expected_num_x_nodes = zx_diagram.num_x_nodes()
+    assert actual_num_b_nodes == expected_num_b_nodes, f'Actual number of boundary nodes {actual_num_b_nodes} != expected number of boundary nodes {expected_num_b_nodes}'
+    assert actual_num_z_nodes == expected_num_z_nodes, f'Actual number of Z nodes {actual_num_z_nodes} != expected number of Z nodes {expected_num_z_nodes}'
+    assert actual_num_x_nodes == expected_num_x_nodes, f'Actual number of Z nodes {actual_num_x_nodes} != expected number of Z nodes {expected_num_x_nodes}'
+
+
 def to_zx_match_diagram(zx_diagram: ZXDiagram) -> ZXMatchDiagram:
     zx_match_diagram = ZXMatchDiagram(zx_diagram)
     matches = set(zx_diagram.compute_matches())
@@ -158,9 +175,8 @@ def to_zx_match_diagram(zx_diagram: ZXDiagram) -> ZXMatchDiagram:
     #     check_super_nodes_exist(zx_match_diagram)
     #     check_super_node_counts(zx_match_diagram)
     #     check_super_node_edges(zx_match_diagram)
-    actual_num_b_nodes = len(zx_match_diagram.b_nodes)
-    expected_num_b_nodes = zx_diagram.num_b_nodes()
-    assert actual_num_b_nodes == expected_num_b_nodes, f'Actual number of boundary nodes {actual_num_b_nodes} != expected number of boundary nodes {expected_num_b_nodes}'
+    check_basis_node_counts(zx_diagram, zx_match_diagram)
+    check_opposite_edges(zx_match_diagram)
     return zx_match_diagram
 
 

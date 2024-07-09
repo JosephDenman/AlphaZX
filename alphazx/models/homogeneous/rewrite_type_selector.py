@@ -2,7 +2,7 @@ import torch.nn
 import torch_geometric as pyg
 
 from alphazx.diagram import METADATA
-from alphazx.models import mask_non_super_nodes
+from alphazx.models import mask_non_super_nodes, softmax_nonzero_entries
 
 
 class RewriteTypeSelector(torch.nn.Module):
@@ -34,9 +34,11 @@ class RewriteTypeSelector(torch.nn.Module):
         masked_x, masked_edge_index, masked_node_types, masked_batch = mask_non_super_nodes(node_type, edge_index,
                                                                                             node_type, batch)
         masked_selected_x = torch.index_select(x, 0, masked_edge_index[0])
-        masked_x = self.mixture_trans(masked_selected_x, masked_edge_index[1])
+        masked_x, mask = self.mixture_trans(masked_selected_x, masked_edge_index[1])
+        masked_x = masked_x[torch.any(mask, dim=1)]
         masked_x = self.mixture_mlp(masked_x).squeeze(dim=-1)
         mixture_probs = torch.full([torch.max(batch) + 1, len(METADATA.super_node_type_indices)], 0., dtype=x.dtype,
                                    device=x.device)
         mixture_probs[masked_batch, masked_node_types - len(METADATA.super_node_type_indices)] = masked_x
+        mixture_probs = softmax_nonzero_entries(mixture_probs)
         return mixture_probs

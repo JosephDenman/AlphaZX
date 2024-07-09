@@ -16,13 +16,13 @@ def concatenate_by_group(x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
     return x_
 
 
-def concatenate_neighbor_features(x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
+def concatenate_neighbor_features(x: torch.Tensor, edge_index: torch.Tensor, max_num_nodes: int | None = None) -> torch.Tensor:
     neighbor_x = torch.index_select(x, 0, edge_index[0])
-    x_, mask = pyg.utils.to_dense_batch(neighbor_x, edge_index[1])
-    row_mask = torch.any(mask, dim=1)
-    x_ = x_[row_mask]
-    mask = mask[row_mask]
-    return x_
+    x_, mask = pyg.utils.to_dense_batch(neighbor_x, edge_index[1], batch_size=max_num_nodes)
+    # row_mask = torch.any(mask, dim=1)
+    # x_ = x_[row_mask]
+    # mask = mask[row_mask]
+    return x_, mask
 
 
 def concatenate_with_neighbor_features(x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
@@ -151,3 +151,33 @@ def throw_on_nan(x: torch.Tensor) -> None:
         raise Exception(f'Input tensor {x} contains NaN values')
     if (x == -torch.inf).any():
         raise Exception(f'Input tensor {x} contains NaN values')
+
+
+def assert_unique_elements(tensor: torch.Tensor) -> None:
+    """
+    Asserts that all elements in the first dimension of the input tensor are unique.
+    For a 1D tensor, all elements must be unique.
+    For a 2D tensor, all rows must be unique.
+    """
+    if tensor.ndim == 1:
+        unique_elements = torch.unique(tensor)
+        if tensor.numel() != unique_elements.numel():
+            raise ValueError("The tensor contains duplicate elements in the first dimension.")
+    elif tensor.ndim == 2:
+        unique_rows = torch.unique(tensor, dim=0)
+        if tensor.size(0) != unique_rows.size(0):
+            raise ValueError("The tensor contains duplicate rows in the first dimension.")
+    else:
+        raise ValueError("The tensor must be either 1D or 2D.")
+
+
+def softmax_nonzero_entries(tensor: torch.Tensor) -> torch.Tensor:
+    # Create a mask of non-zero entries
+    nonzero_mask = tensor != 0.
+    # Compute the masked tensor where we replace non-zero entries with their log-probabilities
+    masked_tensor = torch.where(nonzero_mask, tensor, torch.tensor(-torch.inf).to(tensor.device))
+    # Apply softmax along the rows while keeping the zero entries unchanged
+    softmax_tensor = torch.softmax(masked_tensor, dim=1)
+    # Return the tensor with softmax applied to non-zero entries and zero entries unchanged
+    return torch.where(nonzero_mask, softmax_tensor, tensor)
+

@@ -11,13 +11,13 @@ from torch.nn import (
 )
 from torch_geometric.nn import GPSConv, TransformerConv
 
-from alphazx.models import throw_on_nan
+from alphazx.models import throw_on_nan, assert_unique_elements
 
 
 class GPS(torch.nn.Module):
     def __init__(self,
                  num_node_embeddings: int,
-                 channels: int,
+                 embedding_out_channels: int,
                  node_out_channels: int,
                  edge_in_channels: int,
                  edge_out_channels: int,
@@ -31,22 +31,23 @@ class GPS(torch.nn.Module):
                  mlp_hidden_channels: int):
         super().__init__()
         self.pe_norm = BatchNorm1d(pe_in_channels)
-        self.node_emb = Embedding(num_node_embeddings, channels - pe_out_channels, dtype=torch.float)
+        self.node_emb = Embedding(num_node_embeddings, embedding_out_channels, dtype=torch.float)
         self.pe_lin = Linear(pe_in_channels, pe_out_channels, bias=bias)
         self.edge_lin = Linear(edge_in_channels, edge_out_channels)
         self.convs = ModuleList()
+        node_in_channels = embedding_out_channels + pe_out_channels
         for _ in range(num_layers):
             self.convs.append(
-                GPSConv(channels,
-                        TransformerConv(channels,
-                                        channels,
-                                        heads=num_attn_heads),
+                GPSConv(node_in_channels,
+                        TransformerConv(node_in_channels,
+                                        node_in_channels,
+                                        heads=1),
                         attn_type=attn_type,
                         attn_kwargs=attn_kwargs,
                         heads=num_attn_heads,
                         norm='layer_norm'))
         self.mlp = Sequential(
-            Linear(channels, mlp_hidden_channels),
+            Linear(node_in_channels, mlp_hidden_channels),
             ReLU(),
             Linear(mlp_hidden_channels, mlp_hidden_channels),
             ReLU(),
@@ -72,4 +73,5 @@ class GPS(torch.nn.Module):
         x = torch.cat((self.node_emb(x.long().squeeze(-1)), self.pe_lin(x_pe)), 1)
         for conv in self.convs:
             x = conv(x, edge_index, batch)
+        assert_unique_elements(x)
         return self.mlp(x)

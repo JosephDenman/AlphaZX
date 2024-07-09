@@ -126,12 +126,28 @@ class BestActionStats:
         pass
 
 
+def remove_isolated_nodes(zx_diagram: ZXDiagram) -> None:
+    zx_diagram.remove_nodes_from(list(nx.isolates(zx_diagram)))
+
+
+def remove_self_loop_edges(zx_diagram: ZXDiagram) -> None:
+    zx_diagram.remove_edges_from(list(nx.selfloop_edges(zx_diagram, keys=True)))
+
+
+def remove_isolated_components(zx_diagram: ZXDiagram) -> None:
+    if zx_diagram.num_b_nodes() == 0 or zx_diagram.num_b_nodes() == 1:
+        raise ValueError('Valid diagrams always have at least two boundary nodes')
+    b_nodes = zx_diagram.b_nodes()
+    for c in nx.connected_components(zx_diagram.copy()):
+        if b_nodes.isdisjoint(c):
+            zx_diagram.remove_nodes_from(c)
+
+
 class ZXGame:
     def __init__(self,
                  num_qubits: int,
                  depth: int,
                  t_gates: bool = True,
-                 one_hot_types: bool = False,
                  step_penalty: int = 1,
                  max_episode_length: int = 100,
                  simplified_reward: int = 1):
@@ -139,7 +155,6 @@ class ZXGame:
         self.num_qubits = num_qubits
         self.depth = depth
         self.t_gates = t_gates
-        self.one_hot_types = one_hot_types
         self.step_penalty = step_penalty
         self.max_episode_length = max_episode_length
         self.simplified_reward = simplified_reward
@@ -150,9 +165,9 @@ class ZXGame:
         self.episode_return = 0.
 
         self.zx_diagram = clifford_zx_diagram(self.num_qubits, self.depth, self.t_gates)
-        self.__remove_isolated_nodes()
-        self.__remove_self_loop_edges()
-        self.__remove_isolated_components()
+        remove_isolated_nodes(self.zx_diagram)
+        remove_self_loop_edges(self.zx_diagram)
+        remove_isolated_components(self.zx_diagram)
         self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram)
         self.diagram_stats = DiagramStats(self.zx_match_diagram)
         self.previous_value = diagram_value(self.diagram_stats)
@@ -161,26 +176,12 @@ class ZXGame:
         data.batch = torch.zeros_like(data.node_type)
         self.data = data
 
-    def __remove_isolated_nodes(self) -> None:
-        self.zx_diagram.remove_nodes_from(list(nx.isolates(self.zx_diagram)))
-
-    def __remove_self_loop_edges(self) -> None:
-        self.zx_diagram.remove_edges_from(list(nx.selfloop_edges(self.zx_diagram, keys=True)))
-
-    def __remove_isolated_components(self) -> None:
-        if self.zx_diagram.num_b_nodes() == 0 or self.zx_diagram.num_b_nodes() == 1:
-            raise ValueError('Valid diagrams always have at least two boundary nodes')
-        b_nodes = self.zx_diagram.b_nodes()
-        for c in nx.connected_components(self.zx_diagram.copy()):
-            if b_nodes.isdisjoint(c):
-                self.zx_diagram.remove_nodes_from(c)
-
     def step(self, action: tuple) -> tuple[Data, int, bool, dict]:
         match, params = tuple_to_match(self.zx_match_diagram, self.data, action, self.data_index)
         rewrite(self.zx_diagram, match, params)
-        self.__remove_isolated_nodes()
-        self.__remove_self_loop_edges()
-        self.__remove_isolated_components()
+        remove_isolated_nodes(self.zx_diagram)
+        remove_self_loop_edges(self.zx_diagram)
+        remove_isolated_components(self.zx_diagram)
         self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram)
         self.diagram_stats = DiagramStats(self.zx_match_diagram)
 
@@ -204,9 +205,9 @@ class ZXGame:
         self.zx_diagram = start_state.copy() if start_state is not None else clifford_zx_diagram(self.num_qubits,
                                                                                                  self.depth,
                                                                                                  self.t_gates)
-        self.__remove_isolated_nodes()
-        self.__remove_self_loop_edges()
-        self.__remove_isolated_components()
+        remove_isolated_nodes(self.zx_diagram)
+        remove_self_loop_edges(self.zx_diagram)
+        remove_isolated_components(self.zx_diagram)
         self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram)
         self.diagram_stats = DiagramStats(self.zx_match_diagram)
 

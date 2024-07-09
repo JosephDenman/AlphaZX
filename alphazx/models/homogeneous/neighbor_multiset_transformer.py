@@ -13,7 +13,7 @@ class NeighborMultisetTransformer(torch.nn.Module):
                  layer_norm: bool = True,
                  dropout: float = 0.0):
         super().__init__()
-        self.gmt = pyg.nn.SetTransformerAggregation(in_channels, k, num_encoder_blocks, num_encoder_blocks, heads,
+        self.gmt = pyg.nn.GraphMultisetTransformer(in_channels, k, num_encoder_blocks, num_encoder_blocks, heads,
                                                     # TODO: Reevaluate whether 'False' is correct.
                                                     False, layer_norm, dropout)
 
