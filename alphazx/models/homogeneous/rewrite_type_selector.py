@@ -37,7 +37,9 @@ class RewriteTypeSelector(torch.nn.Module):
         masked_x, mask = self.mixture_trans(torch.index_select(x, 0, masked_edge_index[0]), masked_edge_index[1])
         masked_x = masked_x[torch.any(mask, dim=1)]
         masked_x = self.mixture_mlp(masked_x).squeeze(dim=-1)
-        mixture_probs = torch.full([torch.max(batch) + 1, len(METADATA.super_node_type_indices) - 1], 0., dtype=x.dtype,
+        mixture_probs = torch.full([torch.max(batch) + 1, len(METADATA.super_node_type_indices) - 1],
+                                   0.,
+                                   dtype=x.dtype,
                                    device=x.device)
         mixture_probs[masked_batch, masked_node_types - len(METADATA.super_node_type_indices)] = masked_x
         mixture_probs = softmax_nonzero_entries(mixture_probs)

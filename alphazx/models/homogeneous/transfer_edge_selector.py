@@ -55,6 +55,7 @@ class TransferEdgeSelector(torch.nn.Module):
                 batch: torch.Tensor) -> torch.Tensor:
         throw_on_nan(x)
         masked_edge_index = mask_non_simple_edges(edge_index, node_types)
+        # TODO: Move MLP to sigmoid section
         masked_x = self.mlp(self.neighbor_trans(torch.index_select(x, 0, masked_edge_index[0]), masked_edge_index[1])[0]).squeeze(dim=-1)
         masked_neighbor_x, mask = concatenate_neighbor_features(masked_x, masked_edge_index, batch_size=batch.shape[0])
         masked_neighbor_x[mask] = torch.sigmoid(masked_neighbor_x[mask])
