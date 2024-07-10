@@ -3,7 +3,7 @@ import torch
 import torch_geometric as pyg
 from torch_geometric.typing import NodeType
 
-from alphazx.diagram.match import MatchNode, CompoundMatchNode, BoundaryMatch, FRightMatch, from_index_and_node_set, \
+from alphazx.diagram.match import MatchNode, CompoundMatchNode, FRightMatch, from_index_and_node_set, \
     METADATA, ZXMatchDiagramNode, SuperNode
 from alphazx.diagram.pyg_conv import compute_node_type_attr, compute_edge_type_attr, compute_edge_size_attr
 from alphazx.diagram.zx_diagram import ZXDiagram, base_match_from_node
@@ -98,16 +98,19 @@ class ZXMatchDiagram(nx.DiGraph):
         return hdata
 
     def to_pyg_data(self, with_reverse_mapping: bool = False, sort_by_row: bool = False) -> pyg.data.Data | tuple[
-            pyg.data.Data, 'DataIndexToMatch']:
+        pyg.data.Data, 'DataIndexToMatch']:
         for n, ndata in self.nodes(data=True):
             ndata['node_type'] = torch.tensor(METADATA.node_type_abbrev_index_dict[ndata['node_type']])
         for _, _, edata in self.edges(data=True):
             edata['edge_type'] = torch.tensor(METADATA.edge_type_to_index_dict[edata['edge_type']])
-        data = pyg.utils.from_networkx(self, group_node_attrs=['node_type', 'node_phase', 'node_set'], group_edge_attrs=['edge_type', 'edge_size'])
-        data.sort(sort_by_row)
+        data = pyg.utils.from_networkx(self,
+                                       group_node_attrs=['node_type', 'node_phase', 'node_set'],
+                                       group_edge_attrs=['edge_type', 'edge_size'])
         data.node_type = data.x[:, 0].to(dtype=torch.long)
         data.node_phase = data.x[:, 1].to(dtype=torch.float64)
         data.node_set = data.x[:, 2:].to(dtype=torch.long)
+        # TODO: For some reason 'data.sort' does not work...
+        data.edge_index, data.edge_attr = pyg.utils.sort_edge_index(data.edge_index, data.edge_attr, sort_by_row=sort_by_row)
         data.edge_type = data.edge_attr[:, 0].to(dtype=torch.long)
         data.edge_size = data.edge_attr[:, 1].to(dtype=torch.long)
         data.validate()
@@ -168,7 +171,7 @@ def to_zx_match_diagram(zx_diagram: ZXDiagram) -> ZXMatchDiagram:
     #     for sub_match in match.sub_matches:
     #         assert sub_match in matches, f'Submatch {sub_match} of match {match} not in input diagram'
     for match in matches:
-        assert not isinstance(match, BoundaryMatch), 'Boundary match in input diagram'
+        # assert not isinstance(match, BoundaryMatch), 'Boundary match in input diagram'
         add_match(zx_match_diagram, zx_diagram, match)
     # for match in matches:
     #     assert match in zx_match_diagram, f'Node {match} not in match diagram'
@@ -227,6 +230,3 @@ class HeteroDataIndexToMatch:
 
     def __getitem__(self, item: tuple[NodeType, int]):
         return self.indices[item[0]][item[1]]
-
-# q = ZXMatchDiagram(ZXDiagram(4))
-# print(q.b_nodes)

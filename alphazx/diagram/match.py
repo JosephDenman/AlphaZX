@@ -522,15 +522,19 @@ class YLeftXSuperNode(SuperNode):
 
 
 def from_index_and_node_set(node_type: int, node_set: tuple[int] | list[int] | int) -> MatchNode:
-    constructor = INDEX_TO_CONSTRUCTOR_METADATA[node_type]
-    if isinstance(constructor, SimpleMatchNode):
+    constructor = METADATA.node_type_constructors[node_type]
+    if issubclass(constructor, SimpleMatchNode):
         if isinstance(node_set, tuple) or isinstance(node_set, list):
             assert len(node_set) == 1, f'Expected a single node but received node set {node_set}'
             return constructor(node_set[0])
         else:
             return constructor(node_set)
-    else:
+    elif issubclass(constructor, CompoundMatchNode):
         return constructor(*node_set)
+    elif issubclass(constructor, SuperNode):
+        return constructor()
+    else:
+        raise Exception(f'Attempted to construct a {constructor} node with node type {node_type} and node set {node_set}')
 
 
 def _zx_match_diagram_node_leaf_classes() -> list[Type[ZXMatchDiagramNode]]:
@@ -562,6 +566,7 @@ class Metadata(NamedTuple):
     edge_types: list[tuple[str, str, str]]
     node_type_abbrev_index_dict: dict[str, int]
     edge_type_to_index_dict: dict[tuple[str, str, str], int]
+    node_type_constructors: list[Type[ZXMatchDiagramNode]]
 
     basis_node_type_indices: list[int]
     non_basis_node_type_indices: list[int]
@@ -616,6 +621,7 @@ def _compute_metadata_from_metagraph(metagraph: nx.DiGraph) -> Metadata:
     node_type_abbrevs = []
     edge_types = []
     node_type_abbrev_index_dict = {}
+    node_type_constructors = []
 
     simple_node_type_abbrevs = []
     simple_node_type_indices = []
@@ -638,6 +644,7 @@ def _compute_metadata_from_metagraph(metagraph: nx.DiGraph) -> Metadata:
         node_type_abbrevs.append(node_type_abbrev)
         node_type_indices.append(node_type_index)
         node_type_abbrev_index_dict[node_type_abbrev] = node_type_index
+        node_type_constructors.append(n)
 
     for n, ndata in metagraph.nodes(data=True):
         if issubclass(n, MatchNode):
@@ -700,6 +707,7 @@ def _compute_metadata_from_metagraph(metagraph: nx.DiGraph) -> Metadata:
         edge_types,
         node_type_abbrev_index_dict,
         edge_type_to_index_dict,
+        node_type_constructors,
 
         basis_node_type_indices,
         non_basis_node_type_indices,

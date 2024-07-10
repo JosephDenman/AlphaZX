@@ -32,8 +32,6 @@ class TransferEdgeSelector(torch.nn.Module):
                  mlp_plain_last: bool = True,
                  mlp_bias: bool | list[bool] = True):
         super().__init__()
-        # self.nmt = NeighborMultisetTransformer(in_channels, gmt_k, gmt_num_encoder_blocks, gmt_heads, gmt_layer_norm,
-        #                                        gmt_dropout)
         self.num_node_types = num_node_types
         self.neighbor_trans = pyg.nn.SetTransformerAggregation(in_channels,
                                                                num_node_types,
@@ -43,14 +41,8 @@ class TransferEdgeSelector(torch.nn.Module):
                                                                False,
                                                                gmt_layer_norm,
                                                                gmt_dropout)
-        # self.neighbor_trans = pyg.nn.GraphMultisetTransformer(in_channels,
-        #                                                       num_node_types,
-        #                                                       gmt_num_encoder_blocks,
-        #                                                       gmt_heads,
-        #                                                       gmt_layer_norm,
-        #                                                       gmt_dropout)
         self.mlp = pyg.nn.MLP(
-            [in_channels, 1],
+            [in_channels, mlp_hidden_channels, 1],
             dropout=mlp_dropout, act=mlp_act, act_first=mlp_act_first,
             act_kwargs=mlp_act_kwargs, norm=mlp_norm, norm_kwargs=mlp_norm_kwargs, plain_last=mlp_plain_last,
             bias=mlp_bias)
@@ -68,33 +60,3 @@ class TransferEdgeSelector(torch.nn.Module):
         masked_neighbor_x[mask] = torch.sigmoid(masked_neighbor_x[mask])
         transfer_probs = pyg.utils.to_dense_batch(masked_neighbor_x, batch)[0]
         return transfer_probs
-
-    # def old_forward(self, x: torch.Tensor, edge_index: torch.Tensor, node_types: torch.Tensor,
-    #                 batch: torch.Tensor) -> torch.Tensor:
-    #     # We only want to aggregate along edges between basis nodes
-    #     edge_index = mask_non_basis_edges(edge_index, node_types)
-    #     # Aggregate along edges between basis nodes
-    #     neighbor_x = self.neighbor_trans(torch.index_select(x, 0, edge_index[0]), edge_index[1])[0]
-    #     # Concatenate the neighbor features according to the target nodes
-    #     neighbor_x, mask = concatenate_neighbor_features(neighbor_x, edge_index)
-    #     row_mask = torch.any(mask, dim=1)
-    #     neighbor_x = neighbor_x[row_mask]
-    #
-    #     # Project the concatenated features to a scalar
-    #     neighbor_x = self.mlp(neighbor_x, batch).squeeze(dim=-1)
-    #     # Replace NaN padding with -inf
-    #     neighbor_x[neighbor_x.isnan()] = -torch.inf
-    #     # Apply sigmoid to produce valid bernoulli parameters
-    #     neighbor_x = torch.sigmoid(neighbor_x).squeeze(dim=-1)
-    #     # Create the output tensor
-    #     transfer_probs = torch.zeros(x.shape[0], neighbor_x.shape[1], device=x.device)
-    #     # Identify the target basis nodes - each one should correspond to an aggregated neighborhood
-    #     target_basis_nodes = torch.unique(edge_index[1])
-    #     # Insert the computed probabilities for each target basis node into the output tensor
-    #     transfer_probs[target_basis_nodes] = neighbor_x
-    #     # Assert that the output tensor has the same number of nodes as the feature tensor
-    #     assert transfer_probs.shape[0] == x.shape[
-    #         0], f'Expected transfer probabilities {transfer_probs} to have same dimension as {x}, found {transfer_probs.shape[0]} != {x.shape[0]}'
-    #     # Gather the transfer probabilities according to the node batch
-    #     transfer_probs = pyg.utils.to_dense_batch(transfer_probs, batch)[0]
-    #     return transfer_probs

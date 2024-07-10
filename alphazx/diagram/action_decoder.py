@@ -38,7 +38,6 @@ def compute_transfer_edges(node: int,
     transfer_edges = []
     for neighbor in basis_neighbors.tolist():
         neighbor_match = data_index[neighbor]
-        assert isinstance(neighbor_match, FRightMatch), f'Expected {neighbor_match} to be an FRightMatch'
         transfer_edges.append(neighbor_match.node)
     return set(transfer_edges)
 

@@ -81,7 +81,7 @@ class DiagramStats:
         self.num_x_nodes = zx_match_diagram.zx_diagram.num_x_nodes()
         self.num_non_clifford_gates = num_non_clifford_gates(zx_match_diagram.zx_diagram)
         self.num_edges = zx_match_diagram.zx_diagram.num_edges()
-        self.num_b_left_matches = zx_match_diagram.num_bl_nodes()
+        self.num_b_left_matches = len(zx_match_diagram.bl_nodes)
 
     def to_dict(self) -> dict[str, int]:
         return {
@@ -150,7 +150,8 @@ class ZXGame:
                  t_gates: bool = True,
                  step_penalty: int = 1,
                  max_episode_length: int = 100,
-                 simplified_reward: int = 1):
+                 simplified_reward: int = 1,
+                 pe_dim: int = 40):
 
         self.num_qubits = num_qubits
         self.depth = depth
@@ -158,6 +159,7 @@ class ZXGame:
         self.step_penalty = step_penalty
         self.max_episode_length = max_episode_length
         self.simplified_reward = simplified_reward
+        self.pe_dim = pe_dim
 
         self.episode_length = 0
         self.done = False
@@ -172,7 +174,7 @@ class ZXGame:
         self.diagram_stats = DiagramStats(self.zx_match_diagram)
         self.previous_value = diagram_value(self.diagram_stats)
         data, self.data_index = self.zx_match_diagram.to_pyg_data(True)
-        data = pre_process(data)
+        data = pre_process(data, self.pe_dim)
         data.batch = torch.zeros_like(data.node_type)
         self.data = data
 
@@ -186,6 +188,7 @@ class ZXGame:
         self.diagram_stats = DiagramStats(self.zx_match_diagram)
 
         self.episode_length += 1
+        print('episode_length = ', self.episode_length)
         self.done = is_simplified(self.zx_diagram) or self.episode_length == self.max_episode_length
         current_value = diagram_value(self.diagram_stats)
         self.previous_reward = self.previous_value - current_value + (0 if self.done else -self.step_penalty)
@@ -193,7 +196,7 @@ class ZXGame:
         self.episode_return += self.previous_reward
 
         data, self.data_index = self.zx_match_diagram.to_pyg_data(True)
-        data = pre_process(data)
+        data = pre_process(data, self.pe_dim)
         data.batch = torch.zeros_like(data.node_type)
         self.data = data
         return self.data, self.previous_reward, self.done, self.diagram_stats.to_dict()
@@ -215,7 +218,7 @@ class ZXGame:
         self.previous_value = diagram_value(self.diagram_stats)
 
         data, self.data_index = self.zx_match_diagram.to_pyg_data(True)
-        data = pre_process(data)
+        data = pre_process(data, self.pe_dim)
         data.batch = torch.zeros_like(data.node_type)
         self.data = data
         return self.data, 0, self.done, self.diagram_stats.to_dict()

@@ -70,6 +70,7 @@ class GPS(torch.nn.Module):
                 batch: torch.Tensor) -> torch.Tensor:
         throw_on_nan(x)
         x_pe = self.pe_norm(pe)
+
         x = torch.cat((self.node_emb(x.long().squeeze(-1)), self.pe_lin(x_pe)), 1)
         for conv in self.convs:
             x = conv(x, edge_index, batch)
