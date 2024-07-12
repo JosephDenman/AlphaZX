@@ -1,3 +1,5 @@
+import torch
+
 from alphazx.diagram import METADATA, POSSIBLE_PHASES
 from alphazx.distributions import AlphaZXDistribution
 from alphazx.game import ZXGame
@@ -64,6 +66,7 @@ while not done:
     azx_dist_params, value = model(data)
     azx_dist = AlphaZXDistribution(azx_dist_params)
     action = tuple(azx_dist.sample(1).squeeze().tolist())
+    print('prob = ', torch.exp(azx_dist.log_prob(torch.tensor(action).unsqueeze(dim=0).unsqueeze(dim=0))))
     data, reward, done, stats = zx_game.step(action)
     print('action = ', action)
     print('reward = ', reward)
