@@ -2,7 +2,6 @@ from typing import Literal, NamedTuple
 
 import torch
 
-from alphazx.diagram import METADATA
 from alphazx.distributions.bernoulli_mixture import MultivariateBernoulli
 from torch.distributions.categorical import Categorical
 
@@ -133,6 +132,8 @@ class AlphaZXDistribution:
         return MultivariateBernoulli(params).sample()
 
     def _transfer_edge_log_probs(self, nodes: torch.Tensor, transfer_edges: torch.Tensor) -> torch.Tensor:
+        print('transfer_edges = ', transfer_edges)
+        print('self._select_transfer_edge_dist_params = ', self._select_feature_dist_params(nodes, 'transfer_edge'))
         return MultivariateBernoulli(self._select_feature_dist_params(nodes, 'transfer_edge')).log_prob(
             transfer_edges.float())
 
@@ -147,15 +148,19 @@ class AlphaZXDistribution:
                                 sampled_actions_batch[b] is the set of actions sampled at some step in a trajectory.
         :return: The log probability of each sampled action.
         """
-        actions = sampled_actions[:, :, 0]
+        action_types = sampled_actions[:, :, 0]
         nodes = sampled_actions[:, :, 1]
         phases = sampled_actions[:, :, 2]
         new_edges = sampled_actions[:, :, 3]
         transfer_edges = sampled_actions[:, :, 4:]
-        action_type_log_probs = self._action_type_log_probs(actions)
-        node_log_probs = self._node_log_probs(actions, nodes)
+        action_type_log_probs = self._action_type_log_probs(action_types)
+        node_log_probs = self._node_log_probs(action_types, nodes)
         phase_log_probs = self._feature_log_probs('phase', nodes, phases)
         new_edge_log_probs = self._feature_log_probs('new_edge', nodes, new_edges)
+        print('actions = ', action_types)
+        print('nodes = ', nodes)
+        print('transfer_edge_params.shape = ', self.transfer_edge_dist_params.shape)
+        print('transfer_edges = ', transfer_edges)
         transfer_edge_log_probs = self._transfer_edge_log_probs(nodes, transfer_edges)
         return torch.stack(
             (action_type_log_probs, node_log_probs, phase_log_probs, new_edge_log_probs, transfer_edge_log_probs),

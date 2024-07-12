@@ -42,7 +42,6 @@ class NodeSelector(torch.nn.Module):
         x = self.mlp(x).squeeze(dim=-1)
         # Compute mask for nodes that do not have types between 1 and 10 (inclusive)
         valid_type_mask = (node_types >= 1) & (node_types <= 10)
-
         # Set features of invalid nodes to zero
         x[~valid_type_mask] = 0.0
         # Convert to dense batch format

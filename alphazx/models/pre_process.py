@@ -5,7 +5,6 @@ from alphazx.diagram.match import METADATA
 
 
 def with_laplacian_pe(data: pyg.data.Data, pe_dimension: int) -> pyg.data.Data:
-    print('pe_dimension = ', pe_dimension)
     return pyg.transforms.AddLaplacianEigenvectorPE(k=pe_dimension, attr_name='pe', is_undirected=data.is_undirected())(
         data)
 
