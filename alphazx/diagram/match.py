@@ -582,6 +582,7 @@ class Metadata(NamedTuple):
 
     match_node_type_abbrevs: list[int]
     match_node_type_indices: list[int]
+    non_match_node_type_indices: list[int]
     node_feat_to_index_dict: dict[tuple[int, float], int]
 
     max_match_size: int
@@ -637,6 +638,7 @@ def _compute_metadata_from_metagraph(metagraph: nx.DiGraph) -> Metadata:
 
     match_node_type_abbrevs = []
     match_node_type_indices = []
+    non_match_node_type_indices = []
 
     for n, ndata in metagraph.nodes(data=True):
         node_type_abbrev = ndata['abbrev']
@@ -647,11 +649,13 @@ def _compute_metadata_from_metagraph(metagraph: nx.DiGraph) -> Metadata:
         node_type_constructors.append(n)
 
     for n, ndata in metagraph.nodes(data=True):
+        node_type_abbrev = ndata['abbrev']
+        node_type_index = ndata['index']
         if issubclass(n, MatchNode):
-            node_type_abbrev = ndata['abbrev']
-            node_type_index = ndata['index']
             match_node_type_abbrevs.append(node_type_abbrev)
             match_node_type_indices.append(node_type_index)
+        else:
+            non_match_node_type_indices.append(node_type_index)
 
     for n, ndata in metagraph.nodes(data=True):
         node_type_abbrev = ndata['abbrev']
@@ -723,6 +727,7 @@ def _compute_metadata_from_metagraph(metagraph: nx.DiGraph) -> Metadata:
 
         match_node_type_abbrevs,
         match_node_type_indices,
+        non_match_node_type_indices,
 
         node_feat_to_index_dict,
         max_match_size)

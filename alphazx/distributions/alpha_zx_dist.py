@@ -1,6 +1,8 @@
 from typing import Literal, NamedTuple
 
 import torch
+
+from alphazx.diagram import METADATA
 from alphazx.distributions.bernoulli_mixture import MultivariateBernoulli
 from torch.distributions.categorical import Categorical
 
@@ -57,8 +59,6 @@ class AlphaZXDistribution:
         self.phase_dist_params = params.phase_dist_probs.to(device)
         self.new_edge_dist_params = params.new_edge_dist_probs.to(device)
         self.transfer_edge_dist_params = params.transfer_edge_dist_probs.to(device)
-        print('transfer_edge_dist_params = ', self.transfer_edge_dist_params.shape)
-        print('transfer_edge_dist_params = ', self.transfer_edge_dist_params.shape)
 
     def _sample_action_types(self, k: int) -> torch.Tensor:
         return Categorical(probs=self.mixture_dist_params).sample(torch.Size([k])).T
@@ -129,7 +129,7 @@ class AlphaZXDistribution:
 
     def _sample_transfer_edges(self, nodes: torch.Tensor) -> torch.Tensor:
         params = self._select_feature_dist_params(nodes, 'transfer_edge')
-        print('selected_transfer_edge_params = ', params)
+        # print('transfer_edge_params = ', params)
         return MultivariateBernoulli(params).sample()
 
     def _transfer_edge_log_probs(self, nodes: torch.Tensor, transfer_edges: torch.Tensor) -> torch.Tensor:
@@ -179,8 +179,6 @@ class AlphaZXDistribution:
         new_edges = self._sample_features('new_edge', nodes)
         # print('sampled_new_edges = ', new_edges)
         transfer_edges = self._sample_transfer_edges(nodes)
-        print('transfer_edges = ', transfer_edges)
-        # print('sampled_transfer_edges = ', transfer_edges)
         return torch.cat((torch.stack((action_types, nodes, phases, new_edges), dim=-1), transfer_edges), dim=-1).long()
 
     @staticmethod

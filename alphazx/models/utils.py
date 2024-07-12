@@ -1,7 +1,7 @@
 import torch
 import torch_geometric as pyg
 
-from alphazx.diagram.match import METADATA, BoundarySuperNode
+from alphazx.diagram.match import METADATA, BoundarySuperNode, BoundaryMatch
 
 torch.set_printoptions(threshold=10_000)
 
@@ -78,6 +78,29 @@ def mask_non_super_nodes(x: torch.Tensor, edge_index: torch.Tensor, node_types: 
     masked_node_types = node_types[mask]
     masked_batch = batch[mask]
     return masked_x, masked_edge_index, masked_node_types, masked_batch
+
+
+def compute_non_simple_node_mask(node_types: torch.Tensor) -> torch.Tensor:
+    mask = torch.full_like(node_types, False, dtype=torch.bool)
+    for simple_node_index in METADATA.simple_node_type_indices:
+        mask = mask | (node_types == simple_node_index)
+    return mask
+
+
+def compute_non_super_node_mask(node_types: torch.Tensor) -> torch.Tensor:
+    mask = torch.full_like(node_types, False, dtype=torch.bool)
+    for super_node_index in METADATA.super_node_type_indices:
+        if super_node_index != BoundarySuperNode.index:
+            mask = mask | (node_types == super_node_index)
+    return mask
+
+
+def compute_non_match_node_mask(node_types: torch.Tensor) -> torch.Tensor:
+    mask = torch.full_like(node_types, False, dtype=torch.bool)
+    for match_node_index in METADATA.match_node_type_indices:
+        if match_node_index != BoundaryMatch.index:
+            mask = mask | (node_types == match_node_index)
+    return mask
 
 
 def mask_non_basis_nodes(x: torch.Tensor, edge_index: torch.Tensor, node_types: torch.Tensor, batch: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -162,29 +185,47 @@ def throw_on_nan(x: torch.Tensor) -> None:
 
 def assert_unique_elements(tensor: torch.Tensor) -> None:
     """
-    Asserts that all elements in the first dimension of the input tensor are unique.
-    For a 1D tensor, all elements must be unique.
-    For a 2D tensor, all rows must be unique.
+    Asserts that all non-zero elements in a 1D tensor or all non-all-zero rows in a 2D tensor are unique.
+    Returns the sets of indices which have equal entries.
+
+    For a 1D tensor, all non-zero elements must be unique.
+    For a 2D tensor, all non-all-zero rows must be unique.
+
+    Returns:
+        Set of tuples, where each tuple contains indices of elements/rows that are not unique.
     """
+    duplicate_indices = set()
+
     if tensor.ndim == 1:
-        unique_elements = torch.unique(tensor)
-        if tensor.numel() != unique_elements.numel():
-            raise ValueError("The tensor contains duplicate elements in the first dimension.")
+        non_zero_elements = tensor[tensor != 0]
+        if non_zero_elements.numel() > 0:
+            unique_non_zero_elements, counts = torch.unique(non_zero_elements, return_counts=True)
+            duplicate_elements = unique_non_zero_elements[counts > 1]
+            for element in duplicate_elements:
+                indices = (tensor == element).nonzero(as_tuple=True)[0].tolist()
+                duplicate_indices.add(tuple(indices))
     elif tensor.ndim == 2:
-        unique_rows = torch.unique(tensor, dim=0)
-        if tensor.size(0) != unique_rows.size(0):
-            raise ValueError("The tensor contains duplicate rows in the first dimension.")
+        non_zero_rows = tensor[torch.any(tensor != 0, dim=1)]
+        if non_zero_rows.size(0) > 0:
+            unique_non_zero_rows, counts = torch.unique(non_zero_rows, dim=0, return_counts=True)
+            duplicate_rows = unique_non_zero_rows[counts > 1]
+            for row in duplicate_rows:
+                indices = (tensor == row).all(dim=1).nonzero(as_tuple=True)[0].tolist()
+                duplicate_indices.add(tuple(indices))
     else:
         raise ValueError("The tensor must be either 1D or 2D.")
 
+    if len(duplicate_indices) > 0:
+        raise ValueError(f"The input tensor {tensor} of shape {tensor.shape} contains duplicate entries:{duplicate_indices}\nVerify{[[tensor[index] for index in indices] for indices in duplicate_indices]}")
 
-def softmax_nonzero_entries(tensor: torch.Tensor) -> torch.Tensor:
+
+def softmax_nonzero_entries(tensor: torch.Tensor, dim: int = 1) -> torch.Tensor:
     # Create a mask of non-zero entries
     nonzero_mask = tensor != 0.
     # Compute the masked tensor where we replace non-zero entries with their log-probabilities
     masked_tensor = torch.where(nonzero_mask, tensor, torch.tensor(-torch.inf).to(tensor.device))
     # Apply softmax along the rows while keeping the zero entries unchanged
-    softmax_tensor = torch.softmax(masked_tensor, dim=1)
+    softmax_tensor = torch.softmax(masked_tensor, dim=dim)
     # Return the tensor with softmax applied to non-zero entries and zero entries unchanged
     return torch.where(nonzero_mask, softmax_tensor, tensor)
 

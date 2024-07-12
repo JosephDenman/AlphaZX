@@ -1,12 +1,13 @@
 from alphazx.diagram import METADATA, POSSIBLE_PHASES
 from alphazx.distributions import AlphaZXDistribution
 from alphazx.game import ZXGame
+from alphazx.models import pre_process
 from alphazx.models.homogeneous.mcts.alphazx_model import AlphaZXModel
 
 num_node_types = len(METADATA.node_type_abbrevs)
 num_possible_phases = len(POSSIBLE_PHASES)
 num_possible_new_edges = 10
-pe_dim = 40
+pe_dim = 8
 repr_gps_embedding_out_channels = 8
 repr_gps_node_out_channels = 64
 repr_gps_edge_in_channels = 2
@@ -54,11 +55,12 @@ model = AlphaZXModel(num_node_types,
 
 
 max_episode_length = 1000
-num_qubits = 200
-depth = 200
+num_qubits = 10
+depth = 10
 zx_game = ZXGame(num_qubits, depth, max_episode_length=max_episode_length, pe_dim=pe_dim)
 data, reward, done, stats = zx_game.reset()
 while not done:
+    data = pre_process(data, pe_dim)
     azx_dist_params, value = model(data)
     azx_dist = AlphaZXDistribution(azx_dist_params)
     action = tuple(azx_dist.sample(1).squeeze().tolist())

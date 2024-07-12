@@ -3,8 +3,9 @@ from typing import Callable, Any, Optional
 import torch
 import torch_geometric as pyg
 
-from alphazx.models.utils import throw_on_nan, mask_non_basis_nodes, concatenate_neighbor_features, \
-    assert_unique_elements, mask_non_basis_edges, mask_non_simple_edges
+from alphazx.models.aggregation.set_transformer import SetTransformerAggregation
+from alphazx.models.utils import throw_on_nan, concatenate_neighbor_features, \
+    mask_non_simple_edges, compute_non_simple_node_mask
 
 
 def compute_actual_num_basis_nodes(transfer_probs: torch.Tensor) -> int:
@@ -33,14 +34,14 @@ class TransferEdgeSelector(torch.nn.Module):
                  mlp_bias: bool | list[bool] = True):
         super().__init__()
         self.num_node_types = num_node_types
-        self.neighbor_trans = pyg.nn.SetTransformerAggregation(in_channels,
-                                                               num_node_types,
-                                                               gmt_num_encoder_blocks,
-                                                               gmt_num_encoder_blocks,
-                                                               gmt_heads,
-                                                               False,
-                                                               gmt_layer_norm,
-                                                               gmt_dropout)
+        self.neighbor_trans = SetTransformerAggregation(in_channels,
+                                                        num_node_types,
+                                                        gmt_num_encoder_blocks,
+                                                        gmt_num_encoder_blocks,
+                                                        gmt_heads,
+                                                        False,
+                                                        gmt_layer_norm,
+                                                        gmt_dropout)
         self.mlp = pyg.nn.MLP(
             [in_channels, mlp_hidden_channels, 1],
             dropout=mlp_dropout, act=mlp_act, act_first=mlp_act_first,
@@ -54,10 +55,42 @@ class TransferEdgeSelector(torch.nn.Module):
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor, node_types: torch.Tensor,
                 batch: torch.Tensor) -> torch.Tensor:
         throw_on_nan(x)
-        masked_edge_index = mask_non_simple_edges(edge_index, node_types)
-        # TODO: Move MLP to sigmoid section
-        masked_x = self.mlp(self.neighbor_trans(torch.index_select(x, 0, masked_edge_index[0]), masked_edge_index[1])[0]).squeeze(dim=-1)
-        masked_neighbor_x, mask = concatenate_neighbor_features(masked_x, masked_edge_index, batch_size=batch.shape[0])
-        masked_neighbor_x[mask] = torch.sigmoid(masked_neighbor_x[mask])
-        transfer_probs = pyg.utils.to_dense_batch(masked_neighbor_x, batch)[0]
+        # TODO: Once https://github.com/pytorch/pytorch/issues/41508 is fixed, mask the non-simple edges at the start.
+        x = self.neighbor_trans(torch.index_select(x, 0, edge_index[0]), edge_index[1])[0]
+        x = self.mlp(x).squeeze(dim=-1)
+        neighbor_x, mask = concatenate_neighbor_features(x, edge_index, batch_size=batch.shape[0])
+        neighbor_x[mask] = torch.sigmoid(neighbor_x[mask])
+        non_simple_node_mask = compute_non_simple_node_mask(node_types)
+        neighbor_x[~non_simple_node_mask] = torch.zeros_like(neighbor_x[~non_simple_node_mask], dtype=x.dtype, device=x.device)
+        transfer_probs = pyg.utils.to_dense_batch(neighbor_x, batch)[0]
         return transfer_probs
+
+    # def old_forward(self, x: torch.Tensor, edge_index: torch.Tensor, node_types: torch.Tensor,
+    #             batch: torch.Tensor) -> torch.Tensor:
+    #     throw_on_nan(x)
+    #     masked_edge_index = mask_non_simple_edges(edge_index, node_types)
+    #     # TODO: Move MLP to sigmoid section
+    #     masked_x = self.neighbor_trans(torch.index_select(x, 0, masked_edge_index[0]), masked_edge_index[1])[0]
+    #     masked_x = self.mlp(masked_x).squeeze(dim=-1)
+    #     masked_neighbor_x, mask = concatenate_neighbor_features(masked_x, masked_edge_index, batch_size=batch.shape[0])
+    #     masked_neighbor_x[mask] = torch.sigmoid(masked_neighbor_x[mask])
+    #     assert_unique_elements(masked_neighbor_x)
+    #     print('masked_neighbor_x = ', masked_neighbor_x)
+    #     transfer_probs = pyg.utils.to_dense_batch(masked_neighbor_x, batch)[0]
+    #     return transfer_probs
+    #
+    # def old_old_forward(self, x: torch.Tensor, edge_index: torch.Tensor, node_types: torch.Tensor,
+    #                 batch: torch.Tensor) -> torch.Tensor:
+    #     throw_on_nan(x)
+    #     masked_edge_index = mask_non_simple_edges(edge_index, node_types)
+    #     masked_x, mask = self.neighbor_trans(torch.index_select(x, 0, masked_edge_index[0]), masked_edge_index[1])
+    #     print('masked_x.is_nan() = ', masked_x.isnan())
+    #     print('masked_x = ', masked_x[torch.any(mask, dim=1)])
+    #     assert_unique_elements(masked_x[torch.any(mask, dim=1)])
+    #     row_mask = torch.any(mask, dim=1)
+    #     masked_x[mask] = self.mlp(masked_x[mask])
+    #     masked_neighbor_x, mask = concatenate_neighbor_features(masked_x, masked_edge_index, batch_size=batch.shape[0])
+    #     masked_neighbor_x[mask] = torch.sigmoid(masked_neighbor_x[mask])
+    #     transfer_probs = pyg.utils.to_dense_batch(masked_neighbor_x, batch)[0]
+    #     print('transfer_probs = ', transfer_probs)
+    #     return transfer_probs

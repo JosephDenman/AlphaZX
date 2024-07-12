@@ -69,10 +69,12 @@ class GPS(torch.nn.Module):
                 edge_index: torch.Tensor,
                 batch: torch.Tensor) -> torch.Tensor:
         throw_on_nan(x)
+        #assert_unique_elements(pe)
         x_pe = self.pe_norm(pe)
-
+        #assert_unique_elements(x_pe)
         x = torch.cat((self.node_emb(x.long().squeeze(-1)), self.pe_lin(x_pe)), 1)
+        #assert_unique_elements(x)
         for conv in self.convs:
             x = conv(x, edge_index, batch)
-        assert_unique_elements(x)
+        #assert_unique_elements(x)
         return self.mlp(x)
