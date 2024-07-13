@@ -63,14 +63,14 @@ class AlphaZXModel(nn.Module):
                                                     value_gmt_layer_norm,
                                                     value_gmt_dropout)
 
-    def forward(self, data: pyg.data.Data) -> tuple[AlphaZXDistributionParams, torch.Tensor]:
-        data.x = self.representation_network(data)
-        policy, value = self.prediction_network(data)
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, node_type: torch.Tensor, batch: torch.Tensor, pe: torch.Tensor) -> tuple[AlphaZXDistributionParams, torch.Tensor]:
+        x = self.representation_network(x, edge_index, batch, pe)
+        policy, value = self.prediction_network(x, edge_index, node_type, batch)
         return policy, value
 
-    def compute_policy_value(self, data: pyg.data.Data) -> tuple[AlphaZXDistributionParams, torch.Tensor]:
-        data.x = self.representation_network(data)
-        policy, value = self.prediction_network(data)
+    def compute_policy_value(self, x: torch.Tensor, edge_index: torch.Tensor, node_type: torch.Tensor, batch: torch.Tensor, pe: torch.Tensor) -> tuple[AlphaZXDistributionParams, torch.Tensor]:
+        x = self.representation_network(x, edge_index, batch, pe)
+        policy, value = self.prediction_network(x, edge_index, node_type, batch)
         return policy, value
 
     def compute_logp_value(self, data: pyg.data.Data) -> tuple[torch.Tensor, torch.Tensor]:

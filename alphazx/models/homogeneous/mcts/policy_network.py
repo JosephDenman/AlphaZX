@@ -39,19 +39,18 @@ class PolicyNetwork(nn.Module):
         self.new_edge_selector.reset_parameters()
         self.transfer_edge_selector.reset_parameters()
 
-    def forward(self, data: pyg.data.Data) -> AlphaZXDistributionParams:
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, node_type: torch.Tensor, batch: torch.Tensor) -> AlphaZXDistributionParams:
         """
         TODO: Have the node, phase, and edge prob computations be autoregressive. Compute mixture probabilities last
               to incorporate intermediate embedding updates. Do we need to do layer norm / residual connection between each
               MLP?
-        :param data: The pyg.data.Data object representing the ZX match diagram.
         :return: Parameters for the AlphaZXDistribution.
         """
-        mixture_probs = self.rewrite_type_selector(data.x, data.edge_index, data.node_type, data.batch)
-        node_probs = self.node_selector(data.x, data.node_type, data.batch)
-        phase_probs = self.new_phase_selector(data.x, data.node_type, data.batch)
-        edge_probs = self.new_edge_selector(data.x, data.node_type, data.batch)
-        transfer_edge_probs = self.transfer_edge_selector(data.x, data.edge_index, data.node_type, data.batch)
+        mixture_probs = self.rewrite_type_selector(x, edge_index, node_type, batch)
+        node_probs = self.node_selector(x, node_type, batch)
+        phase_probs = self.new_phase_selector(x, node_type, batch)
+        edge_probs = self.new_edge_selector(x, node_type, batch)
+        transfer_edge_probs = self.transfer_edge_selector(x, edge_index, node_type, batch)
         return AlphaZXDistributionParams(mixture_probs,
                                          node_probs,
                                          phase_probs,
@@ -65,3 +64,32 @@ def trans_dec_test():
     memory = torch.rand(2, 8, 16)
     tgt = torch.rand(2, 8, 16)
     print(transformer_decoder(tgt, memory))
+
+
+def pad_or_strip(source: torch.Tensor, target_size: int, fill_value: float = 0.) -> torch.Tensor:
+    """
+    Adds or removes padding (with fill value `fill_value`) from the last dimension of `source` so that the last dimension
+    of `source` is the same size as the last dimension of `target`. Both tensors are assumed to be three-dimensional. It
+    is possible that the last dimension of `source` is larger or smaller than the last dimension of `target`.
+
+    :param source: The tensor to be padded.
+    :param target_size: The length of the last dimension of `source` after padding.
+    :param fill_value: The value to pad with.
+
+    :return: The newly padded `source` tensor.
+    """
+    # Get the sizes of the source and target tensors
+    source_size = source.size()
+    # Calculate the size difference in the last dimension
+    diff = target_size - source_size[-1]
+    if diff > 0:
+        # If the target's last dimension is larger, pad the source tensor
+        pad_shape = list(source_size)
+        pad_shape[-1] = diff
+        padding = torch.full(pad_shape, fill_value, dtype=source.dtype, device=source.device)
+        padded_source = torch.cat((source, padding), dim=-1)
+    else:
+        # If the target's last dimension is smaller or equal, slice the source tensor
+        padded_source = source[..., :target_size]
+    return padded_source
+

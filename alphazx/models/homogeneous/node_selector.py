@@ -65,4 +65,5 @@ class NodeSelector(torch.nn.Module):
         for i in range(1, 11):
             node_probs[:, i, :][apply_softmax_mask[:, i - 1]] = torch.softmax(
                 node_probs[:, i, :][apply_softmax_mask[:, i - 1]], dim=-1)
+        node_probs[node_probs == -torch.inf] = 0.
         return node_probs

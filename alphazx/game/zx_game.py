@@ -188,7 +188,7 @@ class ZXGame:
         self.diagram_stats = DiagramStats(self.zx_match_diagram)
 
         self.episode_length += 1
-        print('episode_length = ', self.episode_length)
+        # print('episode_length = ', self.episode_length)
         self.done = is_simplified(self.zx_diagram) or self.episode_length == self.max_episode_length
         current_value = diagram_value(self.diagram_stats)
         self.previous_reward = self.previous_value - current_value + (0 if self.done else -self.step_penalty)

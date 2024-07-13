@@ -19,7 +19,7 @@ class ValueNetwork(nn.Module):
         self.pool.reset_parameters()
         self.mlp.reset_parameters()
 
-    def forward(self, data: pyg.data.Data) -> torch.Tensor:
-        x = self.pool(data.x, data.batch)
-        res = self.mlp(x, data.batch)
-        return res
+    def forward(self, x: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
+        x = self.pool(x, batch)
+        x = self.mlp(x, batch)
+        return x

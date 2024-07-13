@@ -41,5 +41,5 @@ class RepresentationNetwork(nn.Module):
     def reset_parameters(self):
         self.gps.reset_parameters()
 
-    def forward(self, data: pyg.data.Data) -> torch.Tensor:
-        return self.gps(data.x, data.pe, data.edge_index, data.batch)
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, batch: torch.Tensor, pe: torch.Tensor) -> torch.Tensor:
+        return self.gps(x, edge_index, batch, pe)

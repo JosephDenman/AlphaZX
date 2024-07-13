@@ -1,14 +1,20 @@
 from typing import Literal, NamedTuple
 
 import torch
+from torch.distributions.categorical import Categorical
 
 from alphazx.distributions.bernoulli_mixture import MultivariateBernoulli
-from torch.distributions.categorical import Categorical
 
 
 def safe_log(t: torch.Tensor) -> torch.Tensor:
     eps = torch.finfo(t.dtype).eps
     return torch.log(torch.clamp(t, min=eps))
+
+
+def check_non_zero_elems_exist(t: torch.Tensor) -> None:
+    num_zero_elems = torch.sum((t == 0.))
+    num_elems = t.numel()
+    assert num_zero_elems != num_elems, f'All elements of {t} are zero'
 
 
 class AlphaZXDistributionParams(NamedTuple):
@@ -54,6 +60,7 @@ class AlphaZXDistribution:
                                    Samples drawn from this distribution are all zeros (no edges are selected to be transferred).
         """
         self.mixture_dist_params = params.mixture_dist_probs.to(device)
+        # check_non_zero_elems_exist(params.node_dist_probs)
         self.node_dist_params = params.node_dist_probs.to(device)
         self.phase_dist_params = params.phase_dist_probs.to(device)
         self.new_edge_dist_params = params.new_edge_dist_probs.to(device)
@@ -132,8 +139,8 @@ class AlphaZXDistribution:
         return MultivariateBernoulli(params).sample()
 
     def _transfer_edge_log_probs(self, nodes: torch.Tensor, transfer_edges: torch.Tensor) -> torch.Tensor:
-        print('transfer_edges = ', transfer_edges)
-        print('self._select_transfer_edge_dist_params = ', self._select_feature_dist_params(nodes, 'transfer_edge'))
+        # print('transfer_edges = ', transfer_edges)
+        # print('self._select_transfer_edge_dist_params = ', self._select_feature_dist_params(nodes, 'transfer_edge'))
         return MultivariateBernoulli(self._select_feature_dist_params(nodes, 'transfer_edge')).log_prob(
             transfer_edges.float())
 
@@ -153,18 +160,30 @@ class AlphaZXDistribution:
         phases = sampled_actions[:, :, 2]
         new_edges = sampled_actions[:, :, 3]
         transfer_edges = sampled_actions[:, :, 4:]
-        action_type_log_probs = self._action_type_log_probs(action_types)
-        node_log_probs = self._node_log_probs(action_types, nodes)
-        phase_log_probs = self._feature_log_probs('phase', nodes, phases)
-        new_edge_log_probs = self._feature_log_probs('new_edge', nodes, new_edges)
-        print('actions = ', action_types)
-        print('nodes = ', nodes)
-        print('transfer_edge_params.shape = ', self.transfer_edge_dist_params.shape)
-        print('transfer_edges = ', transfer_edges)
-        transfer_edge_log_probs = self._transfer_edge_log_probs(nodes, transfer_edges)
-        return torch.stack(
-            (action_type_log_probs, node_log_probs, phase_log_probs, new_edge_log_probs, transfer_edge_log_probs),
-            dim=-1).sum(dim=-1)
+        try:
+            action_type_log_probs = self._action_type_log_probs(action_types)
+            node_log_probs = self._node_log_probs(action_types, nodes)
+            phase_log_probs = self._feature_log_probs('phase', nodes, phases)
+            new_edge_log_probs = self._feature_log_probs('new_edge', nodes, new_edges)
+            transfer_edge_log_probs = self._transfer_edge_log_probs(nodes, transfer_edges)
+            return torch.stack(
+                (action_type_log_probs, node_log_probs, phase_log_probs, new_edge_log_probs, transfer_edge_log_probs),
+                dim=-1).sum(dim=-1)
+        except IndexError as error:
+            print('sampled_actions = ', sampled_actions)
+            print('\n')
+            print('mixture_dist_params.shape = ', self.mixture_dist_params.shape)
+            print('node_dist_params.shape = ', self.node_dist_params.shape)
+            # print('phase_dist_params.shape = ', self.phase_dist_params.shape)
+            # print('new_edge_dist_params.shape = ', self.new_edge_dist_params.shape)
+            # print('transfer_edge_dist_params.shape = ', self.transfer_edge_dist_params.shape)
+            print('\n')
+            print('mixture_dist_params = ', self.mixture_dist_params)
+            print('node_dist_params = ', self.node_dist_params)
+            # print('phase_dist_params = ', self.phase_dist_params)
+            # print('new_edge_dist_params = ', self.new_edge_dist_params)
+            # print('transfer_edge_dist_params = ', self.transfer_edge_dist_params)
+            raise error
 
     def sample(self, k: int) -> torch.Tensor:
         """
@@ -204,4 +223,4 @@ class AlphaZXDistribution:
 
         will allow us to optimize an upper bound on the distribution.
         """
-        return torch.tensor(0.0).to(device)
+        return torch.tensor(0.).to(device)
