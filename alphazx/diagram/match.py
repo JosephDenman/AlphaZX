@@ -583,9 +583,12 @@ class Metadata(NamedTuple):
     match_node_type_abbrevs: list[int]
     match_node_type_indices: list[int]
     non_match_node_type_indices: list[int]
+
     node_feat_to_index_dict: dict[tuple[int, float], int]
+    edge_feat_to_index_dict: dict[tuple[int, int], int]
 
     max_match_size: int
+    max_edge_size: int
 
 
 def compute_meta_edge_type(a: Type[ZXMatchDiagramNode], b: Type[ZXMatchDiagramNode]) -> str:
@@ -699,6 +702,17 @@ def _compute_metadata_from_metagraph(metagraph: nx.DiGraph) -> Metadata:
             possible_node_feature_pairs.append((n.index, 0.))
     node_feat_to_index_dict = {feature_pair: i for i, feature_pair in enumerate(possible_node_feature_pairs)}
 
+    max_edge_size = 10000
+    possible_edge_feature_pairs = []
+    for a, b, edata in metagraph.edges(data=True):
+        edge_type = edata['e_type']
+        if edge_type[1] == S_ETYPE_NAME or edge_types[1] == SI_ETYPE_NAME:
+            for possible_edge_size in range(1, max_edge_size + 1):
+                possible_edge_feature_pairs.append((edge_type_to_index_dict[edge_type], possible_edge_size))
+        else:
+            possible_edge_feature_pairs.append((edge_type_to_index_dict[edge_type], 1))
+    edge_feat_to_index_dict = {feature_pair: i for i, feature_pair in enumerate(possible_edge_feature_pairs)}
+
     match_sizes = []
     for n in metagraph.nodes:
         if issubclass(n, MatchNode):
@@ -730,7 +744,10 @@ def _compute_metadata_from_metagraph(metagraph: nx.DiGraph) -> Metadata:
         non_match_node_type_indices,
 
         node_feat_to_index_dict,
-        max_match_size)
+        edge_feat_to_index_dict,
+
+        max_match_size,
+        max_edge_size)
 
 
 def _compute_metadata() -> Metadata:

@@ -11,9 +11,10 @@ class RepresentationNetwork(nn.Module):
     def __init__(self,
                  num_node_types: int,
                  num_possible_phases: int,
-                 embedding_out_channels: int,
+                 node_embedding_out_channels: int,
                  node_out_channels: int,
-                 edge_in_channels: int,
+                 num_edge_embeddings: int,
+                 edge_embedding_out_channels: int,
                  edge_out_channels: int,
                  pe_in_channels: int,
                  pe_out_channels: int,
@@ -25,9 +26,10 @@ class RepresentationNetwork(nn.Module):
                  mlp_hidden_channels: int) -> None:
         super(RepresentationNetwork, self).__init__()
         self.gps = GPS(num_node_types * num_possible_phases,
-                       embedding_out_channels,
+                       node_embedding_out_channels,
                        node_out_channels,
-                       edge_in_channels,
+                       num_edge_embeddings,
+                       edge_embedding_out_channels,
                        edge_out_channels,
                        pe_in_channels,
                        pe_out_channels,
@@ -41,5 +43,5 @@ class RepresentationNetwork(nn.Module):
     def reset_parameters(self):
         self.gps.reset_parameters()
 
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, batch: torch.Tensor, pe: torch.Tensor) -> torch.Tensor:
-        return self.gps(x, edge_index, batch, pe)
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, edge_attr: torch.Tensor, batch: torch.Tensor, pe: torch.Tensor) -> torch.Tensor:
+        return self.gps(x, edge_index, edge_attr, batch, pe)

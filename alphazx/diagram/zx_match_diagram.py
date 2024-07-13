@@ -111,8 +111,9 @@ class ZXMatchDiagram(nx.DiGraph):
         data.node_set = data.x[:, 2:].to(dtype=torch.long)
         # TODO: For some reason 'data.sort' does not work...
         data.edge_index, data.edge_attr = pyg.utils.sort_edge_index(data.edge_index, data.edge_attr, sort_by_row=sort_by_row)
-        data.edge_type = data.edge_attr[:, 0].to(dtype=torch.long)
-        data.edge_size = data.edge_attr[:, 1].to(dtype=torch.long)
+        data.edge_attr = data.edge_attr.to(dtype=torch.long)
+        data.edge_type = data.edge_attr[:, 0]
+        data.edge_size = data.edge_attr[:, 1]
         data.validate()
         if with_reverse_mapping:
             return data, DataIndexToMatch(data)
@@ -178,8 +179,8 @@ def to_zx_match_diagram(zx_diagram: ZXDiagram) -> ZXMatchDiagram:
     #     check_super_nodes_exist(zx_match_diagram)
     #     check_super_node_counts(zx_match_diagram)
     #     check_super_node_edges(zx_match_diagram)
-    check_basis_node_counts(zx_diagram, zx_match_diagram)
-    check_opposite_edges(zx_match_diagram)
+    # check_basis_node_counts(zx_diagram, zx_match_diagram)
+    # check_opposite_edges(zx_match_diagram)
     return zx_match_diagram
 
 

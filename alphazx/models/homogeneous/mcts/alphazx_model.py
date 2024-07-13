@@ -10,14 +10,14 @@ from alphazx.models.homogeneous.mcts.representation_network import Representatio
 
 
 class AlphaZXModel(nn.Module):
-
     def __init__(self,
                  num_node_types: int,
                  num_possible_phases: int,
                  num_possible_new_edges: int,
-                 embedding_out_channels: int,
+                 node_embedding_out_channels: int,
                  node_out_channels: int,
-                 edge_in_channels: int,
+                 num_edge_embeddings: int,
+                 edge_embedding_out_channels: int,
                  edge_out_channels: int,
                  pe_in_channels: int,
                  pe_out_channels: int,
@@ -38,9 +38,10 @@ class AlphaZXModel(nn.Module):
         super(AlphaZXModel, self).__init__()
         self.representation_network = RepresentationNetwork(num_node_types,
                                                             num_possible_phases,
-                                                            embedding_out_channels,
+                                                            node_embedding_out_channels,
                                                             node_out_channels,
-                                                            edge_in_channels,
+                                                            num_edge_embeddings,
+                                                            edge_embedding_out_channels,
                                                             edge_out_channels,
                                                             pe_in_channels,
                                                             pe_out_channels,
@@ -63,8 +64,8 @@ class AlphaZXModel(nn.Module):
                                                     value_gmt_layer_norm,
                                                     value_gmt_dropout)
 
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, node_type: torch.Tensor, batch: torch.Tensor, pe: torch.Tensor) -> tuple[AlphaZXDistributionParams, torch.Tensor]:
-        x = self.representation_network(x, edge_index, batch, pe)
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, edge_attr: torch.Tensor, node_type: torch.Tensor, batch: torch.Tensor, pe: torch.Tensor) -> tuple[AlphaZXDistributionParams, torch.Tensor]:
+        x = self.representation_network(x, edge_index, edge_attr, batch, pe)
         policy, value = self.prediction_network(x, edge_index, node_type, batch)
         return policy, value
 
