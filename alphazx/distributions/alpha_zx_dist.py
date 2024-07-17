@@ -4,7 +4,9 @@ import torch
 from torch.distributions.categorical import Categorical
 
 from alphazx.distributions.bernoulli_mixture import MultivariateBernoulli
+from alphazx.models import assert_not_all_zero
 
+torch.set_printoptions(threshold=60_000)
 
 def safe_log(t: torch.Tensor) -> torch.Tensor:
     eps = torch.finfo(t.dtype).eps
@@ -60,7 +62,7 @@ class AlphaZXDistribution:
                                    Samples drawn from this distribution are all zeros (no edges are selected to be transferred).
         """
         self.mixture_dist_params = params.mixture_dist_probs.to(device)
-        # check_non_zero_elems_exist(params.node_dist_probs)
+        check_non_zero_elems_exist(params.node_dist_probs)
         self.node_dist_params = params.node_dist_probs.to(device)
         self.phase_dist_params = params.phase_dist_probs.to(device)
         self.new_edge_dist_params = params.new_edge_dist_probs.to(device)
@@ -73,9 +75,13 @@ class AlphaZXDistribution:
         return torch.gather(safe_log(self.mixture_dist_params), 1, action_types)
 
     def _select_node_dist_params(self, action_types: torch.Tensor) -> torch.Tensor:
+        action_types = action_types - 1
         # Reshape action_types for broadcasting over the distributions
         action_types_expanded = action_types.unsqueeze(-1).expand(-1, -1, self.node_dist_params.size(-1))
         selected_node_dist_params = torch.gather(self.node_dist_params, 1, action_types_expanded)
+        print('action_types = ', action_types)
+        print('node_dist_params = ', self.node_dist_params)
+        print('selected_node_dist_params = ', selected_node_dist_params)
         return selected_node_dist_params
 
     @staticmethod
@@ -93,13 +99,24 @@ class AlphaZXDistribution:
         return self._sample_from_selected_dist_params(self._select_node_dist_params(action_types))
 
     def _node_log_probs(self, action_types: torch.Tensor, nodes: torch.Tensor) -> torch.Tensor:
-        selected_node_dist_params = self._select_node_dist_params(action_types)
-        batch_size, num_nodes = nodes.shape
-        # Generate a tensor of batch indices to pair with each node index
-        batch_indices = torch.arange(batch_size).view(-1, 1).expand_as(nodes)
-        # Select the distribution parameters for each node
-        node_log_probs = safe_log(selected_node_dist_params)[batch_indices, torch.arange(num_nodes), nodes]
-        return node_log_probs
+        try:
+            selected_node_dist_params = self._select_node_dist_params(action_types)
+            assert_not_all_zero(selected_node_dist_params)
+            batch_size, num_nodes = nodes.shape
+            # Generate a tensor of batch indices to pair with each node index
+            batch_indices = torch.arange(batch_size).view(-1, 1).expand_as(nodes)
+            # Select the distribution parameters for each node
+            node_log_probs = safe_log(selected_node_dist_params)[batch_indices, torch.arange(num_nodes), nodes]
+            return node_log_probs
+        except IndexError as error:
+            print('node_dist_params = ', self.node_dist_params)
+            print('action_types = ', action_types)
+            print('nodes = ', nodes)
+            print('nodes.shape = ', nodes.shape)
+            print('selected_feature_dist_params = ', selected_node_dist_params)
+            print('batch_indices = ', batch_indices)
+            print('torch.arange(num_nodes) = ', torch.arange(num_nodes))
+            raise error
 
     def _select_feature_dist_params(self,
                                     nodes: torch.Tensor,
@@ -126,12 +143,19 @@ class AlphaZXDistribution:
     def _feature_log_probs(self, feature_type: Literal['phase'] | Literal['new_edge'], nodes: torch.Tensor,
                            features: torch.Tensor) -> torch.Tensor:
         selected_feature_dist_params = self._select_feature_dist_params(nodes, feature_type)
+        assert_not_all_zero(selected_feature_dist_params)
         batch_size, num_nodes = features.shape
         # Generate a tensor of batch indices to pair with each node index
         batch_indices = torch.arange(batch_size).view(-1, 1).expand_as(features)
-        # Select the corresponding distribution parameters for each node
-        feature_log_probs = safe_log(selected_feature_dist_params)[batch_indices, torch.arange(num_nodes), features]
-        return feature_log_probs
+        try:
+            feature_log_probs = safe_log(selected_feature_dist_params)[batch_indices, torch.arange(num_nodes), features]
+            return feature_log_probs
+        except IndexError as error:
+            print('batch_indices = ', batch_indices)
+            print('selected_feature_dist_params = ', selected_feature_dist_params)
+            print('features = ', features)
+            print('torch.arange(num_nodes) = ', torch.arange(num_nodes))
+            raise error
 
     def _sample_transfer_edges(self, nodes: torch.Tensor) -> torch.Tensor:
         params = self._select_feature_dist_params(nodes, 'transfer_edge')

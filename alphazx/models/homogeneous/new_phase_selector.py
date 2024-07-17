@@ -6,16 +6,17 @@ from alphazx.models import throw_on_nan
 
 
 class NewPhaseSelector(torch.nn.Module):
-    def __init__(self, node_embedding_channels: int, num_possible_phases: int):
+    def __init__(self, node_embedding_channels: int, num_possible_phases: int, dropout: float):
         super().__init__()
         self.num_possible_phases = num_possible_phases
-        self.mlp = pyg.nn.MLP([node_embedding_channels, num_possible_phases])
+        self.mlp = pyg.nn.MLP(in_channels=node_embedding_channels, hidden_channels=node_embedding_channels,
+                              out_channels=num_possible_phases, num_layers=2, dropout=dropout, norm='layer_norm')
 
     def reset_parameters(self):
         self.mlp.reset_parameters()
 
     def forward(self, x: torch.Tensor, node_types: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
-        throw_on_nan(x)
+        # throw_on_nan(x)
         # Exact same computation as the new edge probs computation
         # Gather node embeddings according to batch
         phase_probs = pyg.utils.to_dense_batch(x, batch)[0]

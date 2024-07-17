@@ -1,3 +1,4 @@
+import itertools
 from typing import Any
 
 import torch
@@ -6,12 +7,8 @@ from torch.nn import (
     Embedding,
     Linear,
     ModuleList,
-    ReLU,
-    Sequential,
 )
-from torch_geometric.nn import GPSConv, TransformerConv
-
-from alphazx.models import throw_on_nan, assert_unique_elements
+from torch_geometric.nn import GPSConv, TransformerConv, MLP
 
 
 class GPS(torch.nn.Module):
@@ -21,7 +18,6 @@ class GPS(torch.nn.Module):
                  node_out_channels: int,
                  num_edge_embeddings: int,
                  edge_embedding_out_channels: int,
-                 edge_out_channels: int,
                  pe_in_channels: int,
                  pe_out_channels: int,
                  num_layers: int,
@@ -31,8 +27,8 @@ class GPS(torch.nn.Module):
                  attn_kwargs: dict[str, Any],
                  mlp_hidden_channels: int):
         super().__init__()
-        self.node_emb = Embedding(num_node_embeddings, node_embedding_out_channels, dtype=torch.float64)
-        self.edge_emb = Embedding(num_edge_embeddings, edge_embedding_out_channels, dtype=torch.float64)
+        self.node_emb = Embedding(num_node_embeddings, node_embedding_out_channels, dtype=torch.float64, sparse=True)
+        self.edge_emb = Embedding(num_edge_embeddings, edge_embedding_out_channels, dtype=torch.float64, sparse=True)
         self.pe_norm = BatchNorm1d(pe_in_channels)
         self.pe_lin = Linear(pe_in_channels, pe_out_channels, bias=bias)
         self.convs = ModuleList()
@@ -47,15 +43,16 @@ class GPS(torch.nn.Module):
                                         heads=1),
                         attn_type=attn_type,
                         attn_kwargs=attn_kwargs,
-                        heads=num_attn_heads,
-                        norm='layer_norm'))
-        self.mlp = Sequential(
-            Linear(node_in_channels, mlp_hidden_channels),
-            ReLU(),
-            Linear(mlp_hidden_channels, mlp_hidden_channels),
-            ReLU(),
-            Linear(mlp_hidden_channels, node_out_channels),
-        )
+                        heads=num_attn_heads))
+        self.mlp = MLP(in_channels=node_in_channels, hidden_channels=mlp_hidden_channels,
+                       out_channels=node_out_channels, num_layers=2, dropout=0.1, norm='layer_norm')
+
+    def sparse_parameters(self):
+        return itertools.chain(self.node_emb.parameters(), self.edge_emb.parameters())
+
+    def dense_parameters(self):
+        return itertools.chain(self.pe_norm.parameters(), self.pe_lin.parameters(), self.convs.parameters(),
+                               self.mlp.parameters())
 
     def reset_parameters(self):
         self.node_emb.reset_parameters()

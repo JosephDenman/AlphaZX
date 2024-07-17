@@ -11,7 +11,7 @@ class ValueNetwork(nn.Module):
                  gmt_layer_norm: bool,
                  gmt_dropout: float) -> None:
         super(ValueNetwork, self).__init__()
-        self.pool = pyg.nn.GraphMultisetTransformer(node_embedding_channels, 1, gmt_num_encoder_blocks, gmt_num_heads,
+        self.pool = pyg.nn.GraphMultisetTransformer(node_embedding_channels, 10, gmt_num_encoder_blocks, gmt_num_heads,
                                                     gmt_layer_norm, gmt_dropout)
         self.mlp = pyg.nn.MLP([node_embedding_channels, 1])
 

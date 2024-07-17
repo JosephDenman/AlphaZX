@@ -16,7 +16,6 @@ repr_gps_node_embedding_out_channels = 8
 repr_gps_node_out_channels = 64
 repr_gps_num_edge_embeddings = len(METADATA.edge_feat_to_index_dict)
 repr_gps_edge_embedding_out_channels = 8
-repr_gps_edge_out_channels = 64
 repr_gps_pe_in_channels = pe_dim
 repr_gps_pe_out_channels = pe_dim
 repr_gps_num_layers = 5
@@ -43,7 +42,6 @@ model = AlphaZXModel(num_node_types,
                      repr_gps_node_out_channels,
                      repr_gps_num_edge_embeddings,
                      repr_gps_edge_embedding_out_channels,
-                     repr_gps_edge_out_channels,
                      repr_gps_pe_in_channels,
                      repr_gps_pe_out_channels,
                      repr_gps_num_layers,

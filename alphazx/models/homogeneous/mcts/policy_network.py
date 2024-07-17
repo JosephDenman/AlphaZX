@@ -19,18 +19,18 @@ class PolicyNetwork(nn.Module):
                  num_pooling_encoder_blocks: int,
                  num_pooling_heads: int,
                  pooling_layer_norm: bool,
-                 pooling_dropout: float):
+                 dropout: float):
         super(PolicyNetwork, self).__init__()
         self.num_node_types = num_node_types
         self.num_possible_phases = num_possible_phases
         self.num_possible_new_edges = num_possible_new_edges
         self.rewrite_type_selector = RewriteTypeSelector(node_embedding_channels, num_node_types,
                                                          num_pooling_encoder_blocks, num_pooling_heads,
-                                                         pooling_layer_norm, pooling_dropout)
-        self.node_selector = NodeSelector(node_embedding_channels, num_node_types)
-        self.new_phase_selector = NewPhaseSelector(node_embedding_channels, num_possible_phases)
-        self.new_edge_selector = NewEdgeSelector(node_embedding_channels, num_possible_new_edges)
-        self.transfer_edge_selector = TransferEdgeSelector(node_embedding_channels, num_node_types)
+                                                         pooling_layer_norm, dropout)
+        self.node_selector = NodeSelector(node_embedding_channels, num_node_types, dropout)
+        self.new_phase_selector = NewPhaseSelector(node_embedding_channels, num_possible_phases, dropout)
+        self.new_edge_selector = NewEdgeSelector(node_embedding_channels, num_possible_new_edges, dropout)
+        self.transfer_edge_selector = TransferEdgeSelector(node_embedding_channels, num_node_types, num_pooling_encoder_blocks, num_pooling_heads, pooling_layer_norm, dropout)
 
     def reset_parameters(self):
         self.rewrite_type_selector.reset_parameters()

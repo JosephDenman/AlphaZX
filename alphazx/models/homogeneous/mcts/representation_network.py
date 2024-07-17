@@ -15,7 +15,6 @@ class RepresentationNetwork(nn.Module):
                  node_out_channels: int,
                  num_edge_embeddings: int,
                  edge_embedding_out_channels: int,
-                 edge_out_channels: int,
                  pe_in_channels: int,
                  pe_out_channels: int,
                  num_layers: int,
@@ -30,7 +29,6 @@ class RepresentationNetwork(nn.Module):
                        node_out_channels,
                        num_edge_embeddings,
                        edge_embedding_out_channels,
-                       edge_out_channels,
                        pe_in_channels,
                        pe_out_channels,
                        num_layers,
@@ -42,6 +40,12 @@ class RepresentationNetwork(nn.Module):
 
     def reset_parameters(self):
         self.gps.reset_parameters()
+
+    def sparse_parameters(self):
+        return self.gps.sparse_parameters()
+
+    def dense_parameters(self):
+        return self.gps.dense_parameters()
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor, edge_attr: torch.Tensor, batch: torch.Tensor, pe: torch.Tensor) -> torch.Tensor:
         return self.gps(x, edge_index, edge_attr, batch, pe)

@@ -2,20 +2,20 @@ import torch.nn
 import torch_geometric as pyg
 
 from alphazx.diagram.match import FRightZMatch, FRightXMatch
-from alphazx.models import throw_on_nan
 
 
 class NewEdgeSelector(torch.nn.Module):
-    def __init__(self, node_embedding_channels: int, num_possible_new_edges: int):
+    def __init__(self, node_embedding_channels: int, num_possible_new_edges: int, dropout: float):
         super().__init__()
         self.num_possible_new_edges = num_possible_new_edges
-        self.mlp = pyg.nn.MLP([node_embedding_channels, num_possible_new_edges])
+        self.mlp = pyg.nn.MLP(in_channels=node_embedding_channels, hidden_channels=node_embedding_channels,
+                              out_channels=num_possible_new_edges, num_layers=2, dropout=dropout, norm='layer_norm')
 
     def reset_parameters(self):
         self.mlp.reset_parameters()
 
     def forward(self, x: torch.Tensor, node_types: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
-        throw_on_nan(x)
+        # throw_on_nan(x)
         # Gather node embeddings according to batch
         new_edge_probs = pyg.utils.to_dense_batch(x, batch)[0]
         # Project node embeddings to a vector representing the probabilities of selecting the number of new edges
