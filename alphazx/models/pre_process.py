@@ -25,7 +25,7 @@ def with_embeddable_feats(data: pyg.data.Data) -> pyg.data.Data:
     return data
 
 
-def pre_process(data: pyg.data.Data, pe_dimension: int = 2) -> pyg.data.Data:
+def pre_process(data: pyg.data.Data, pe_dimension: int = 2):
     data = with_embeddable_feats(data)
     data = with_laplacian_pe(data, pe_dimension)
     return data

@@ -1,12 +1,13 @@
 import unittest
 
 import torch
-from hypothesis import given, settings
+from hypothesis import given
 
-from alphazx.models.utils import concatenate_by_group, concatenate_neighbor_features, concatenate_with_neighbor_features, \
-    mask_non_basis_edges, edge_index_as_node_types, compute_column_mask_for_values, mask_edges_by_type
 from alphazx.diagram.diagram_generators import clifford_zx_match_diagram
 from alphazx.diagram.match import METADATA
+from alphazx.models.utils import concatenate_by_group, concatenate_neighbor_features, \
+    concatenate_with_neighbor_features, \
+    mask_non_basis_edges, edge_index_as_node_types, compute_column_mask_for_values, mask_edges_by_type, throw_on_nan
 from tests.utils import zx_diagram_config_st, mask_columns_by_value_st, random_node_types_st, concatenate_by_group_st
 
 
@@ -139,3 +140,38 @@ class UtilsTest(unittest.TestCase):
         actual = compute_column_mask_for_values(t, values_to_mask)
         expected = compute_column_mask_for_values_py(t, values_to_mask)
         self.assertTrue(torch.equal(actual, expected))
+
+    def test_throw_on_nan(self):
+        try:
+            t = torch.tensor([[0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.6002, 0.0000,
+                               0.0000, 0.0000, 0.3998, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
+                               0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
+                              [torch.nan, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan,
+                               torch.nan,
+                               torch.nan, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan,
+                               torch.nan,
+                               torch.nan, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan],
+                              [0.0000, 0.0000, 0.0000, 1.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
+                               0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
+                               0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
+                              [0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 1.0000,
+                               0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
+                               0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
+                              [0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.5004, 0.0000, 0.0000, 0.0000,
+                               0.0000, 0.0000, 0.0000, 0.4996, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
+                               0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000],
+                              [torch.nan, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan,
+                               torch.nan,
+                               torch.nan, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan,
+                               torch.nan,
+                               torch.nan, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan, torch.nan],
+                              [0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
+                               0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
+                               0.0000, 0.3361, 0.0000, 0.0000, 0.0000, 0.0000, 0.6639],
+                              [0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
+                               0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 1.0000, 0.0000, 0.0000,
+                               0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000]], dtype=torch.float64)
+            throw_on_nan(t)
+            self.fail('Expected error')
+        except AssertionError:
+            pass

@@ -176,11 +176,11 @@ def compute_basis_neighbors(edge_index: torch.Tensor, node: int, node_types: tor
 
 def throw_on_nan(x: torch.Tensor) -> None:
     if torch.isnan(x).any():
-        raise Exception(f'Input tensor {x} contains NaN values')
+        raise AssertionError(f'Input tensor {x} contains NaN values')
     if (x == torch.inf).any():
-        raise Exception(f'Input tensor {x} contains NaN values')
+        raise AssertionError(f'Input tensor {x} contains NaN values')
     if (x == -torch.inf).any():
-        raise Exception(f'Input tensor {x} contains NaN values')
+        raise AssertionError(f'Input tensor {x} contains NaN values')
 
 
 def assert_unique_elements(tensor: torch.Tensor) -> None:

@@ -75,13 +75,11 @@ class AlphaZXDistribution:
         return torch.gather(safe_log(self.mixture_dist_params), 1, action_types)
 
     def _select_node_dist_params(self, action_types: torch.Tensor) -> torch.Tensor:
-        action_types = action_types - 1
         # Reshape action_types for broadcasting over the distributions
         action_types_expanded = action_types.unsqueeze(-1).expand(-1, -1, self.node_dist_params.size(-1))
         selected_node_dist_params = torch.gather(self.node_dist_params, 1, action_types_expanded)
-        print('action_types = ', action_types)
-        print('node_dist_params = ', self.node_dist_params)
-        print('selected_node_dist_params = ', selected_node_dist_params)
+        # print('action_types = ', action_types)
+        # print('selected_node_dist_params = ', selected_node_dist_params)
         return selected_node_dist_params
 
     @staticmethod
@@ -109,13 +107,13 @@ class AlphaZXDistribution:
             node_log_probs = safe_log(selected_node_dist_params)[batch_indices, torch.arange(num_nodes), nodes]
             return node_log_probs
         except IndexError as error:
-            print('node_dist_params = ', self.node_dist_params)
-            print('action_types = ', action_types)
-            print('nodes = ', nodes)
-            print('nodes.shape = ', nodes.shape)
-            print('selected_feature_dist_params = ', selected_node_dist_params)
-            print('batch_indices = ', batch_indices)
-            print('torch.arange(num_nodes) = ', torch.arange(num_nodes))
+            # print('node_dist_params = ', self.node_dist_params)
+            # print('action_types = ', action_types)
+            # print('nodes = ', nodes)
+            # print('nodes.shape = ', nodes.shape)
+            # print('selected_feature_dist_params = ', selected_node_dist_params)
+            # print('batch_indices = ', batch_indices)
+            # print('torch.arange(num_nodes) = ', torch.arange(num_nodes))
             raise error
 
     def _select_feature_dist_params(self,
@@ -151,10 +149,10 @@ class AlphaZXDistribution:
             feature_log_probs = safe_log(selected_feature_dist_params)[batch_indices, torch.arange(num_nodes), features]
             return feature_log_probs
         except IndexError as error:
-            print('batch_indices = ', batch_indices)
-            print('selected_feature_dist_params = ', selected_feature_dist_params)
-            print('features = ', features)
-            print('torch.arange(num_nodes) = ', torch.arange(num_nodes))
+            # print('batch_indices = ', batch_indices)
+            # print('selected_feature_dist_params = ', selected_feature_dist_params)
+            # print('features = ', features)
+            # print('torch.arange(num_nodes) = ', torch.arange(num_nodes))
             raise error
 
     def _sample_transfer_edges(self, nodes: torch.Tensor) -> torch.Tensor:
@@ -194,16 +192,16 @@ class AlphaZXDistribution:
                 (action_type_log_probs, node_log_probs, phase_log_probs, new_edge_log_probs, transfer_edge_log_probs),
                 dim=-1).sum(dim=-1)
         except IndexError as error:
-            print('sampled_actions = ', sampled_actions)
-            print('\n')
-            print('mixture_dist_params.shape = ', self.mixture_dist_params.shape)
-            print('node_dist_params.shape = ', self.node_dist_params.shape)
-            # print('phase_dist_params.shape = ', self.phase_dist_params.shape)
-            # print('new_edge_dist_params.shape = ', self.new_edge_dist_params.shape)
-            # print('transfer_edge_dist_params.shape = ', self.transfer_edge_dist_params.shape)
-            print('\n')
-            print('mixture_dist_params = ', self.mixture_dist_params)
-            print('node_dist_params = ', self.node_dist_params)
+            # print('sampled_actions = ', sampled_actions)
+            # print('\n')
+            # print('mixture_dist_params.shape = ', self.mixture_dist_params.shape)
+            # print('node_dist_params.shape = ', self.node_dist_params.shape)
+            # # print('phase_dist_params.shape = ', self.phase_dist_params.shape)
+            # # print('new_edge_dist_params.shape = ', self.new_edge_dist_params.shape)
+            # # print('transfer_edge_dist_params.shape = ', self.transfer_edge_dist_params.shape)
+            # print('\n')
+            # print('mixture_dist_params = ', self.mixture_dist_params)
+            # print('node_dist_params = ', self.node_dist_params)
             # print('phase_dist_params = ', self.phase_dist_params)
             # print('new_edge_dist_params = ', self.new_edge_dist_params)
             # print('transfer_edge_dist_params = ', self.transfer_edge_dist_params)

@@ -88,9 +88,6 @@ class ZXMatchDiagram(nx.DiGraph):
                                                                                          METADATA.node_type_abbrevs,
                                                                                          METADATA.edge_types).sort(
             sort_by_row)
-
-        # print('hdata = ', hdata)
-        # hdata['id'] = self.zx_diagram.id
         add_attr_dicts(hdata)
         hdata.validate()
         if with_reverse_mapping:
@@ -106,6 +103,7 @@ class ZXMatchDiagram(nx.DiGraph):
         data = pyg.utils.from_networkx(self,
                                        group_node_attrs=['node_type', 'node_phase', 'node_set'],
                                        group_edge_attrs=['edge_type', 'edge_size'])
+        data.id = torch.tensor(self.zx_diagram.id, dtype=torch.float64)
         data.node_type = data.x[:, 0].to(dtype=torch.long)
         data.node_phase = data.x[:, 1].to(dtype=torch.float64)
         data.node_set = data.x[:, 2:].to(dtype=torch.long)
