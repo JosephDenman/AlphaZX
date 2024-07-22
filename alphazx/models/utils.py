@@ -236,3 +236,7 @@ def assert_not_all_zero(t: torch.Tensor) -> None:
     if torch.all(t == 0):
         raise AssertionError("The tensor contains all zero floating point 64 numbers.")
 
+
+def is_all_zero(t: torch.Tensor) -> bool:
+    return torch.all(t == 0).item()
+

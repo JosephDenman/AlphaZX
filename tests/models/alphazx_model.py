@@ -5,7 +5,7 @@ import torch
 from alphazx.diagram import METADATA, POSSIBLE_PHASES, clifford_zx_diagram, to_zx_match_diagram
 from alphazx.distributions import AlphaZXDistribution, AlphaZXDistributionParams
 from alphazx.game import remove_isolated_nodes, remove_self_loop_edges, remove_isolated_components
-from alphazx.models import pre_process
+from alphazx.models import pre_process, is_all_zero
 from alphazx.models.homogeneous.mcts.alphazx_model import AlphaZXModel
 
 torch.set_default_tensor_type(torch.DoubleTensor)
@@ -88,43 +88,57 @@ def check_model_consistency(batch: pyg.data.Batch, azx_dist_params: AlphaZXDistr
     B = batch.batch_size
 
     for params in list(azx_dist_params):
-        # print('params = ', params)
         assert params.shape[0] == B, f'Expected batch dimension of parameters {params} to be {B}'
 
-    for b_idx in range(B):
-        data = batch.get_example(b_idx)
-        x, edge_index, edge_attr, node_type, batch_tensor = data.x, data.edge_index, data.edge_attr, data.node_type, data.batch
+    batch = batch.to_data_list()
+    for b_idx in range(len(batch)):
+        print('b_idx = ', b_idx)
+        data = batch[b_idx]
+        x, edge_index, edge_attr, node_type = data.x, data.edge_index, data.edge_attr, data.node_type
+
         mixture_dist_probs = azx_dist_params.mixture_dist_probs[b_idx]
         for md_idx in range(len(mixture_dist_probs)):
-            mixture_component = mixture_dist_probs[md_idx]
-            num_nodes_for_component = torch.sum(node_type == md_idx)
-            if mixture_component != 0:
-                assert num_nodes_for_component.item() != 0, f'Expected number of nodes for mixture component {md_idx} with value {mixture_component} to be non-zero, node_types ={node_type}'
+            mixture_component = mixture_dist_probs[md_idx].item()
+            expected_num_nodes_for_component = torch.sum(node_type == md_idx).item()
+            if (md_idx >= 12) and (md_idx <= 21):
+                if mixture_component != 0:
+                    assert expected_num_nodes_for_component != 0, f'Expected number of nodes for mixture component {md_idx} with value {mixture_component} to be non-zero\nnode_types ={node_type}'
+                else:
+                    assert expected_num_nodes_for_component == 0, f'Expected number of nodes for mixture component {md_idx} with value {mixture_component} to be zero, got {expected_num_nodes_for_component}\nnode_types ={node_type}'
             else:
-                assert num_nodes_for_component.item() == 0, f'Expected number of nodes for mixture component {md_idx} with value {mixture_component} to be zero, got {num_nodes_for_component}, node_types ={node_type}'
-        #
-        # node_dist_probs = azx_dist_params.node_dist_probs[b_idx]
-        # new_edge_dist_probs = azx_dist_params.new_edge_dist_probs[b_idx]
-        # phase_dist_probs = azx_dist_params.phase_dist_probs[b_idx]
-        # transfer_edge_dist_probs = azx_dist_params.transfer_edge_dist_probs[b_idx]
+                assert mixture_component == 0., f'Expected mixture component {md_idx} to be zero, got {mixture_component}\nnode_types ={node_type}'
 
-    # pass
+        node_dist_probs = azx_dist_params.node_dist_probs[b_idx]
+        for nd_idx in range(len(node_dist_probs)):
+            print('nd_idx = ', nd_idx)
+            # print('node_dist_probs = ', node_dist_probs)
+            print('len(node_type) = ', len(node_type))
+            node_dist_probs_row = node_dist_probs[nd_idx]
+            if (nd_idx >= 1) & (nd_idx <= 10):
+                print('node_dist_probs_row = ', node_dist_probs[nd_idx])
+                print(f'node_dist_probs_row[:{len(node_type)}])] = ', node_dist_probs[nd_idx][:len(node_type)])
+                actual_non_zero_node_prob_idxs = node_dist_probs_row[:len(node_type)] != 0.
+                expected_non_zero_node_prob_idxs = node_type == nd_idx
+                assert torch.equal(actual_non_zero_node_prob_idxs, expected_non_zero_node_prob_idxs), f'Expected node probs {actual_non_zero_node_prob_idxs} for type {nd_idx} to be {expected_non_zero_node_prob_idxs}\nnode_type = {node_type}'
+            else:
+                assert is_all_zero(node_dist_probs_row), f'Expected node probs for type {nd_idx} to be all zero, got {node_dist_probs_row}\nnode_type = {node_type}'
 
 
-num_batches = 2
-batch_size = 4
-num_qubits = 2
-depth = 4
-batch_list = create_batch_list(num_batches, batch_size, num_qubits, depth)
-for batch in batch_list:
-    print('batch = ', batch)
-    batch = batch.sort(False)
-    batch = pre_process(batch, pe_dim)
-    azx_dist_params, value = model(batch.x, batch.edge_index, batch.edge_attr, batch.node_type, batch.batch, batch.pe)
-    #print('azx_dist_params.mixture_dist_params = ', azx_dist_params.mixture_dist_probs)
-    #print('azx_dist_params.node_dist_params = ', azx_dist_params.node_dist_probs)
-    check_model_consistency(batch, azx_dist_params)
-    azx_dist = AlphaZXDistribution(azx_dist_params)
-    sampled_actions = azx_dist.sample(1)
-    check_model_consistency(batch, azx_dist_params, sampled_actions)
+with torch.no_grad():
+    num_batches = 2
+    batch_size = 4
+    num_qubits = 2
+    depth = 4
+    batch_list = create_batch_list(num_batches, batch_size, num_qubits, depth)
+    for b in batch_list:
+        print('batch = ', b)
+        b = b.sort(False)
+        b = pre_process(b, pe_dim)
+        azx_dist_params, value = model(b.x, b.edge_index, b.edge_attr, b.node_type, b.batch, b.pe)
+        #print('azx_dist_params.mixture_dist_params = ', azx_dist_params.mixture_dist_probs)
+        #print('azx_dist_params.node_dist_params = ', azx_dist_params.node_dist_probs)
+        check_model_consistency(b, azx_dist_params)
+        azx_dist = AlphaZXDistribution(azx_dist_params)
+        sampled_actions = azx_dist.sample(1)
+        check_model_consistency(b, azx_dist_params, sampled_actions)
 

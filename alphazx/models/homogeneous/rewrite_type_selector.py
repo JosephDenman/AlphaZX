@@ -24,20 +24,15 @@ class RewriteTypeSelector(torch.nn.Module):
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor, node_types: torch.Tensor,
                 batch: torch.Tensor) -> torch.Tensor:
         x = self.mlp(x).squeeze(dim=-1)
-        print('x = ', x)
-        print('edge_index = ', edge_index)
-        print('node_types = ', node_types)
-        print('batch = ', batch)
         non_super_node_mask = (node_types >= 12) & (node_types <= 21)
         masked_x = x[non_super_node_mask]
         masked_batch = batch[non_super_node_mask]
         masked_node_type = node_types[non_super_node_mask]
-        mixture_probs = torch.zeros([torch.max(batch) + 1, len(METADATA.super_node_type_indices) - 1],
+        # TODO: Eliminate 'max' by adding 'max_batch_size' as input (constructed during batch creation)
+        mixture_probs = torch.zeros([torch.max(batch) + 1, self.num_node_types],
                                     dtype=x.dtype,
                                     device=x.device)
-        print('mixture_probs.shape = ', mixture_probs.shape)
-
-        mixture_probs[masked_batch, masked_node_type - len(METADATA.super_node_type_indices)] = masked_x
+        mixture_probs[masked_batch, masked_node_type] = masked_x
         mixture_probs = softmax_nonzero_entries(mixture_probs)
         return mixture_probs
 
@@ -64,19 +59,19 @@ class RewriteTypeSelector(torch.nn.Module):
     #     # mixture_probs = softmax_nonzero_entries(mixture_probs)
     #     # return mixture_probs
 
-    def node_selector_forward(self, x: torch.Tensor, node_types: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
-        x = self.mlp(x).squeeze(-1)
-        valid_type_mask = (node_types >= 1) & (node_types <= 10)
-        x[~valid_type_mask] = 0.
-        dense_x, _ = pyg.utils.to_dense_batch(x, batch)
-        T = self.num_node_types
-        B, N = dense_x.shape
-        dense_node_types, _ = pyg.utils.to_dense_batch(node_types, batch, batch_size=B, max_num_nodes=N,
-                                                       fill_value=torch.nan)
-        node_probs = torch.zeros([B, T, N], device=x.device, dtype=x.dtype)
-        valid_type_broadcast = (dense_node_types.unsqueeze(1) == torch.arange(0, T, device=x.device).view(1, -1, 1))
-        node_probs = torch.masked_scatter(node_probs, valid_type_broadcast, dense_x)
-        node_probs = softmax_nonzero_entries(node_probs, dim=-1)
-        node_probs = node_probs[:, 1:11, :]
-        throw_on_nan(node_probs)
-        return node_probs
+    # def forward(self, x: torch.Tensor, node_types: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
+    #     x = self.mlp(x).squeeze(-1)
+    #     valid_type_mask = (node_types >= 1) & (node_types <= 10)
+    #     x[~valid_type_mask] = 0.
+    #     dense_x, _ = pyg.utils.to_dense_batch(x, batch)
+    #     T = self.num_node_types
+    #     B, N = dense_x.shape
+    #     dense_node_types, _ = pyg.utils.to_dense_batch(node_types, batch, batch_size=B, max_num_nodes=N,
+    #                                                    fill_value=torch.nan)
+    #     node_probs = torch.zeros([B, T, N], device=x.device, dtype=x.dtype)
+    #     valid_type_broadcast = (dense_node_types.unsqueeze(1) == torch.arange(0, T, device=x.device).view(1, -1, 1))
+    #     node_probs = torch.masked_scatter(node_probs, valid_type_broadcast, dense_x)
+    #     node_probs = softmax_nonzero_entries(node_probs, dim=-1)
+    #     # node_probs = node_probs[:, 1:11, :]
+    #     throw_on_nan(node_probs)
+    #     return node_probs

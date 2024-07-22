@@ -66,7 +66,7 @@ zx_game = ZXGame(num_qubits, depth, max_episode_length=max_episode_length, pe_di
 data, reward, done, stats = zx_game.reset()
 while not done:
     data = pre_process(data, pe_dim)
-    azx_dist_params, value = model(data.x, data.edge_index, data.edge_attr, data.node_type, data.batch, data.pe)
+    azx_dist_params, value = model(data.x, data.edge_index, data.edge_attr, data.node_type, data.b, data.pe)
     azx_dist = AlphaZXDistribution(azx_dist_params)
     action = tuple(azx_dist.sample(1).squeeze().tolist())
     print('prob = ', torch.exp(azx_dist.log_prob(torch.tensor(action).unsqueeze(dim=0).unsqueeze(dim=0))))
