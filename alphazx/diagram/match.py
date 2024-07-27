@@ -579,6 +579,7 @@ class Metadata(NamedTuple):
     super_node_type_abbrevs: list[str]
     super_node_type_indices: list[int]
     non_super_node_type_indices: list[int]
+    # super_node_to_simple_node_index_dict: dict[int, int]
 
     match_node_type_abbrevs: list[int]
     match_node_type_indices: list[int]
@@ -638,6 +639,7 @@ def _compute_metadata_from_metagraph(metagraph: nx.DiGraph) -> Metadata:
     super_node_type_abbrevs = []
     super_node_type_indices = []
     non_super_node_type_indices = []
+    # super_node_to_simple_node_index_dict = {}
 
     match_node_type_abbrevs = []
     match_node_type_indices = []
@@ -657,6 +659,7 @@ def _compute_metadata_from_metagraph(metagraph: nx.DiGraph) -> Metadata:
         if issubclass(n, MatchNode):
             match_node_type_abbrevs.append(node_type_abbrev)
             match_node_type_indices.append(node_type_index)
+            # super_node_to_simple_node_index_dict[n.super_node.index] = n.index
         else:
             non_match_node_type_indices.append(node_type_index)
 
@@ -738,6 +741,7 @@ def _compute_metadata_from_metagraph(metagraph: nx.DiGraph) -> Metadata:
         super_node_type_abbrevs,
         super_node_type_indices,
         non_super_node_type_indices,
+        # super_node_to_simple_node_index_dict,
 
         match_node_type_abbrevs,
         match_node_type_indices,

@@ -34,6 +34,7 @@ class RewriteTypeSelector(torch.nn.Module):
                                     device=x.device)
         mixture_probs[masked_batch, masked_node_type] = masked_x
         mixture_probs = softmax_nonzero_entries(mixture_probs)
+        throw_on_nan(mixture_probs)
         return mixture_probs
 
     # def forward(self, x: torch.Tensor, edge_index: torch.Tensor, node_types: torch.Tensor,

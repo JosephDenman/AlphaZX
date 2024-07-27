@@ -6,34 +6,33 @@ from alphazx.game import ZXGame
 from alphazx.models import pre_process
 from alphazx.models.homogeneous.mcts.alphazx_model import AlphaZXModel
 
-pe_dim = 8
+torch.set_default_tensor_type(torch.DoubleTensor)
 
 num_node_types = len(METADATA.node_type_abbrevs)
 num_possible_phases = len(POSSIBLE_PHASES)
-num_possible_new_edges = 10
-
-repr_gps_node_embedding_out_channels = 8
+num_possible_new_edges = 5
+pe_dim = 20
+repr_gps_node_embedding_out_channels = 64
 repr_gps_node_out_channels = 64
 repr_gps_num_edge_embeddings = len(METADATA.edge_feat_to_index_dict)
-repr_gps_edge_embedding_out_channels = 8
+repr_gps_edge_embedding_out_channels = 64
+repr_gps_edge_out_channels = 64
 repr_gps_pe_in_channels = pe_dim
 repr_gps_pe_out_channels = pe_dim
-repr_gps_num_layers = 5
+repr_gps_num_layers = 2
 repr_gps_bias = True
 repr_gps_num_attn_heads = 4
 repr_gps_attn_type = 'multihead'
 repr_gps_attn_kwargs = {}
 repr_gps_mlp_hidden_channels = 64
-
-policy_num_pooling_encoder_blocks = 4
-policy_num_pooling_heads = 4
+policy_num_pooling_encoder_blocks = 2
+policy_num_pooling_heads = 32
 policy_pooling_layer_norm = True
-policy_pooling_dropout = 0.1
-
-value_gmt_num_encoder_blocks = 4
+policy_pooling_dropout = 0.15
+value_gmt_num_encoder_blocks = 2
 value_gmt_num_heads = 4
 value_gmt_layer_norm = True
-value_gmt_dropout = 0.1
+value_gmt_dropout = 0.15
 
 model = AlphaZXModel(num_node_types,
                      num_possible_phases,

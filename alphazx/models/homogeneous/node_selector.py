@@ -49,26 +49,32 @@ class NodeSelector(torch.nn.Module):
 
     def forward(self, x: torch.Tensor, node_types: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
         x = self.mlp(x).squeeze(-1)
-        valid_type_mask = (node_types >= 1) & (node_types <= 10)
-        x[~valid_type_mask] = 0.
-        dense_x, _ = pyg.utils.to_dense_batch(x, batch)
-        T = self.num_node_types
-        B, N = dense_x.shape
+        # Create masks for valid node types (1 to 10 inclusive)
+        valid_types_mask = (node_types >= 1) & (node_types <= 10)
+        masked_logits = x * valid_types_mask.float()
 
-        print('node_types = ', node_types)
-        node_types[~valid_type_mask] = -1
-        print('node_types = ', node_types)
-        print('type_broadcast = ', pyg.utils.to_dense_batch(node_types.unsqueeze(1) == torch.arange(0, T), batch, batch_size=B, max_num_nodes=N, fill_value=torch.nan)[0])
+        # Convert node logits and node types to dense batch form
+        dense_logits, _ = pyg.utils.to_dense_batch(masked_logits, batch)
+        T = 22
+        B, N = dense_logits.shape
         dense_node_types, _ = pyg.utils.to_dense_batch(node_types, batch, batch_size=B, max_num_nodes=N,
                                                        fill_value=torch.nan)
-        node_probs = torch.zeros([B, T, N], device=x.device, dtype=x.dtype)
-        valid_type_broadcast = (dense_node_types.unsqueeze(1) == torch.arange(0, T, device=x.device).view(1, -1, 1))
-        # print('y = ', valid_type_broadcast[batch[~valid_type_mask], node_types[~valid_type_mask]])
-        print('dense_node_types = ', dense_node_types)
-        print('valid_type_broadcast = ', valid_type_broadcast)
-        node_probs = torch.masked_scatter(node_probs, valid_type_broadcast, dense_x)
+
+        # Create output tensor
+        node_probs = torch.zeros((B, T, N), device=x.device)
+
+        # Mask out the logits of invalid types and apply softmax along the node dimension
+        valid_types_mask_dense = (dense_node_types >= 1) & (dense_node_types <= 10)
+        valid_logits = dense_logits * valid_types_mask_dense.float()
+
+        # Generate the type-specific mask
+        type_indices = torch.arange(1, 11, device=x.device).view(1, -1, 1)
+        type_mask = (dense_node_types.unsqueeze(1) == type_indices).float()
+
+        # Multiply probabilities with type mask to scatter into correct type slots
+        expanded_probs = valid_logits.unsqueeze(1) * type_mask
+        node_probs[:, 1:11, :] = expanded_probs
         node_probs = softmax_nonzero_entries(node_probs, dim=-1)
-        # node_probs = node_probs[:, 1:11, :]
         throw_on_nan(node_probs)
         return node_probs
 

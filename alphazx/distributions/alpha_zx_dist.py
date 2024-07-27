@@ -19,6 +19,11 @@ def check_non_zero_elems_exist(t: torch.Tensor) -> None:
     assert num_zero_elems != num_elems, f'All elements of {t} are zero'
 
 
+def check_non_zero_rows(t: torch.Tensor) -> None:
+    if torch.any(torch.all((t == 0.), dim=-1)).item():
+        raise Exception(f'Input tensor {t} contains all zero rows')
+
+
 class AlphaZXDistributionParams(NamedTuple):
     mixture_dist_probs: torch.Tensor
     node_dist_probs: torch.Tensor
@@ -61,14 +66,17 @@ class AlphaZXDistribution:
                                    in the top left corner of the innermost 2D tensor. All other entries in the innermost 2D tensor are 0.
                                    Samples drawn from this distribution are all zeros (no edges are selected to be transferred).
         """
+        check_non_zero_rows(params.mixture_dist_probs)
         self.mixture_dist_params = params.mixture_dist_probs.to(device)
-        check_non_zero_elems_exist(params.node_dist_probs)
+        # check_non_zero_rows(params.node_dist_probs)
         self.node_dist_params = params.node_dist_probs.to(device)
+        check_non_zero_rows(params.phase_dist_probs)
         self.phase_dist_params = params.phase_dist_probs.to(device)
+        check_non_zero_rows(params.new_edge_dist_probs)
         self.new_edge_dist_params = params.new_edge_dist_probs.to(device)
         self.transfer_edge_dist_params = params.transfer_edge_dist_probs.to(device)
 
-    def _sample_action_types(self, k: int) -> torch.Tensor:
+    def sample_action_types(self, k: int) -> torch.Tensor:
         return Categorical(probs=self.mixture_dist_params).sample(torch.Size([k])).T
 
     def _action_type_log_probs(self, action_types: torch.Tensor) -> torch.Tensor:
@@ -76,14 +84,25 @@ class AlphaZXDistribution:
 
     def _select_node_dist_params(self, action_types: torch.Tensor) -> torch.Tensor:
         # Reshape action_types for broadcasting over the distributions
+        action_types = action_types - 11
         action_types_expanded = action_types.unsqueeze(-1).expand(-1, -1, self.node_dist_params.size(-1))
+        # print('action_types_expanded = ', action_types_expanded)
         selected_node_dist_params = torch.gather(self.node_dist_params, 1, action_types_expanded)
+        try:
+            check_non_zero_rows(selected_node_dist_params)
+        except Exception as error:
+            print('action_types = ', action_types)
+            print('mixture_dist_params = ', self.mixture_dist_params)
+            print('node_dist_params = ', self.node_dist_params)
+            raise error
+        # print('selected_node_dist_params = ', selected_node_dist_params)
         # print('action_types = ', action_types)
         # print('selected_node_dist_params = ', selected_node_dist_params)
         return selected_node_dist_params
 
     @staticmethod
     def _sample_from_selected_dist_params(selected_dist_params: torch.Tensor) -> torch.Tensor:
+        check_non_zero_rows(selected_dist_params)
         # Flatten the tensor from [batch_size, num_distributions, num_classes] to [batch_size * num_distributions, num_classes]
         # because categorical treats the first dimension as the batch dimension
         flattened_distributions = selected_dist_params.view(-1, selected_dist_params.size(-1))
@@ -93,7 +112,7 @@ class AlphaZXDistribution:
         reshaped_samples = samples.view(selected_dist_params.size(0), selected_dist_params.size(1))
         return reshaped_samples
 
-    def _sample_nodes(self, action_types: torch.Tensor) -> torch.Tensor:
+    def sample_nodes(self, action_types: torch.Tensor) -> torch.Tensor:
         return self._sample_from_selected_dist_params(self._select_node_dist_params(action_types))
 
     def _node_log_probs(self, action_types: torch.Tensor, nodes: torch.Tensor) -> torch.Tensor:
@@ -138,6 +157,12 @@ class AlphaZXDistribution:
                          nodes: torch.Tensor) -> torch.Tensor:
         return self._sample_from_selected_dist_params(self._select_feature_dist_params(nodes, feature_type))
 
+    def sample_phases(self, nodes: torch.Tensor) -> torch.Tensor:
+        return self._sample_features('phase', nodes)
+
+    def sample_new_edges(self, nodes: torch.Tensor) -> torch.Tensor:
+        return self._sample_features('new_edge', nodes)
+
     def _feature_log_probs(self, feature_type: Literal['phase'] | Literal['new_edge'], nodes: torch.Tensor,
                            features: torch.Tensor) -> torch.Tensor:
         selected_feature_dist_params = self._select_feature_dist_params(nodes, feature_type)
@@ -155,7 +180,7 @@ class AlphaZXDistribution:
             # print('torch.arange(num_nodes) = ', torch.arange(num_nodes))
             raise error
 
-    def _sample_transfer_edges(self, nodes: torch.Tensor) -> torch.Tensor:
+    def sample_transfer_edges(self, nodes: torch.Tensor) -> torch.Tensor:
         params = self._select_feature_dist_params(nodes, 'transfer_edge')
         # print('transfer_edge_params = ', params)
         return MultivariateBernoulli(params).sample()
@@ -216,15 +241,15 @@ class AlphaZXDistribution:
         :param k: The number of samples to produce.
         :return: K x L tensor of actions.
         """
-        action_types = self._sample_action_types(k)
+        action_types = self.sample_action_types(k)
         # print('sampled_action_types = ', action_types)
-        nodes = self._sample_nodes(action_types)
+        nodes = self.sample_nodes(action_types)
         # print('sampled_nodes = ', nodes)
-        phases = self._sample_features('phase', nodes)
+        phases = self.sample_phases(nodes)
         # print('sampled_phases = ', phases)
-        new_edges = self._sample_features('new_edge', nodes)
+        new_edges = self.sample_new_edges(nodes)
         # print('sampled_new_edges = ', new_edges)
-        transfer_edges = self._sample_transfer_edges(nodes)
+        transfer_edges = self.sample_transfer_edges(nodes)
         return torch.cat((torch.stack((action_types, nodes, phases, new_edges), dim=-1), transfer_edges), dim=-1).long()
 
     @staticmethod

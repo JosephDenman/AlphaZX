@@ -1,5 +1,6 @@
 import torch
 import torch_geometric as pyg
+from typing import Any
 
 from alphazx.diagram.match import METADATA, BoundarySuperNode, BoundaryMatch
 
@@ -219,15 +220,26 @@ def assert_unique_elements(tensor: torch.Tensor) -> None:
         raise ValueError(f"The input tensor {tensor} of shape {tensor.shape} contains duplicate entries:{duplicate_indices}\nVerify{[[tensor[index] for index in indices] for indices in duplicate_indices]}")
 
 
-def softmax_nonzero_entries(tensor: torch.Tensor, dim: int = 1) -> torch.Tensor:
-    # Create a mask of non-zero entries
-    nonzero_mask = tensor != 0.
-    # Compute the masked tensor where we replace non-zero entries with their log-probabilities
-    masked_tensor = torch.where(nonzero_mask, tensor, torch.tensor(-torch.inf).to(tensor.device))
-    # Apply softmax along the rows while keeping the zero entries unchanged
-    softmax_tensor = torch.softmax(masked_tensor, dim=dim)
-    # Return the tensor with softmax applied to non-zero entries and zero entries unchanged
-    return torch.where(nonzero_mask, softmax_tensor, tensor)
+def check_non_zero_rows(t: torch.Tensor) -> None:
+    if torch.any(torch.all((t == 0.), dim=-1)).item():
+        raise Exception(f'Input tensor {t} contains all zero rows')
+
+
+def check_all_value_rows(t: torch.Tensor, value: Any) -> None:
+    if torch.any(torch.all((t == value), dim=-1)).item():
+        raise Exception(f'Input tensor {t} contains all zero rows')
+
+
+def softmax_nonzero_entries(x: torch.Tensor, dim: int = -1) -> torch.Tensor:
+    # Create a mask of non-zero elements
+    mask = (x != 0).float()
+    # Replace zero elements with a large negative value to avoid affecting the softmax calculation
+    x_masked = x + (1 - mask) * -1e9
+    # Compute the softmax
+    softmax = torch.nn.functional.softmax(x_masked, dim=-1)
+    # Zero out positions that were originally zero in the input
+    softmax = softmax * mask
+    return softmax
 
 
 def assert_not_all_zero(t: torch.Tensor) -> None:
@@ -239,4 +251,3 @@ def assert_not_all_zero(t: torch.Tensor) -> None:
 
 def is_all_zero(t: torch.Tensor) -> bool:
     return torch.all(t == 0).item()
-
