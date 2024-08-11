@@ -14,7 +14,7 @@ class MultivariateBernoulli:
         if not torch.all((params >= 0.0) & (params <= 1.0)):
             raise ValueError('All parameters must be in the range [0, 1].')
         # Since each component is multivariate Bernoulli, we treat each independently
-        self.dist = Independent(Bernoulli(probs=self.params), 1)
+        self.dist = Independent(Bernoulli(probs=self.params, validate_args=True), 1)
 
     def log_prob(self, value: torch.Tensor) -> torch.Tensor:
         return self.dist.log_prob(value)

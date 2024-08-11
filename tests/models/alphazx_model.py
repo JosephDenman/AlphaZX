@@ -118,39 +118,40 @@ def check_model_consistency(batch: pyg.data.Batch, azx_dist_params: AlphaZXDistr
                 assert is_all_zero(node_dist_probs_row), f'Expected node probs for type {nd_idx} to be all zero, got {node_dist_probs_row}\nnode_type = {node_type}'
 
     if sampled_rewrite_types_batch is not None:
-        assert sampled_rewrite_types_batch.shape[0] == len(
+        assert sampled_rewrite_types_batch.shape[1] == len(
             batch), f'Expected {len(batch)} batches in sampled actions {sampled_rewrite_types_batch} but got {sampled_rewrite_types_batch.shape[0]}'
         if num_samples is not None:
-            assert sampled_rewrite_types_batch.shape[1] == num_samples, f'Expected {num_samples} in sampled actions {sampled_rewrite_types_batch} but got {sampled_rewrite_types_batch.shape[1]}'
-        for b_idx in range(sampled_rewrite_types_batch.shape[0]):
-            sampled_rewrite_types = sampled_rewrite_types_batch[b_idx]
-            for sampled_rewrite_type_idx in range(sampled_rewrite_types.shape[0]):
-                sampled_rewrite_type = sampled_rewrite_types[sampled_rewrite_type_idx]
+            assert sampled_rewrite_types_batch.shape[0] == num_samples, f'Expected {num_samples} in sampled actions {sampled_rewrite_types_batch} but got {sampled_rewrite_types_batch.shape[1]}'
+        for sample_idx in range(sampled_rewrite_types_batch.shape[0]):
+            for b_idx in range(sampled_rewrite_types_batch.shape[1]):
+                sampled_rewrite_type = sampled_rewrite_types_batch[sample_idx][b_idx]
                 rewrite_type_dist_component = azx_dist_params.mixture_dist_probs[b_idx][sampled_rewrite_type]
                 assert rewrite_type_dist_component != 0., f'Expected non-zero entry rewrite type component for rewrite type {sampled_rewrite_type} in batch {b_idx}\nazx_dist_params = {azx_dist_params.mixture_dist_probs}'
 
 
-with torch.no_grad():
-    num_batches = 2
-    batch_size = 4
-    num_qubits = 2
-    depth = 4
-    batch_list = create_batch_list(num_batches, batch_size, num_qubits, depth)
-    for b in batch_list:
-        b = b.sort(False)
-        b = pre_process(b, pe_dim)
-        azx_dist_params, value = model(b.x, b.edge_index, b.edge_attr, b.node_type, b.batch, b.pe)
-        #print('azx_dist_params.mixture_dist_params = ', azx_dist_params.mixture_dist_probs)
-        #print('azx_dist_params.node_dist_params = ', azx_dist_params.node_dist_probs)
-        check_model_consistency(b, azx_dist_params)
-        azx_dist = AlphaZXDistribution(azx_dist_params)
-        sampled_actions = azx_dist.sample(1)
-        print('sampled_actions = ', sampled_actions)
-        # print('azx_dist_param = ', azx_dist_params)
-        # sampled_rewrite_types = azx_dist.sample_action_types(1)
-        # print('sampled_rewrite_types = ', sampled_rewrite_types)
-        # check_model_consistency(b, azx_dist_params, num_samples=1, sampled_rewrite_types_batch=sampled_rewrite_types)
-        # sampled_nodes = azx_dist.sample_nodes(sampled_rewrite_types)
+# with torch.no_grad():
+#     num_batches = 2
+#     batch_size = 4
+#     num_qubits = 5
+#     depth = 5
+#     batch_list = create_batch_list(num_batches, batch_size, num_qubits, depth)
+#     for b in batch_list:
+#         b = b.sort(False)
+#         b = pre_process(b, pe_dim)
+#         azx_dist_params, value = model(b.x, b.edge_index, b.edge_attr, b.node_type, b.batch, b.pe)
+        # print('mixture_dist_params = ', azx_dist_params.mixture_dist_probs)
+        # print('node_dist_params = ', azx_dist_params.node_dist_probs)
+        # print('phase_dist_probs = ', azx_dist_params.phase_dist_probs)
+        # check_model_consistency(b, azx_dist_params)
+        # azx_dist = AlphaZXDistribution(azx_dist_params)
+        # sampled_actions = azx_dist.sample(2)
+        # print('sampled_actions = ', sampled_actions)
+        # probs = azx_dist.probs(sampled_actions)
+        # print('probs = ', probs)
+        # sampled_action_types = azx_dist.sample_action_types(1)
+        # print('sampled_action_types = ', sampled_action_types)
+        # print('rewrite_type_probs = ', azx_dist.action_type_log_probs(sampled_action_types).exp())
+        # sampled_nodes = azx_dist.sample_nodes(sampled_action_types)
         # print('sampled_nodes = ', sampled_nodes)
-        # check_model_consistency(b, azx_dist_params, num_samples=1, sampled_rewrite_types_batch=sampled_rewrite_types)
+        # print('node_probs = ', azx_dist.node_log_probs(sampled_action_types, sampled_nodes).exp())
 
