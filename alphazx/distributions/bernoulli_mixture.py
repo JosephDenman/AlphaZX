@@ -44,12 +44,12 @@ class MultivariateBernoulliMixture:
         # Bernoulli parameters for each component
         bernoulli_params = params[..., 1:]
         # Create categorical distribution for selecting the mixture components
-        mixture_dist = Categorical(probs=mixture_coeffs, validate_args=True)
+        mixture_dist = Categorical(probs=mixture_coeffs)
         # Create the Bernoulli distribution for each mixture component
         # Since each component is multivariate Bernoulli, we treat each independently
-        component_dist = Independent(Bernoulli(probs=bernoulli_params, validate_args=True), 1)
+        component_dist = Independent(Bernoulli(probs=bernoulli_params), 1)
         # Combine into a mixture distribution
-        self.dist = MixtureSameFamily(mixture_dist, component_dist, validate_args=True)
+        self.dist = MixtureSameFamily(mixture_dist, component_dist)
 
     def log_prob(self, value: torch.Tensor) -> torch.Tensor:
         return self.dist.log_prob(value)

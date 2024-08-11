@@ -39,7 +39,7 @@ class PolicyNetwork(nn.Module):
         self.new_edge_selector.reset_parameters()
         self.transfer_edge_selector.reset_parameters()
 
-    def forward(self, ids: torch.Tensor, x: torch.Tensor, edge_index: torch.Tensor, node_type: torch.Tensor, batch: torch.Tensor) -> AlphaZXDistributionParams:
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, node_type: torch.Tensor, batch: torch.Tensor) -> AlphaZXDistributionParams:
         """
         TODO: Have the node, phase, and edge prob computations be autoregressive. Compute mixture probabilities last
               to incorporate intermediate embedding updates. Do we need to do layer norm / residual connection between each
@@ -51,8 +51,7 @@ class PolicyNetwork(nn.Module):
         phase_probs = self.new_phase_selector(x, node_type, batch)
         edge_probs = self.new_edge_selector(x, node_type, batch)
         transfer_edge_probs = self.transfer_edge_selector(x, edge_index, node_type, batch)
-        return AlphaZXDistributionParams(ids,
-                                         mixture_probs,
+        return AlphaZXDistributionParams(mixture_probs,
                                          node_probs,
                                          phase_probs,
                                          edge_probs,

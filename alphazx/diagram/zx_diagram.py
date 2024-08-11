@@ -23,7 +23,7 @@ class ZXDiagram(nx.MultiGraph):
         self.phase_denominator = phase_denominator
         super().__init__(incoming_graph_data=nx_graph, multigraph_input=True)
         self.next_node_index = max(nx_graph.nodes()) + 1 if self.number_of_nodes() > 0 else 0
-        self.id = random.randint(0, 2 ** 32 - 1)
+        self.id = uuid.uuid1().int >> 64
         self._z_nodes_set = set()
         self._x_nodes_set = set()
         self._b_nodes_set = set()

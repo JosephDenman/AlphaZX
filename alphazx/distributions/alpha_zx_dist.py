@@ -10,7 +10,7 @@ torch.set_printoptions(threshold=60_000)
 
 def safe_log(t: torch.Tensor) -> torch.Tensor:
     eps = torch.finfo(t.dtype).eps
-    return torch.log(t + eps)
+    return torch.log(torch.clamp(t, min=eps))
 
 
 def check_non_zero_elems_exist(t: torch.Tensor) -> None:
@@ -25,7 +25,6 @@ def check_non_zero_rows(t: torch.Tensor) -> None:
 
 
 class AlphaZXDistributionParams(NamedTuple):
-    graph_ids: torch.Tensor
     mixture_dist_probs: torch.Tensor
     node_dist_probs: torch.Tensor
     phase_dist_probs: torch.Tensor
@@ -67,7 +66,6 @@ class AlphaZXDistribution:
                                    in the top left corner of the innermost 2D tensor. All other entries in the innermost 2D tensor are 0.
                                    Samples drawn from this distribution are all zeros (no edges are selected to be transferred).
         """
-        self.graph_ids = params.graph_ids.to(device)
         check_non_zero_rows(params.mixture_dist_probs)
         self.mixture_dist_params = params.mixture_dist_probs.to(device)
         # check_non_zero_rows(params.node_dist_probs)
@@ -78,31 +76,27 @@ class AlphaZXDistribution:
         self.new_edge_dist_params = params.new_edge_dist_probs.to(device)
         self.transfer_edge_dist_params = params.transfer_edge_dist_probs.to(device)
 
-    def sample_rewrite_types(self, k: int) -> torch.Tensor:
-        return Categorical(probs=self.mixture_dist_params, validate_args=True).sample(torch.Size([k])).T
+    def sample_action_types(self, k: int) -> torch.Tensor:
+        return Categorical(probs=self.mixture_dist_params).sample(torch.Size([k])).T
 
-    def _rewrite_type_log_probs(self, rewrite_types: torch.Tensor) -> torch.Tensor:
-        return safe_log(torch.gather(self.mixture_dist_params, 1, rewrite_types))
+    def _action_type_log_probs(self, action_types: torch.Tensor) -> torch.Tensor:
+        return torch.gather(safe_log(self.mixture_dist_params), 1, action_types)
 
-    def _select_node_dist_params(self, rewrite_types: torch.Tensor) -> torch.Tensor:
-        # Reshape rewrite_types for broadcasting over the distributions
-        rewrite_types = rewrite_types - 11
-        rewrite_types_expanded = rewrite_types.unsqueeze(-1).expand(-1, -1, self.node_dist_params.size(-1))
-        # print('rewrite_types_expanded = ', rewrite_types_expanded)
-        selected_node_dist_params = torch.gather(self.node_dist_params, 1, rewrite_types_expanded)
+    def _select_node_dist_params(self, action_types: torch.Tensor) -> torch.Tensor:
+        # Reshape action_types for broadcasting over the distributions
+        action_types = action_types - 11
+        action_types_expanded = action_types.unsqueeze(-1).expand(-1, -1, self.node_dist_params.size(-1))
+        # print('action_types_expanded = ', action_types_expanded)
+        selected_node_dist_params = torch.gather(self.node_dist_params, 1, action_types_expanded)
         try:
             check_non_zero_rows(selected_node_dist_params)
         except Exception as error:
-            torch.set_printoptions(profile="full")
-            print('rewrite_types = ', rewrite_types)
-            print('rewrite_types_expanded = ', rewrite_types_expanded)
-            print('selected_node_dist_params = ', selected_node_dist_params)
+            print('action_types = ', action_types)
             print('mixture_dist_params = ', self.mixture_dist_params)
             print('node_dist_params = ', self.node_dist_params)
-            torch.set_printoptions(profile="default")  # reset
             raise error
         # print('selected_node_dist_params = ', selected_node_dist_params)
-        # print('rewrite_types = ', rewrite_types)
+        # print('action_types = ', action_types)
         # print('selected_node_dist_params = ', selected_node_dist_params)
         return selected_node_dist_params
 
@@ -112,28 +106,28 @@ class AlphaZXDistribution:
         # Flatten the tensor from [batch_size, num_distributions, num_classes] to [batch_size * num_distributions, num_classes]
         # because categorical treats the first dimension as the batch dimension
         flattened_distributions = selected_dist_params.view(-1, selected_dist_params.size(-1))
-        dist = Categorical(probs=flattened_distributions, validate_args=True)
+        dist = Categorical(probs=flattened_distributions)
         samples = dist.sample()
         # Reshape the samples back to the original [batch_size, num_distributions] format
         reshaped_samples = samples.view(selected_dist_params.size(0), selected_dist_params.size(1))
         return reshaped_samples
 
-    def sample_nodes(self, rewrite_types: torch.Tensor) -> torch.Tensor:
-        return self._sample_from_selected_dist_params(self._select_node_dist_params(rewrite_types))
+    def sample_nodes(self, action_types: torch.Tensor) -> torch.Tensor:
+        return self._sample_from_selected_dist_params(self._select_node_dist_params(action_types))
 
-    def _node_log_probs(self, rewrite_types: torch.Tensor, nodes: torch.Tensor) -> torch.Tensor:
+    def _node_log_probs(self, action_types: torch.Tensor, nodes: torch.Tensor) -> torch.Tensor:
         try:
-            selected_node_dist_params = self._select_node_dist_params(rewrite_types)
+            selected_node_dist_params = self._select_node_dist_params(action_types)
             assert_not_all_zero(selected_node_dist_params)
             batch_size, num_nodes = nodes.shape
             # Generate a tensor of batch indices to pair with each node index
             batch_indices = torch.arange(batch_size).view(-1, 1).expand_as(nodes)
             # Select the distribution parameters for each node
-            node_log_probs = safe_log(selected_node_dist_params[batch_indices, torch.arange(num_nodes), nodes])
+            node_log_probs = safe_log(selected_node_dist_params)[batch_indices, torch.arange(num_nodes), nodes]
             return node_log_probs
         except IndexError as error:
             # print('node_dist_params = ', self.node_dist_params)
-            # print('rewrite_types = ', rewrite_types)
+            # print('action_types = ', action_types)
             # print('nodes = ', nodes)
             # print('nodes.shape = ', nodes.shape)
             # print('selected_feature_dist_params = ', selected_node_dist_params)
@@ -176,8 +170,15 @@ class AlphaZXDistribution:
         batch_size, num_nodes = features.shape
         # Generate a tensor of batch indices to pair with each node index
         batch_indices = torch.arange(batch_size).view(-1, 1).expand_as(features)
-        feature_log_probs = safe_log(selected_feature_dist_params[batch_indices, torch.arange(num_nodes), features])
-        return feature_log_probs
+        try:
+            feature_log_probs = safe_log(selected_feature_dist_params)[batch_indices, torch.arange(num_nodes), features]
+            return feature_log_probs
+        except IndexError as error:
+            # print('batch_indices = ', batch_indices)
+            # print('selected_feature_dist_params = ', selected_feature_dist_params)
+            # print('features = ', features)
+            # print('torch.arange(num_nodes) = ', torch.arange(num_nodes))
+            raise error
 
     def sample_transfer_edges(self, nodes: torch.Tensor) -> torch.Tensor:
         params = self._select_feature_dist_params(nodes, 'transfer_edge')
@@ -185,8 +186,10 @@ class AlphaZXDistribution:
         return MultivariateBernoulli(params).sample()
 
     def _transfer_edge_log_probs(self, nodes: torch.Tensor, transfer_edges: torch.Tensor) -> torch.Tensor:
+        # print('transfer_edges = ', transfer_edges)
+        # print('self._select_transfer_edge_dist_params = ', self._select_feature_dist_params(nodes, 'transfer_edge'))
         return MultivariateBernoulli(self._select_feature_dist_params(nodes, 'transfer_edge')).log_prob(
-            transfer_edges.double())
+            transfer_edges.float())
 
     def prob(self, sampled_actions: torch.Tensor) -> torch.Tensor:
         return self.log_prob(sampled_actions).exp()
@@ -199,21 +202,35 @@ class AlphaZXDistribution:
                                 sampled_actions_batch[b] is the set of actions sampled at some step in a trajectory.
         :return: The log probability of each sampled action.
         """
-        actual_graph_ids = sampled_actions[:, :, 0].squeeze(dim=-1).to(dtype=torch.long)
-        assert torch.equal(actual_graph_ids, self.graph_ids), f'Expected actual graph ids {actual_graph_ids} to equal {self.graph_ids}'
-        rewrite_types = sampled_actions[:, :, 1].to(dtype=torch.int64)
-        nodes = sampled_actions[:, :, 2].to(dtype=torch.int64)
-        phases = sampled_actions[:, :, 3].to(dtype=torch.int64)
-        new_edges = sampled_actions[:, :, 4].to(dtype=torch.int64)
-        transfer_edges = sampled_actions[:, :, 5:].to(dtype=torch.int64)
-        rewrite_type_log_probs = self._rewrite_type_log_probs(rewrite_types)
-        node_log_probs = self._node_log_probs(rewrite_types, nodes)
-        phase_log_probs = self._feature_log_probs('phase', nodes, phases)
-        new_edge_log_probs = self._feature_log_probs('new_edge', nodes, new_edges)
-        transfer_edge_log_probs = self._transfer_edge_log_probs(nodes, transfer_edges)
-        return torch.stack(
-            (rewrite_type_log_probs, node_log_probs, phase_log_probs, new_edge_log_probs, transfer_edge_log_probs),
-            dim=-1).sum(dim=-1)
+        action_types = sampled_actions[:, :, 0]
+        nodes = sampled_actions[:, :, 1]
+        phases = sampled_actions[:, :, 2]
+        new_edges = sampled_actions[:, :, 3]
+        transfer_edges = sampled_actions[:, :, 4:]
+        try:
+            action_type_log_probs = self._action_type_log_probs(action_types)
+            node_log_probs = self._node_log_probs(action_types, nodes)
+            phase_log_probs = self._feature_log_probs('phase', nodes, phases)
+            new_edge_log_probs = self._feature_log_probs('new_edge', nodes, new_edges)
+            transfer_edge_log_probs = self._transfer_edge_log_probs(nodes, transfer_edges)
+            return torch.stack(
+                (action_type_log_probs, node_log_probs, phase_log_probs, new_edge_log_probs, transfer_edge_log_probs),
+                dim=-1).sum(dim=-1)
+        except IndexError as error:
+            # print('sampled_actions = ', sampled_actions)
+            # print('\n')
+            # print('mixture_dist_params.shape = ', self.mixture_dist_params.shape)
+            # print('node_dist_params.shape = ', self.node_dist_params.shape)
+            # # print('phase_dist_params.shape = ', self.phase_dist_params.shape)
+            # # print('new_edge_dist_params.shape = ', self.new_edge_dist_params.shape)
+            # # print('transfer_edge_dist_params.shape = ', self.transfer_edge_dist_params.shape)
+            # print('\n')
+            # print('mixture_dist_params = ', self.mixture_dist_params)
+            # print('node_dist_params = ', self.node_dist_params)
+            # print('phase_dist_params = ', self.phase_dist_params)
+            # print('new_edge_dist_params = ', self.new_edge_dist_params)
+            # print('transfer_edge_dist_params = ', self.transfer_edge_dist_params)
+            raise error
 
     def sample(self, k: int) -> torch.Tensor:
         """
@@ -224,16 +241,16 @@ class AlphaZXDistribution:
         :param k: The number of samples to produce.
         :return: K x L tensor of actions.
         """
-        rewrite_types = self.sample_rewrite_types(k)
-        # print('sampled_rewrite_types = ', rewrite_types)
-        nodes = self.sample_nodes(rewrite_types)
+        action_types = self.sample_action_types(k)
+        # print('sampled_action_types = ', action_types)
+        nodes = self.sample_nodes(action_types)
         # print('sampled_nodes = ', nodes)
         phases = self.sample_phases(nodes)
         # print('sampled_phases = ', phases)
         new_edges = self.sample_new_edges(nodes)
         # print('sampled_new_edges = ', new_edges)
         transfer_edges = self.sample_transfer_edges(nodes)
-        return torch.cat((self.graph_ids.view(-1, 1, 1), torch.stack((rewrite_types, nodes, phases, new_edges), dim=-1), transfer_edges), dim=-1).long()
+        return torch.cat((torch.stack((action_types, nodes, phases, new_edges), dim=-1), transfer_edges), dim=-1).long()
 
     @staticmethod
     def entropy(device: torch.device = 'cpu') -> torch.Tensor:

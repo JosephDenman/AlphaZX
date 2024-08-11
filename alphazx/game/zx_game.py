@@ -180,9 +180,7 @@ class ZXGame:
         self.data = data
 
     def step(self, action: tuple) -> tuple[Data, int, bool, dict]:
-        actual_id = torch.tensor(action[0])
-        assert torch.isclose(self.data.id.to(dtype=torch.long), torch.tensor(action[0], dtype=torch.long)), f'Expected actual id {actual_id} to match expected id {self.data.id}'
-        action = action[1:]
+
         match, params = tuple_to_match(self.zx_match_diagram, self.data, action, self.data_index)
         rewrite(self.zx_diagram, match, params)
         remove_isolated_nodes(self.zx_diagram)

@@ -1,13 +1,10 @@
-import gym.vector
 import torch
-import torch_geometric as pyg
 
 from alphazx.diagram import METADATA, POSSIBLE_PHASES
 from alphazx.distributions import AlphaZXDistribution
 from alphazx.game import ZXGame
 from alphazx.models import pre_process
 from alphazx.models.homogeneous.mcts.alphazx_model import AlphaZXModel
-from tests.models.alphazx_model import check_model_consistency
 
 torch.set_default_tensor_type(torch.DoubleTensor)
 
@@ -61,24 +58,20 @@ model = AlphaZXModel(num_node_types,
                      value_gmt_layer_norm,
                      value_gmt_dropout)
 
-num_envs = 8
-max_episode_length = 100
+max_episode_length = 1000
 num_qubits = 10
 depth = 10
-zx_env = gym.vector.SyncVectorEnv(
-    [lambda: ZXGame(num_qubits, depth, max_episode_length=max_episode_length, pe_dim=pe_dim) for _ in range(num_envs)])
-data, reward, done, stats = zx_env.reset()
+zx_game = ZXGame(num_qubits, depth, max_episode_length=max_episode_length, pe_dim=pe_dim)
+data, reward, done, stats = zx_game.reset()
 while not done:
     data = pre_process(data, pe_dim)
     azx_dist_params, value = model(data.x, data.edge_index, data.edge_attr, data.node_type, data.b, data.pe)
-    check_model_consistency(pyg.data.Batch.from_data_list([data]), azx_dist_params)
     azx_dist = AlphaZXDistribution(azx_dist_params)
-    sampled_action = azx_dist.sample(1)
-    sampled_rewrite_types = sampled_action[:, 0]
-    sampled_nodes = sampled_action[:, 1]
-    action = sampled_action.numpy()
-    data, reward, done, stats = zx_env.step(action)
+    action = tuple(azx_dist.sample(1).squeeze().tolist())
+    print('prob = ', torch.exp(azx_dist.log_prob(torch.tensor(action).unsqueeze(dim=0).unsqueeze(dim=0))))
+    data, reward, done, stats = zx_game.step(action)
     print('action = ', action)
     print('reward = ', reward)
     print('done = ', done)
     print('stats = ', stats)
+
