@@ -4,7 +4,7 @@ import torch_geometric as pyg
 import torch
 from alphazx.diagram import METADATA, POSSIBLE_PHASES, clifford_zx_diagram, to_zx_match_diagram
 from alphazx.distributions import AlphaZXDistribution, AlphaZXDistributionParams
-from alphazx.game import remove_isolated_nodes, remove_self_loop_edges, remove_isolated_components
+from alphazx.game import remove_isolated_nodes, remove_self_loop_edges, remove_isolated_components, ZXGame
 from alphazx.models import pre_process, is_all_zero
 from alphazx.models.homogeneous.mcts.alphazx_model import AlphaZXModel
 
@@ -15,14 +15,14 @@ torch.set_printoptions(threshold=60_000)
 num_node_types = len(METADATA.node_type_abbrevs)
 num_possible_phases = len(POSSIBLE_PHASES)
 num_possible_new_edges = 5
-pe_dim = 20
+walk_length = 20
 repr_gps_node_embedding_out_channels = 64
 repr_gps_node_out_channels = 64
 repr_gps_num_edge_embeddings = len(METADATA.edge_feat_to_index_dict)
 repr_gps_edge_embedding_out_channels = 64
 repr_gps_edge_out_channels = 64
-repr_gps_pe_in_channels = pe_dim
-repr_gps_pe_out_channels = pe_dim
+repr_gps_pe_in_channels = walk_length
+repr_gps_pe_out_channels = walk_length
 repr_gps_num_layers = 2
 repr_gps_bias = True
 repr_gps_num_attn_heads = 4
@@ -129,29 +129,76 @@ def check_model_consistency(batch: pyg.data.Batch, azx_dist_params: AlphaZXDistr
                 assert rewrite_type_dist_component != 0., f'Expected non-zero entry rewrite type component for rewrite type {sampled_rewrite_type} in batch {b_idx}\nazx_dist_params = {azx_dist_params.mixture_dist_probs}'
 
 
-# with torch.no_grad():
-#     num_batches = 2
-#     batch_size = 4
-#     num_qubits = 5
-#     depth = 5
-#     batch_list = create_batch_list(num_batches, batch_size, num_qubits, depth)
-#     for b in batch_list:
-#         b = b.sort(False)
-#         b = pre_process(b, pe_dim)
-#         azx_dist_params, value = model(b.x, b.edge_index, b.edge_attr, b.node_type, b.batch, b.pe)
-        # print('mixture_dist_params = ', azx_dist_params.mixture_dist_probs)
-        # print('node_dist_params = ', azx_dist_params.node_dist_probs)
-        # print('phase_dist_probs = ', azx_dist_params.phase_dist_probs)
-        # check_model_consistency(b, azx_dist_params)
-        # azx_dist = AlphaZXDistribution(azx_dist_params)
-        # sampled_actions = azx_dist.sample(2)
-        # print('sampled_actions = ', sampled_actions)
-        # probs = azx_dist.probs(sampled_actions)
-        # print('probs = ', probs)
-        # sampled_action_types = azx_dist.sample_action_types(1)
-        # print('sampled_action_types = ', sampled_action_types)
-        # print('rewrite_type_probs = ', azx_dist.action_type_log_probs(sampled_action_types).exp())
-        # sampled_nodes = azx_dist.sample_nodes(sampled_action_types)
-        # print('sampled_nodes = ', sampled_nodes)
-        # print('node_probs = ', azx_dist.node_log_probs(sampled_action_types, sampled_nodes).exp())
+num_envs = 8
+max_episode_length = 1000
+num_qubits = 10
+depth = 10
+envs = [ZXGame(num_qubits, depth, max_episode_length=max_episode_length, pe_dim=walk_length) for _ in range(num_envs)]
+
+step_data = [env.reset() for env in envs]
+while not any([step_datum[2] for step_datum in step_data]):
+    b = pyg.data.Batch.from_data_list([step_datum[0] for step_datum in step_data])
+    b = pre_process(b, walk_length)
+    azx_dist_params, value = model(b.x, b.edge_index, b.edge_attr, b.node_type, b.batch, b.pe)
+    azx_dist = AlphaZXDistribution(azx_dist_params)
+    sampled_actions = azx_dist.sample(1)
+    print('sampled_actions = ', sampled_actions)
+    probs = torch.exp(azx_dist.log_prob(sampled_actions))
+    print('probs = ', probs)
+    for env_id, action in enumerate(sampled_actions[0]):
+        action = tuple(action.tolist())
+        step_datum = envs[env_id].step(action)
+        data, reward, done, stats = step_datum
+        print('env_id = ', env_id)
+        print('action = ', action)
+        print('reward = ', reward)
+        print('done = ', done)
+        print('stats = ', stats)
+        step_data[env_id] = step_datum
+
+
+# for b in batch_list:
+#     b = b.sort(False)
+#     b = pre_process(b, pe_dim)
+#     azx_dist_params, value = model(b.x, b.edge_index, b.edge_attr, b.node_type, b.batch, b.pe)
+#     print('mixture_dist_params = ', azx_dist_params.mixture_dist_probs)
+#     print('node_dist_params = ', azx_dist_params.node_dist_probs)
+#     print('phase_dist_probs = ', azx_dist_params.phase_dist_probs)
+#     # check_model_consistency(b, azx_dist_params)
+#     azx_dist = AlphaZXDistribution(azx_dist_params)
+#     sampled_actions = azx_dist.sample(2)
+#     print('sampled_actions = ', sampled_actions)
+#     probs = azx_dist.probs(sampled_actions)
+#     print('probs = ', probs)
+#     sampled_action_types = azx_dist.sample_action_types(1)
+#     print('sampled_action_types = ', sampled_action_types)
+#     print('rewrite_type_probs = ', azx_dist.action_type_log_probs(sampled_action_types).exp())
+#     sampled_nodes = azx_dist.sample_nodes(sampled_action_types)
+#     print('sampled_nodes = ', sampled_nodes)
+#     print('node_probs = ', azx_dist.node_log_probs(sampled_action_types, sampled_nodes).exp())
+
+# num_batches = 6
+# batch_size = 4
+# num_qubits = 25
+# depth = 25
+# batch_list = create_batch_list(num_batches, batch_size, num_qubits, depth)
+# for b in batch_list:
+#     b = b.sort(False)
+#     b = pre_process(b, pe_dim)
+#     azx_dist_params, value = model(b.x, b.edge_index, b.edge_attr, b.node_type, b.batch, b.pe)
+#     print('mixture_dist_params = ', azx_dist_params.mixture_dist_probs)
+#     print('node_dist_params = ', azx_dist_params.node_dist_probs)
+#     print('phase_dist_probs = ', azx_dist_params.phase_dist_probs)
+#     # check_model_consistency(b, azx_dist_params)
+#     azx_dist = AlphaZXDistribution(azx_dist_params)
+#     sampled_actions = azx_dist.sample(2)
+#     print('sampled_actions = ', sampled_actions)
+#     probs = azx_dist.probs(sampled_actions)
+#     print('probs = ', probs)
+#     sampled_action_types = azx_dist.sample_action_types(1)
+#     print('sampled_action_types = ', sampled_action_types)
+#     print('rewrite_type_probs = ', azx_dist.action_type_log_probs(sampled_action_types).exp())
+#     sampled_nodes = azx_dist.sample_nodes(sampled_action_types)
+#     print('sampled_nodes = ', sampled_nodes)
+#     print('node_probs = ', azx_dist.node_log_probs(sampled_action_types, sampled_nodes).exp())
 

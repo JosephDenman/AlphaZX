@@ -35,18 +35,20 @@ def concatenate_with_neighbor_features(x: torch.Tensor, edge_index: torch.Tensor
     return x_
 
 
-def pad_and_stack_actions(tensors: list[torch.Tensor], pad_value=0.) -> torch.Tensor:
+def pad_and_stack_actions(action_batches: list[torch.Tensor], pad_value=0.) -> torch.Tensor:
     # Find the maximum length (L_j) in the third dimension across all tensors
-    max_length = max(tensor.size(2) for tensor in tensors)
+    max_length = 0
+    for action_batch in action_batches:
+        max_length = max(max_length, action_batch.shape[1])
 
     # Define a function to pad each tensor to the maximum length
     def pad_tensor(tensor):
-        pad_size = max_length - tensor.size(2)
+        pad_size = max_length - tensor.shape[1]
         return torch.nn.functional.pad(tensor, (0, pad_size), mode='constant', value=pad_value)
 
     # Pad all tensors to the same length and stack them
-    padded_tensors = torch.stack([pad_tensor(tensor) for tensor in tensors])
-    return padded_tensors
+    padded_actions = torch.stack([pad_tensor(action_batch) for action_batch in action_batches])
+    return padded_actions
 
 
 def mask_non_basis_edges(edge_index: torch.Tensor, node_types: torch.Tensor) -> torch.Tensor:

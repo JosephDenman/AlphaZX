@@ -9,6 +9,10 @@ def with_laplacian_pe(data: pyg.data.Data, pe_dimension: int) -> pyg.data.Data:
         data)
 
 
+def with_random_walk_pe(data: pyg.data.Data, walk_length: int) -> pyg.data.Data:
+    return pyg.transforms.AddRandomWalkPE(walk_length=walk_length, attr_name='pe')(data)
+
+
 def with_embeddable_feats(data: pyg.data.Data) -> pyg.data.Data:
     node_feature_idxs = []
     for node_feature in data.x:
@@ -25,7 +29,7 @@ def with_embeddable_feats(data: pyg.data.Data) -> pyg.data.Data:
     return data
 
 
-def pre_process(data: pyg.data.Data, pe_dimension: int = 2):
+def pre_process(data: pyg.data.Data, pe_dimension: int):
     data = with_embeddable_feats(data)
-    data = with_laplacian_pe(data, pe_dimension)
+    data = with_random_walk_pe(data, pe_dimension)
     return data

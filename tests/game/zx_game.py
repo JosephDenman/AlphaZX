@@ -58,20 +58,20 @@ model = AlphaZXModel(num_node_types,
                      value_gmt_layer_norm,
                      value_gmt_dropout)
 
-max_episode_length = 1000
-num_qubits = 10
-depth = 10
-zx_game = ZXGame(num_qubits, depth, max_episode_length=max_episode_length, pe_dim=pe_dim)
-data, reward, done, stats = zx_game.reset()
-while not done:
-    data = pre_process(data, pe_dim)
-    azx_dist_params, value = model(data.x, data.edge_index, data.edge_attr, data.node_type, data.b, data.pe)
-    azx_dist = AlphaZXDistribution(azx_dist_params)
-    action = tuple(azx_dist.sample(1).squeeze().tolist())
-    print('prob = ', torch.exp(azx_dist.log_prob(torch.tensor(action).unsqueeze(dim=0).unsqueeze(dim=0))))
-    data, reward, done, stats = zx_game.step(action)
-    print('action = ', action)
-    print('reward = ', reward)
-    print('done = ', done)
-    print('stats = ', stats)
+# max_episode_length = 1000
+# num_qubits = 10
+# depth = 10
+# zx_game = ZXGame(num_qubits, depth, max_episode_length=max_episode_length, pe_dim=pe_dim)
+# data, reward, done, stats = zx_game.reset()
+# while not done:
+#     data = pre_process(data, pe_dim)
+#     azx_dist_params, value = model(data.x, data.edge_index, data.edge_attr, data.node_type, data.b, data.pe)
+#     azx_dist = AlphaZXDistribution(azx_dist_params)
+#     action = tuple(azx_dist.sample(1).squeeze().tolist())
+#     print('prob = ', torch.exp(azx_dist.log_prob(torch.tensor(action).unsqueeze(dim=0).unsqueeze(dim=0))))
+#     data, reward, done, stats = zx_game.step(action)
+#     print('action = ', action)
+#     print('reward = ', reward)
+#     print('done = ', done)
+#     print('stats = ', stats)
 

@@ -85,7 +85,13 @@ class AlphaZXDistribution:
 
     def select_node_dist_params(self, action_types: torch.Tensor) -> torch.Tensor:
         selected_node_dist_params = self.node_dist_params[torch.arange(self.B), action_types - 11]
-        check_non_zero_rows(selected_node_dist_params)
+        try:
+            check_non_zero_rows(selected_node_dist_params)
+        except Exception as error:
+            print('action_types = ', action_types)
+            print('mixture_dist_params = ', self.mixture_dist_params)
+            print('node_dist_params = ', self.node_dist_params)
+            raise error
         return selected_node_dist_params
 
     def sample_nodes(self, action_types: torch.Tensor) -> torch.Tensor:
