@@ -174,10 +174,7 @@ class ZXGame:
         remove_isolated_components(self.zx_diagram)
         self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram)
         self.diagram_stats = DiagramStats(self.zx_match_diagram)
-        data, self.data_index = self.zx_match_diagram.to_pyg_data(True)
-        # data = pre_process(data, self.pe_dim)
-        data.b = torch.zeros_like(data.node_type)
-        self.data = data
+        self.data, self.data_index = self.zx_match_diagram.to_pyg_data(True)
 
     def step(self, action: tuple) -> tuple[Data, int, bool, dict]:
 
@@ -205,9 +202,7 @@ class ZXGame:
         # self.previous_reward += done_reward if self.done else -self.step_penalty * self.episode_length
         self.episode_return += self.previous_reward
 
-        data, self.data_index = self.zx_match_diagram.to_pyg_data(True)
-        data.b = torch.zeros_like(data.node_type)
-        self.data = data
+        self.data, self.data_index = self.zx_match_diagram.to_pyg_data(True)
         return self.data, self.previous_reward, self.done, self.diagram_stats.to_dict()
 
     def reset(self, start_state: ZXDiagram = None) -> tuple[Data, int, bool, dict]:
@@ -231,7 +226,5 @@ class ZXGame:
         elif self.episode_length == self.max_episode_length:
             self.done = True
 
-        data, self.data_index = self.zx_match_diagram.to_pyg_data(True)
-        data.b = torch.zeros_like(data.node_type)
-        self.data = data
+        self.data, self.data_index = self.zx_match_diagram.to_pyg_data(True)
         return self.data, done_reward, self.done, self.diagram_stats.to_dict()

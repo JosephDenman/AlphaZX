@@ -29,10 +29,7 @@ policy_num_pooling_encoder_blocks = 2
 policy_num_pooling_heads = 32
 policy_pooling_layer_norm = True
 policy_pooling_dropout = 0.15
-value_gmt_num_encoder_blocks = 2
-value_gmt_num_heads = 4
-value_gmt_layer_norm = True
-value_gmt_dropout = 0.15
+value_hidden_channels = 64
 
 model = AlphaZXModel(num_node_types,
                      num_possible_phases,
@@ -53,10 +50,7 @@ model = AlphaZXModel(num_node_types,
                      policy_num_pooling_heads,
                      policy_pooling_layer_norm,
                      policy_pooling_dropout,
-                     value_gmt_num_encoder_blocks,
-                     value_gmt_num_heads,
-                     value_gmt_layer_norm,
-                     value_gmt_dropout)
+                     value_hidden_channels)
 
 # max_episode_length = 1000
 # num_qubits = 10

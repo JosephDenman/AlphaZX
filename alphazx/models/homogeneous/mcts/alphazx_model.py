@@ -30,10 +30,7 @@ class AlphaZXModel(nn.Module):
                  policy_num_pooling_heads: int,
                  policy_pooling_layer_norm: bool,
                  policy_pooling_dropout: float,
-                 value_gmt_num_encoder_blocks: int,
-                 value_gmt_num_heads: int,
-                 value_gmt_layer_norm: bool,
-                 value_gmt_dropout: float):
+                 value_hidden_channels: int):
         super(AlphaZXModel, self).__init__()
         self.representation_network = RepresentationNetwork(num_node_types,
                                                             num_possible_phases,
@@ -53,24 +50,14 @@ class AlphaZXModel(nn.Module):
                                                     num_possible_phases,
                                                     num_possible_new_edges,
                                                     node_out_channels,
+                                                    edge_embedding_out_channels,
                                                     policy_num_pooling_encoder_blocks,
                                                     policy_num_pooling_heads,
                                                     policy_pooling_layer_norm,
                                                     policy_pooling_dropout,
-                                                    value_gmt_num_encoder_blocks,
-                                                    value_gmt_num_heads,
-                                                    value_gmt_layer_norm,
-                                                    value_gmt_dropout)
+                                                    value_hidden_channels)
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor, edge_attr: torch.Tensor, node_type: torch.Tensor, batch: torch.Tensor, pe: torch.Tensor) -> tuple[AlphaZXDistributionParams, torch.Tensor]:
-        x = self.representation_network(x, edge_index, edge_attr, batch, pe)
-        policy, value = self.prediction_network(x, edge_index, node_type, batch)
+        x, edge_attr = self.representation_network(x, edge_index, edge_attr, batch, pe)
+        policy, value = self.prediction_network(x, edge_index, edge_attr, node_type, batch)
         return policy, value
-
-    def compute_policy_value(self, x: torch.Tensor, edge_index: torch.Tensor, node_type: torch.Tensor, batch: torch.Tensor, pe: torch.Tensor) -> tuple[AlphaZXDistributionParams, torch.Tensor]:
-        x = self.representation_network(x, edge_index, batch, pe)
-        policy, value = self.prediction_network(x, edge_index, node_type, batch)
-        return policy, value
-
-    def compute_logp_value(self, data: pyg.data.Data) -> tuple[torch.Tensor, torch.Tensor]:
-        pass

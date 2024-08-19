@@ -69,7 +69,7 @@ def trans_dec_test():
 def pad_or_strip(source: torch.Tensor, target_size: int, fill_value: float = 0.) -> torch.Tensor:
     """
     Adds or removes padding (with fill value `fill_value`) from the last dimension of `source` so that the last dimension
-    of `source` is the same size as the last dimension of `target`. Both tensors are assumed to be three-dimensional. It
+    of `source` is the same size as `target_size`. Both tensors are assumed to be three-dimensional. It
     is possible that the last dimension of `source` is larger or smaller than the last dimension of `target`.
 
     :param source: The tensor to be padded.

@@ -27,8 +27,8 @@ class GPS(torch.nn.Module):
                  attn_kwargs: dict[str, Any],
                  mlp_hidden_channels: int):
         super().__init__()
-        self.node_emb = Embedding(num_node_embeddings, node_embedding_out_channels, dtype=torch.float64, sparse=True)
-        self.edge_emb = Embedding(num_edge_embeddings, edge_embedding_out_channels, dtype=torch.float64, sparse=True)
+        self.node_emb = Embedding(num_node_embeddings, node_embedding_out_channels, dtype=torch.float64)
+        self.edge_emb = Embedding(num_edge_embeddings, edge_embedding_out_channels, dtype=torch.float64)
         self.pe_norm = BatchNorm1d(pe_in_channels)
         self.pe_lin = Linear(pe_in_channels, pe_out_channels, bias=bias)
         self.convs = ModuleList()
@@ -68,7 +68,7 @@ class GPS(torch.nn.Module):
                 edge_index: torch.Tensor,
                 edge_attr: torch.Tensor,
                 batch: torch.Tensor,
-                pe: torch.Tensor) -> torch.Tensor:
+                pe: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         x = self.node_emb(x.long())
         edge_attr = self.edge_emb(edge_attr.long())
         pe = self.pe_norm(pe)
@@ -76,4 +76,4 @@ class GPS(torch.nn.Module):
         x = torch.cat((x, pe), 1)
         for conv in self.convs:
             x = conv(x, edge_index, batch, edge_attr=edge_attr)
-        return self.mlp(x)
+        return self.mlp(x), edge_attr

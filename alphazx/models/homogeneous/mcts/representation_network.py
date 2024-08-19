@@ -47,5 +47,5 @@ class RepresentationNetwork(nn.Module):
     def dense_parameters(self):
         return self.gps.dense_parameters()
 
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, edge_attr: torch.Tensor, batch: torch.Tensor, pe: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, edge_attr: torch.Tensor, batch: torch.Tensor, pe: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         return self.gps(x, edge_index, edge_attr, batch, pe)

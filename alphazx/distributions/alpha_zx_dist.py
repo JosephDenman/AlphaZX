@@ -121,7 +121,7 @@ class AlphaZXDistribution:
     def sample_features(self, feature_type: str, nodes: torch.Tensor) -> torch.Tensor:
         if feature_type == 'phase' or feature_type == 'new_edge':
             selected_feature_dist_params = self.select_feature_dist_params(feature_type, nodes)
-            check_non_zero_rows(selected_feature_dist_params)
+            assert_not_all_zero(selected_feature_dist_params)
             feature_dist = Categorical(probs=selected_feature_dist_params, validate_args=True)
             sampled_feature = feature_dist.sample(torch.Size([1]))
             return sampled_feature
