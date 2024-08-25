@@ -25,8 +25,8 @@ def assert_correct_match_instance(expected_class: Type[MatchNode], match: MatchN
 def tuple_to_match(zx_match_diagram: ZXMatchDiagram, data: Data, action: tuple, data_index: DataIndexToMatch) -> tuple[
     MatchNode, FRightParameters | None]:
     # In this function, the batch dimension of 'action' is always one.
-    action_type = action[0] - 11
-    match = data_index[action[1]]
+    action_type = action[1] - 11
+    match = data_index[action[2]]
     if action_type == FRightZMatch.index or action_type == FRightXMatch.index:
         if action_type == FRightZMatch:
             assert_correct_match_instance(FRightZMatch, match)

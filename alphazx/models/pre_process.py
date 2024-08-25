@@ -29,7 +29,7 @@ def with_embeddable_feats(data: pyg.data.Data) -> pyg.data.Data:
     return data
 
 
-def pre_process(data: pyg.data.Data, pe_dimension: int):
+def pre_process(data: pyg.data.Batch, pe_dimension: int) -> pyg.data.Batch:
     data = with_embeddable_feats(data)
     data = with_random_walk_pe(data, pe_dimension)
     return data

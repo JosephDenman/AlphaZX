@@ -44,7 +44,7 @@ def compute_transfer_edges(node: int,
 
 def compute_f_right_params(action: tuple, data: pyg.data.Data, data_index: DataIndexToMatch,
                            zx_match_diagram: ZXMatchDiagram) -> FRightParameters:
-    phase = compute_new_phase(action[2], zx_match_diagram.phase_denominator)
-    new_edges = compute_num_new_edges(action[3])
-    transfer_edges = compute_transfer_edges(action[1], action[4:], data, data_index)
+    phase = compute_new_phase(action[3], zx_match_diagram.phase_denominator)
+    new_edges = compute_num_new_edges(action[4])
+    transfer_edges = compute_transfer_edges(action[2], action[5:], data, data_index)
     return FRightParameters(phase, new_edges, transfer_edges)

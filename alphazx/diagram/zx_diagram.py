@@ -12,6 +12,8 @@ from alphazx.diagram.match import MatchNode, FRightMatch, FRightZMatch, FRightXM
     BLeftMatch, BRightMatch, YLeftMatch, YRightMatch, YLeftXMatch, YLeftZMatch, YRightZMatch, YRightXMatch, BoundaryMatch, is_boundary, \
     is_basis, is_z_basis, is_x_basis, SimpleMatchNode, METADATA
 
+current_index = 0
+
 
 class ZXDiagram(nx.MultiGraph):
     NTYPE = 'type'
@@ -23,7 +25,9 @@ class ZXDiagram(nx.MultiGraph):
         self.phase_denominator = phase_denominator
         super().__init__(incoming_graph_data=nx_graph, multigraph_input=True)
         self.next_node_index = max(nx_graph.nodes()) + 1 if self.number_of_nodes() > 0 else 0
-        self.id = uuid.uuid1().int >> 64
+        global current_index
+        self.id = current_index
+        current_index += 1
         self._z_nodes_set = set()
         self._x_nodes_set = set()
         self._b_nodes_set = set()

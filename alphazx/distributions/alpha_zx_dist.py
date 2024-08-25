@@ -26,6 +26,7 @@ def check_non_zero_rows(t: torch.Tensor) -> None:
 
 
 class AlphaZXDistributionParams(NamedTuple):
+    graph_ids: torch.Tensor
     mixture_dist_probs: torch.Tensor
     node_dist_probs: torch.Tensor
     phase_dist_probs: torch.Tensor
@@ -67,6 +68,7 @@ class AlphaZXDistribution:
                                    in the top left corner of the innermost 2D tensor. All other entries in the innermost 2D tensor are 0.
                                    Samples drawn from this distribution are all zeros (no edges are selected to be transferred).
         """
+        self.graph_ids = params.graph_ids
         check_non_zero_rows(params.mixture_dist_probs)
         self.mixture_dist_params = params.mixture_dist_probs
         self.B = self.mixture_dist_params.shape[0]
@@ -88,9 +90,6 @@ class AlphaZXDistribution:
         try:
             check_non_zero_rows(selected_node_dist_params)
         except Exception as error:
-            print('action_types = ', action_types)
-            print('mixture_dist_params = ', self.mixture_dist_params)
-            print('node_dist_params = ', self.node_dist_params)
             raise error
         return selected_node_dist_params
 
@@ -169,11 +168,14 @@ class AlphaZXDistribution:
                                 sampled_actions_batch[b] is the set of actions sampled at some step in a trajectory.
         :return: The log probability of each sampled action.
         """
-        action_types = sampled_actions[:, :, 0]
-        nodes = sampled_actions[:, :, 1]
-        phases = sampled_actions[:, :, 2]
-        new_edges = sampled_actions[:, :, 3]
-        transfer_edges = sampled_actions[:, :, 4:]
+        graph_ids = sampled_actions[:, :, 0]
+        action_types = sampled_actions[:, :, 1]
+        nodes = sampled_actions[:, :, 2]
+        phases = sampled_actions[:, :, 3]
+        new_edges = sampled_actions[:, :, 4]
+        transfer_edges = sampled_actions[:, :, 5:]
+        if not torch.equal(graph_ids.long()[0], self.graph_ids.long()):
+            raise Exception(f'Expected graph ids {self.graph_ids.long()}, received {graph_ids.long()[0]}')
         action_type_log_probs = self.action_type_log_probs(action_types)
         node_log_probs = self.node_log_probs(action_types, nodes)
         phase_log_probs = self.new_phase_log_probs(nodes, phases)
@@ -198,7 +200,8 @@ class AlphaZXDistribution:
         phases = self.sample_phases(nodes)[0]
         new_edges = self.sample_new_edges(nodes)[0]
         transfer_edges = self.sample_transfer_edges(nodes)[0]
-        return torch.cat((torch.stack((action_types, nodes, phases, new_edges), dim=-1), transfer_edges), dim=-1).long()
+        samples = torch.cat((self.graph_ids.reshape(1, -1, 1), torch.stack((action_types, nodes, phases, new_edges), dim=-1), transfer_edges), dim=-1).long()
+        return samples
 
     @staticmethod
     def entropy() -> torch.Tensor:
