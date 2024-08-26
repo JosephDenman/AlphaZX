@@ -1,13 +1,12 @@
 from typing import Type
 
 import networkx as nx
-import torch
 from torch_geometric.data import Data
 
 from alphazx.diagram.action_decoder import compute_f_right_params
 from alphazx.diagram.diagram_generators import clifford_zx_diagram
 from alphazx.diagram.match import MatchNode, FRightZMatch, FLeftZMatch, FRightXMatch, FLeftXMatch, \
-    BRightMatch, BLeftMatch, YRightZMatch, YLeftZMatch, YRightXMatch, YLeftXMatch
+    BRightMatch, BLeftMatch, YRightZMatch, YLeftZMatch, YRightXMatch, YLeftXMatch, METADATA
 from alphazx.diagram.zx_diagram import ZXDiagram
 from alphazx.diagram.zx_match_diagram import ZXMatchDiagram, to_zx_match_diagram, DataIndexToMatch
 from alphazx.rewriting.utils import rewrite, FRightParameters
@@ -74,36 +73,29 @@ def is_simplified(zx_diagram: ZXDiagram) -> bool:
 
 class DiagramStats:
     def __init__(self, zx_match_diagram: ZXMatchDiagram):
+        for match_node_type_abbrev in METADATA.match_node_type_abbrevs:
+            attr_name = f'{match_node_type_abbrev}_nodes'
+            setattr(self, attr_name, len(getattr(zx_match_diagram, attr_name)))
         self.num_nodes = zx_match_diagram.zx_diagram.number_of_nodes()
-        self.num_b_nodes = zx_match_diagram.zx_diagram.num_b_nodes()
-        self.num_z_nodes = zx_match_diagram.zx_diagram.num_z_nodes()
-        self.num_x_nodes = zx_match_diagram.zx_diagram.num_x_nodes()
-        self.num_non_clifford_gates = num_non_clifford_gates(zx_match_diagram.zx_diagram)
         self.num_edges = zx_match_diagram.zx_diagram.num_edges()
-        self.num_b_left_matches = len(zx_match_diagram.bl_nodes)
+        self.num_non_clifford_gates = num_non_clifford_gates(zx_match_diagram.zx_diagram)
 
-    def to_dict(self) -> dict[str, int]:
-        return {
-            'num_nodes': self.num_nodes,
-            'num_b_nodes': self.num_b_nodes,
-            'num_z_nodes': self.num_z_nodes,
-            'num_x_nodes': self.num_x_nodes,
-            'num_non_clifford_gates': self.num_non_clifford_gates,
-            'num_edges': self.num_edges,
-            'num_b_left_matches': self.num_b_left_matches
-        }
+
+def rewrite_weight(diagram_stats_key: str) -> int:
+    if diagram_stats_key == 'num_non_clifford_gates':
+        return 5
+    else:
+        return 2
 
 
 def calculate_reward(old_diagram_stats: DiagramStats, new_diagram_stats: DiagramStats) -> int:
-    """
-    -2 for every node
-    -3 for every new edge
-    -5 for every new non-Clifford gate.
-    """
-    return 3 * (old_diagram_stats.num_edges - new_diagram_stats.num_edges) + 5 * (
-            old_diagram_stats.num_non_clifford_gates - new_diagram_stats.num_non_clifford_gates) + 2 * (
-            old_diagram_stats.num_z_nodes - new_diagram_stats.num_z_nodes) + 2 * (
-            old_diagram_stats.num_x_nodes - new_diagram_stats.num_x_nodes)
+    reward = 0
+    old_diagram_stats_dict = vars(old_diagram_stats)
+    new_diagram_stats_dict = vars(new_diagram_stats)
+    for diagram_stats_key, stat in old_diagram_stats_dict.items():
+        reward += rewrite_weight(diagram_stats_key) * (
+                old_diagram_stats_dict[diagram_stats_key] - new_diagram_stats_dict[diagram_stats_key])
+    return reward
 
 
 class EpisodeStats:
@@ -176,6 +168,16 @@ class ZXGame:
         self.diagram_stats = DiagramStats(self.zx_match_diagram)
         self.data, self.data_index = self.zx_match_diagram.to_pyg_data(True)
 
+    def __calculate_done_reward(self) -> tuple[bool, int]:
+        done_reward = 0
+        done = False
+        if is_simplified(self.zx_diagram):
+            done = True
+            done_reward = self.simplified_reward
+        elif self.episode_length == self.max_episode_length:
+            done = True
+        return done, done_reward
+
     def step(self, action: tuple) -> tuple[Data, int, bool, dict]:
 
         match, params = tuple_to_match(self.zx_match_diagram, self.data, action, self.data_index)
@@ -190,20 +192,11 @@ class ZXGame:
         old_diagram_stats = self.diagram_stats
         self.diagram_stats = DiagramStats(self.zx_match_diagram)
         self.previous_reward = calculate_reward(old_diagram_stats, self.diagram_stats)
-
-        done_reward = 0
-        self.done = False
-        if is_simplified(self.zx_diagram):
-            self.done = True
-            done_reward = self.simplified_reward
-        elif self.episode_length == self.max_episode_length:
-            self.done = True
-
-        # self.previous_reward += done_reward if self.done else -self.step_penalty * self.episode_length
-        self.episode_return += self.previous_reward
+        self.done, done_reward = self.__calculate_done_reward()
+        self.episode_return += self.previous_reward + done_reward
 
         self.data, self.data_index = self.zx_match_diagram.to_pyg_data(True)
-        return self.data, self.previous_reward, self.done, self.diagram_stats.to_dict()
+        return self.data, self.previous_reward, self.done, {'diagram_stats': vars(self.diagram_stats)}
 
     def reset(self, start_state: ZXDiagram = None) -> tuple[Data, int, bool, dict]:
         self.episode_return = 0.
@@ -217,14 +210,6 @@ class ZXGame:
         remove_isolated_components(self.zx_diagram)
         self.zx_match_diagram = to_zx_match_diagram(self.zx_diagram)
         self.diagram_stats = DiagramStats(self.zx_match_diagram)
-
-        done_reward = 0
-        self.done = False
-        if is_simplified(self.zx_diagram):
-            self.done = True
-            done_reward = self.simplified_reward
-        elif self.episode_length == self.max_episode_length:
-            self.done = True
-
+        self.done, done_reward = self.__calculate_done_reward()
         self.data, self.data_index = self.zx_match_diagram.to_pyg_data(True)
-        return self.data, done_reward, self.done, self.diagram_stats.to_dict()
+        return self.data, done_reward, self.done, {'diagram_stats': vars(self.diagram_stats)}
