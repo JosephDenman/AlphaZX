@@ -52,7 +52,7 @@ class TransferEdgeSelector(torch.nn.Module):
             bias=mlp_bias)
 
     def reset_parameters(self):
-        self.nmt.reset_parameters()
+        self.neighbor_trans.reset_parameters()
         self.mlp.reset_parameters()
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor, node_types: torch.Tensor,

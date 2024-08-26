@@ -16,7 +16,7 @@ class RewriteTypeSelector(torch.nn.Module):
                               out_channels=1, num_layers=num_layers, dropout=pooling_dropout, norm='layer_norm')
 
     def reset_parameters(self):
-        self.mixture_mlp.reset_parameters()
+        self.mlp.reset_parameters()
 
     def forward(self, x: torch.Tensor, node_types: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
         x = self.mlp(x).squeeze(dim=-1)
