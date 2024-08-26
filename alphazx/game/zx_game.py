@@ -83,7 +83,7 @@ class DiagramStats:
 
 def rewrite_weight(diagram_stats_key: str) -> int:
     if diagram_stats_key == 'num_non_clifford_gates':
-        return 5
+        return 20
     else:
         return 2
 
