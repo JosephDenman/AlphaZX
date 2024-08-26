@@ -23,16 +23,24 @@ def policy_network():
     num_possible_phases = len(POSSIBLE_PHASES)
     num_possible_new_edges = 10
     node_embedding_channels = 1
-    num_pooling_encoder_blocks = 2
-    num_pooling_heads = 1
+    rts_num_layers = 4
+    ns_num_layers = 4
+    nps_num_layers = 4
+    nes_num_layers = 4
+    tes_num_pooling_encoder_blocks = 2
+    tes_num_pooling_heads = 1
     pooling_layer_norm = True
     pooling_dropout = 0.0
     return PolicyNetwork(num_node_types,
                          num_possible_phases,
                          num_possible_new_edges,
                          node_embedding_channels,
-                         num_pooling_encoder_blocks,
-                         num_pooling_heads,
+                         rts_num_layers,
+                         ns_num_layers,
+                         nps_num_layers,
+                         nes_num_layers,
+                         tes_num_pooling_encoder_blocks,
+                         tes_num_pooling_heads,
                          pooling_layer_norm,
                          pooling_dropout)
     # dataloader = create_data_loader(num_diagrams, batch_size, num_qubits, depth)

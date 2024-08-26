@@ -5,11 +5,11 @@ from alphazx.models import softmax_nonzero_entries, throw_on_nan
 
 
 class NodeSelector(torch.nn.Module):
-    def __init__(self, node_embedding_channels: int, num_node_types: int, dropout: float):
+    def __init__(self, node_embedding_channels: int, num_node_types: int, num_layers: int, dropout: float):
         super().__init__()
         self.num_node_types = num_node_types
         self.mlp = pyg.nn.MLP(in_channels=node_embedding_channels, hidden_channels=node_embedding_channels,
-                              out_channels=1, num_layers=4, dropout=dropout, norm='layer_norm')
+                              out_channels=1, num_layers=num_layers, dropout=dropout, norm='layer_norm')
 
     def reset_parameters(self):
         self.mlp.reset_parameters()

@@ -5,11 +5,11 @@ from alphazx.diagram.match import FRightZMatch, FRightXMatch
 
 
 class NewEdgeSelector(torch.nn.Module):
-    def __init__(self, node_embedding_channels: int, num_possible_new_edges: int, dropout: float):
+    def __init__(self, node_embedding_channels: int, num_possible_new_edges: int, num_layers: int, dropout: float):
         super().__init__()
         self.num_possible_new_edges = num_possible_new_edges
         self.mlp = pyg.nn.MLP(in_channels=node_embedding_channels, hidden_channels=node_embedding_channels,
-                              out_channels=num_possible_new_edges, num_layers=4, dropout=dropout, norm='layer_norm')
+                              out_channels=num_possible_new_edges, num_layers=num_layers, dropout=dropout, norm='layer_norm')
 
     def reset_parameters(self):
         self.mlp.reset_parameters()

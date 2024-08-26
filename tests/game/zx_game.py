@@ -22,10 +22,14 @@ repr_gps_num_attn_heads = 4
 repr_gps_attn_type = 'multihead'
 repr_gps_attn_kwargs = {}
 repr_gps_mlp_hidden_channels = 64
-policy_num_pooling_encoder_blocks = 2
-policy_num_pooling_heads = 32
-policy_pooling_layer_norm = True
-policy_pooling_dropout = 0.15
+policy_rts_num_layers = 4
+policy_ns_num_layers = 4
+policy_nps_num_layers = 4
+policy_nes_num_layers = 4
+policy_tes_num_pooling_encoder_blocks = 4
+policy_tes_num_pooling_heads = 4
+policy_tes_pooling_layer_norm = True
+policy_pooling_dropout = 0.1
 value_hidden_channels = 64
 
 model = AlphaZXModel(num_node_types,
@@ -43,9 +47,13 @@ model = AlphaZXModel(num_node_types,
                      repr_gps_attn_type,
                      repr_gps_attn_kwargs,
                      repr_gps_mlp_hidden_channels,
-                     policy_num_pooling_encoder_blocks,
-                     policy_num_pooling_heads,
-                     policy_pooling_layer_norm,
+                     policy_rts_num_layers,
+                     policy_ns_num_layers,
+                     policy_nps_num_layers,
+                     policy_nes_num_layers,
+                     policy_tes_num_pooling_encoder_blocks,
+                     policy_tes_num_pooling_heads,
+                     policy_tes_pooling_layer_norm,
                      policy_pooling_dropout,
                      value_hidden_channels)
 

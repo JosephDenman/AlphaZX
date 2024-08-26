@@ -16,23 +16,25 @@ class PolicyNetwork(nn.Module):
                  num_possible_phases: int,
                  num_possible_new_edges: int,
                  node_embedding_channels: int,
-                 num_pooling_encoder_blocks: int,
-                 num_pooling_heads: int,
-                 pooling_layer_norm: bool,
+                 rts_num_layers: int,
+                 ns_num_layers: int,
+                 nps_num_layers: int,
+                 nes_num_layers: int,
+                 tes_num_pooling_encoder_blocks: int,
+                 tes_num_pooling_heads: int,
+                 tes_pooling_layer_norm: bool,
                  dropout: float):
         super(PolicyNetwork, self).__init__()
         self.num_node_types = num_node_types
         self.num_possible_phases = num_possible_phases
         self.num_possible_new_edges = num_possible_new_edges
-        self.rewrite_type_selector = RewriteTypeSelector(node_embedding_channels, num_node_types,
-                                                         num_pooling_encoder_blocks, num_pooling_heads,
-                                                         pooling_layer_norm, dropout)
-        self.node_selector = NodeSelector(node_embedding_channels, num_node_types, dropout)
-        self.new_phase_selector = NewPhaseSelector(node_embedding_channels, num_possible_phases, dropout)
-        self.new_edge_selector = NewEdgeSelector(node_embedding_channels, num_possible_new_edges, dropout)
+        self.rewrite_type_selector = RewriteTypeSelector(node_embedding_channels, num_node_types, rts_num_layers, dropout)
+        self.node_selector = NodeSelector(node_embedding_channels, num_node_types, ns_num_layers, dropout)
+        self.new_phase_selector = NewPhaseSelector(node_embedding_channels, num_possible_phases, nps_num_layers, dropout)
+        self.new_edge_selector = NewEdgeSelector(node_embedding_channels, num_possible_new_edges, nes_num_layers, dropout)
         self.transfer_edge_selector = TransferEdgeSelector(node_embedding_channels, num_node_types,
-                                                           num_pooling_encoder_blocks, num_pooling_heads,
-                                                           pooling_layer_norm, dropout)
+                                                           tes_num_pooling_encoder_blocks, tes_num_pooling_heads,
+                                                           tes_pooling_layer_norm, dropout)
 
     def reset_parameters(self):
         self.rewrite_type_selector.reset_parameters()
@@ -49,7 +51,7 @@ class PolicyNetwork(nn.Module):
               MLP?
         :return: Parameters for the AlphaZXDistribution.
         """
-        mixture_probs = self.rewrite_type_selector(x, edge_index, node_type, batch)
+        mixture_probs = self.rewrite_type_selector(x, node_type, batch)
         node_probs = self.node_selector(x, node_type, batch)
         phase_probs = self.new_phase_selector(x, node_type, batch)
         edge_probs = self.new_edge_selector(x, node_type, batch)

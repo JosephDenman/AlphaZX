@@ -13,9 +13,13 @@ class PredictionNetwork(nn.Module):
                  num_possible_new_edges: int,
                  node_embedding_channels: int,
                  edge_embedding_channels: int,
-                 policy_num_pooling_encoder_blocks: int,
-                 policy_num_pooling_heads: int,
-                 policy_pooling_layer_norm: bool,
+                 policy_rts_num_layers: int,
+                 policy_ns_num_layers: int,
+                 policy_nps_num_layers: int,
+                 policy_nes_num_layers: int,
+                 policy_tes_num_pooling_encoder_blocks: int,
+                 policy_tes_num_pooling_heads: int,
+                 policy_tes_pooling_layer_norm: bool,
                  policy_pooling_dropout: float,
                  value_hidden_channels: int):
         super(PredictionNetwork, self).__init__()
@@ -26,9 +30,13 @@ class PredictionNetwork(nn.Module):
                                             num_possible_phases,
                                             num_possible_new_edges,
                                             node_embedding_channels,
-                                            policy_num_pooling_encoder_blocks,
-                                            policy_num_pooling_heads,
-                                            policy_pooling_layer_norm,
+                                            policy_rts_num_layers,
+                                            policy_ns_num_layers,
+                                            policy_nps_num_layers,
+                                            policy_nes_num_layers,
+                                            policy_tes_num_pooling_encoder_blocks,
+                                            policy_tes_num_pooling_heads,
+                                            policy_tes_pooling_layer_norm,
                                             policy_pooling_dropout)
 
     def reset_parameters(self):

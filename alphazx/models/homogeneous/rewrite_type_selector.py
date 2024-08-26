@@ -8,20 +8,17 @@ class RewriteTypeSelector(torch.nn.Module):
     def __init__(self,
                  node_embedding_channels: int,
                  num_node_types: int,
-                 pooling_encoder_blocks: int,
-                 pooling_heads: int,
-                 pooling_layer_norm: bool,
+                 num_layers: int,
                  pooling_dropout: float):
         super().__init__()
         self.num_node_types = num_node_types
         self.mlp = pyg.nn.MLP(in_channels=node_embedding_channels, hidden_channels=node_embedding_channels,
-                              out_channels=1, num_layers=4, dropout=pooling_dropout, norm='layer_norm')
+                              out_channels=1, num_layers=num_layers, dropout=pooling_dropout, norm='layer_norm')
 
     def reset_parameters(self):
         self.mixture_mlp.reset_parameters()
 
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, node_types: torch.Tensor,
-                batch: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, node_types: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
         x = self.mlp(x).squeeze(dim=-1)
         non_super_node_mask = (node_types >= 12) & (node_types <= 21)
         masked_x = x[non_super_node_mask]
