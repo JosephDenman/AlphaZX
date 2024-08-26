@@ -1,8 +1,5 @@
-/tests/rewriting/.hypothesis/
-/tests/diagram/.hypothesis/
-/tests/models/.hypothesis/
-**/__pycache__
-build/
-/dist
+/tests/**/.hypothesis/
+/**/__pycache__/
 AlphaZX.iml
 misc.xml
+/dist/
