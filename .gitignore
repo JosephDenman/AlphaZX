@@ -1,7 +1,7 @@
 /tests/rewriting/.hypothesis/
 /tests/diagram/.hypothesis/
 /tests/models/.hypothesis/
-/**/__pycache__/*
+/__pycache__/*
 build/
 dist/
 dist
