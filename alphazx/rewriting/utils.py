@@ -6,12 +6,12 @@ from alphazx.rewriting.y_rule_rewriter import y_left_rewrite, y_right_rewrite
 
 
 def rewrite(diagram: ZXDiagram, match: MatchNode, f_right_params: tuple[float, int, set[int]] | None = None) -> None:
-    phase, new_edges, transfer_edges = f_right_params
     if isinstance(match, FLeftMatch):
         f_left_rewrite(match, diagram)
     elif isinstance(match, FRightMatch):
         if f_right_params is None:
             raise Exception(f'Expected parameters for {match}')
+        phase, new_edges, transfer_edges = f_right_params
         f_right_rewrite(match, phase, new_edges, transfer_edges, diagram)
     elif isinstance(match, BLeftMatch):
         b_left_rewrite(match, diagram)

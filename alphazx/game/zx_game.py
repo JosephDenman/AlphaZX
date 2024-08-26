@@ -3,7 +3,7 @@ from typing import Type
 import networkx as nx
 from torch_geometric.data import Data
 
-from alphazx.diagram.action_decoder import compute_f_right_params
+from alphazx.diagram.zx_match_diagram import compute_f_right_params
 from alphazx.diagram.diagram_generators import clifford_zx_diagram
 from alphazx.diagram.match import MatchNode, FRightZMatch, FLeftZMatch, FRightXMatch, FLeftXMatch, \
     BRightMatch, BLeftMatch, YRightZMatch, YLeftZMatch, YRightXMatch, YLeftXMatch, METADATA
