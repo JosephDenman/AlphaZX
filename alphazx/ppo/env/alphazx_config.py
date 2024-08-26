@@ -75,4 +75,3 @@ alphazx_ppo_create_config = dict(
 )
 alphazx_ppo_create_config = EasyDict(alphazx_ppo_create_config)
 create_config = alphazx_ppo_create_config
-

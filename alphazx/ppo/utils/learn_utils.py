@@ -1,6 +1,8 @@
 from typing import NamedTuple, Optional
-from alphazx.distributions import AlphaZXDistribution, AlphaZXDistributionParams
+
 import torch
+
+from alphazx.distributions import AlphaZXDistribution, AlphaZXDistributionParams
 
 
 class AlphaZXPPOData(NamedTuple):

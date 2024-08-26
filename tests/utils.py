@@ -12,6 +12,7 @@ def zx_diagram_config_st(max_num_qubits: int = 80, max_depth: int = 80):
         depth = draw(st.integers(1, max_depth))
         t_gates = draw(st.booleans())
         return num_qubits, depth, t_gates
+
     return inner_zx_match_diagram_st()
 
 
@@ -24,7 +25,8 @@ def mask_columns_by_value_st(draw):
 
 @composite
 def random_node_types_st(draw):
-    return torch.Tensor(draw(st.lists(st.sampled_from(METADATA.node_type_indices), unique=True, min_size=0, max_size=len(METADATA.node_type_indices))))
+    return torch.Tensor(draw(st.lists(st.sampled_from(METADATA.node_type_indices), unique=True, min_size=0,
+                                      max_size=len(METADATA.node_type_indices))))
 
 
 @composite

@@ -65,4 +65,3 @@ model = AlphaZXModel(num_node_types,
 #     print('reward = ', reward)
 #     print('done = ', done)
 #     print('stats = ', stats)
-

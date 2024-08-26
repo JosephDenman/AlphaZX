@@ -2,7 +2,6 @@ from typing import Optional
 
 import torch
 from torch import Tensor
-
 from torch_geometric.experimental import disable_dynamic_shapes
 from torch_geometric.nn.aggr import Aggregation
 
@@ -41,16 +40,17 @@ class SetTransformerAggregation(Aggregation):
         dropout (float, optional): Dropout probability of attention weights.
             (default: :obj:`0`)
     """
+
     def __init__(
-        self,
-        channels: int,
-        num_seed_points: int = 1,
-        num_encoder_blocks: int = 1,
-        num_decoder_blocks: int = 1,
-        heads: int = 1,
-        concat: bool = True,
-        layer_norm: bool = False,
-        dropout: float = 0.0,
+            self,
+            channels: int,
+            num_seed_points: int = 1,
+            num_encoder_blocks: int = 1,
+            num_decoder_blocks: int = 1,
+            heads: int = 1,
+            concat: bool = True,
+            layer_norm: bool = False,
+            dropout: float = 0.0,
     ):
         super().__init__()
 
@@ -83,13 +83,13 @@ class SetTransformerAggregation(Aggregation):
 
     @disable_dynamic_shapes(required_args=['dim_size', 'max_num_elements'])
     def forward(
-        self,
-        x: Tensor,
-        index: Optional[Tensor] = None,
-        ptr: Optional[Tensor] = None,
-        dim_size: Optional[int] = None,
-        dim: int = -2,
-        max_num_elements: Optional[int] = None,
+            self,
+            x: Tensor,
+            index: Optional[Tensor] = None,
+            ptr: Optional[Tensor] = None,
+            dim_size: Optional[int] = None,
+            dim: int = -2,
+            max_num_elements: Optional[int] = None,
     ) -> tuple[Tensor, Tensor]:
 
         x, mask = self.to_dense_batch(x, index, ptr, dim_size, dim,

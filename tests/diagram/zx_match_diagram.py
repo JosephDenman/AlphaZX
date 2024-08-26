@@ -1,6 +1,5 @@
 import unittest
 
-import torch
 import torch_geometric.data as pyg_data
 from hypothesis import given
 

@@ -1,8 +1,7 @@
 import torch.nn
 import torch_geometric as pyg
 
-from alphazx.diagram import METADATA
-from alphazx.models import softmax_nonzero_entries, compute_non_super_node_mask, throw_on_nan
+from alphazx.models import softmax_nonzero_entries, throw_on_nan
 
 
 class RewriteTypeSelector(torch.nn.Module):

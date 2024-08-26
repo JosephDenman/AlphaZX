@@ -2,7 +2,6 @@ import torch.nn
 import torch_geometric as pyg
 
 from alphazx.diagram.match import FRightZMatch, FRightXMatch
-from alphazx.models import throw_on_nan
 
 
 class NewPhaseSelector(torch.nn.Module):

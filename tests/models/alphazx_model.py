@@ -1,5 +1,6 @@
-import torch_geometric as pyg
 import torch
+import torch_geometric as pyg
+
 from alphazx.diagram import METADATA, POSSIBLE_PHASES, clifford_zx_diagram, to_zx_match_diagram
 from alphazx.distributions import AlphaZXDistributionParams
 from alphazx.game import remove_isolated_nodes, remove_self_loop_edges, remove_isolated_components
@@ -70,7 +71,8 @@ def create_batch_list(num_batches: int, batch_size: int, num_qubits: int, depth:
     return batch_list
 
 
-def check_model_consistency(batch: pyg.data.Batch, azx_dist_params: AlphaZXDistributionParams, num_samples: int = None, sampled_rewrite_types_batch: torch.Tensor = None) -> None:
+def check_model_consistency(batch: pyg.data.Batch, azx_dist_params: AlphaZXDistributionParams, num_samples: int = None,
+                            sampled_rewrite_types_batch: torch.Tensor = None) -> None:
     # Where mixture parameters are non-zero, there should be the same number of nodes in the data.
     # Only mixture parameters for match nodes should be present.
     # All non-zero node rows should have the same number of nodes of that type in the graph
@@ -105,15 +107,18 @@ def check_model_consistency(batch: pyg.data.Batch, azx_dist_params: AlphaZXDistr
             if (nd_idx >= 1) & (nd_idx <= 10):
                 actual_non_zero_node_prob_idxs = node_dist_probs_row != 0.
                 expected_non_zero_node_prob_idxs = node_type == nd_idx
-                assert torch.equal(actual_non_zero_node_prob_idxs, expected_non_zero_node_prob_idxs), f'Expected node probs {actual_non_zero_node_prob_idxs} for type {nd_idx} to be {expected_non_zero_node_prob_idxs}\nnode_type = {node_type}'
+                assert torch.equal(actual_non_zero_node_prob_idxs,
+                                   expected_non_zero_node_prob_idxs), f'Expected node probs {actual_non_zero_node_prob_idxs} for type {nd_idx} to be {expected_non_zero_node_prob_idxs}\nnode_type = {node_type}'
             else:
-                assert is_all_zero(node_dist_probs_row), f'Expected node probs for type {nd_idx} to be all zero, got {node_dist_probs_row}\nnode_type = {node_type}'
+                assert is_all_zero(
+                    node_dist_probs_row), f'Expected node probs for type {nd_idx} to be all zero, got {node_dist_probs_row}\nnode_type = {node_type}'
 
     if sampled_rewrite_types_batch is not None:
         assert sampled_rewrite_types_batch.shape[1] == len(
             batch), f'Expected {len(batch)} batches in sampled actions {sampled_rewrite_types_batch} but got {sampled_rewrite_types_batch.shape[0]}'
         if num_samples is not None:
-            assert sampled_rewrite_types_batch.shape[0] == num_samples, f'Expected {num_samples} in sampled actions {sampled_rewrite_types_batch} but got {sampled_rewrite_types_batch.shape[1]}'
+            assert sampled_rewrite_types_batch.shape[
+                       0] == num_samples, f'Expected {num_samples} in sampled actions {sampled_rewrite_types_batch} but got {sampled_rewrite_types_batch.shape[1]}'
         for sample_idx in range(sampled_rewrite_types_batch.shape[0]):
             for b_idx in range(sampled_rewrite_types_batch.shape[1]):
                 sampled_rewrite_type = sampled_rewrite_types_batch[sample_idx][b_idx]

@@ -108,7 +108,8 @@ class ZXMatchDiagram(nx.DiGraph):
         data.node_phase = data.x[:, 1].to(dtype=torch.float64)
         data.node_set = data.x[:, 2:].to(dtype=torch.long)
         # TODO: For some reason 'data.sort' does not work...
-        data.edge_index, data.edge_attr = pyg.utils.sort_edge_index(data.edge_index, data.edge_attr, sort_by_row=sort_by_row)
+        data.edge_index, data.edge_attr = pyg.utils.sort_edge_index(data.edge_index, data.edge_attr,
+                                                                    sort_by_row=sort_by_row)
         data.edge_attr = data.edge_attr.to(dtype=torch.long)
         data.edge_type = data.edge_attr[:, 0]
         data.edge_size = data.edge_attr[:, 1]

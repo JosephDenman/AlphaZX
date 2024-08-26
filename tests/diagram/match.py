@@ -96,20 +96,22 @@ class TestFRightMatch(unittest.TestCase):
         assert list(f_right_z_pattern(PD).f_right_x_matches()) == []
 
     def test_disconnected_match_z(self):
-        assert list(disconnected_test_graph(FRightZMatch.abbrev).f_right_z_matches()) == [FRightZMatch(0), FRightZMatch(1)]
+        assert list(disconnected_test_graph(FRightZMatch.abbrev).f_right_z_matches()) == [FRightZMatch(0),
+                                                                                          FRightZMatch(1)]
 
     def test_disconnected_match_x(self):
-        assert list(disconnected_test_graph(FRightXMatch.abbrev).f_right_x_matches()) == [FRightXMatch(0), FRightXMatch(1)]
+        assert list(disconnected_test_graph(FRightXMatch.abbrev).f_right_x_matches()) == [FRightXMatch(0),
+                                                                                          FRightXMatch(1)]
 
     def test_consecutive_parallel_edge_match_z(self):
         assert list(consecutive_parallel_edge_test_graph(FRightZMatch.abbrev).f_right_z_matches()) == [FRightZMatch(57),
-                                                                                                FRightZMatch(45),
-                                                                                                FRightZMatch(23)]
+                                                                                                       FRightZMatch(45),
+                                                                                                       FRightZMatch(23)]
 
     def test_consecutive_parallel_edge_match_x(self):
         assert list(consecutive_parallel_edge_test_graph(FRightXMatch.abbrev).f_right_x_matches()) == [FRightXMatch(57),
-                                                                                                FRightXMatch(45),
-                                                                                                FRightXMatch(23)]
+                                                                                                       FRightXMatch(45),
+                                                                                                       FRightXMatch(23)]
 
 
 def diamond_graph() -> ZXDiagram:

@@ -2,12 +2,13 @@ import copy
 from typing import Any, Optional, Tuple
 
 import numpy as np
-from alphazx.diagram import ZXDiagram
-from alphazx.game.zx_game import ZXGame
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.utils import ENV_REGISTRY
 from easydict import EasyDict
 from gym import spaces
+
+from alphazx.diagram import ZXDiagram
+from alphazx.game.zx_game import ZXGame
 
 
 @ENV_REGISTRY.register('alphazx')

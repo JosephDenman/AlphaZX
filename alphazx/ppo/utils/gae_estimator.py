@@ -1,15 +1,14 @@
-from typing import TYPE_CHECKING, Callable, Optional, Any
-from easydict import EasyDict
+from typing import Callable, Optional, Any
 
 import torch
 import torch_geometric as pyg
 import treetensor.torch as ttorch
-from ding.policy import Policy
 from ding.data import Buffer
-from ding.rl_utils import gae, gae_data, get_train_sample
 from ding.framework import task
+from ding.policy import Policy
+from ding.rl_utils import gae, gae_data
 from ding.utils.data import ttorch_collate
-from ding.torch_utils import to_device
+from easydict import EasyDict
 
 
 def is_batched_graph(data: Any) -> bool:
@@ -34,6 +33,7 @@ def gae_estimator(cfg: EasyDict, policy: Policy, buffer_: Optional[Buffer] = Non
         return task.void()
 
     model = policy.get_attribute('model')
+
     # Unify the shape of obs and action
 
     def _gae(ctx: "OnlineRLContext"):

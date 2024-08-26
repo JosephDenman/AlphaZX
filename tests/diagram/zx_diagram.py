@@ -21,7 +21,8 @@ class TestZXDiagram(unittest.TestCase):
             self.assertEqual(n, n_copy)
             self.assertDictEqual(ndata, ndata_copy)
         self.assertEqual(len(d.edges), len(d_copy.edges))
-        for (s, t, k, edata), (s_copy, t_copy, k_copy, edata_copy) in zip(d.edges(data=True, keys=True), d_copy.edges(data=True, keys=True)):
+        for (s, t, k, edata), (s_copy, t_copy, k_copy, edata_copy) in zip(d.edges(data=True, keys=True),
+                                                                          d_copy.edges(data=True, keys=True)):
             self.assertEqual(s, s_copy)
             self.assertEqual(t, t_copy)
             self.assertEqual(k, k_copy)

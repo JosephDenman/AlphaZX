@@ -30,7 +30,9 @@ class PolicyNetwork(nn.Module):
         self.node_selector = NodeSelector(node_embedding_channels, num_node_types, dropout)
         self.new_phase_selector = NewPhaseSelector(node_embedding_channels, num_possible_phases, dropout)
         self.new_edge_selector = NewEdgeSelector(node_embedding_channels, num_possible_new_edges, dropout)
-        self.transfer_edge_selector = TransferEdgeSelector(node_embedding_channels, num_node_types, num_pooling_encoder_blocks, num_pooling_heads, pooling_layer_norm, dropout)
+        self.transfer_edge_selector = TransferEdgeSelector(node_embedding_channels, num_node_types,
+                                                           num_pooling_encoder_blocks, num_pooling_heads,
+                                                           pooling_layer_norm, dropout)
 
     def reset_parameters(self):
         self.rewrite_type_selector.reset_parameters()
@@ -39,7 +41,8 @@ class PolicyNetwork(nn.Module):
         self.new_edge_selector.reset_parameters()
         self.transfer_edge_selector.reset_parameters()
 
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, node_type: torch.Tensor, batch: torch.Tensor, graph_ids: torch.Tensor) -> AlphaZXDistributionParams:
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, node_type: torch.Tensor, batch: torch.Tensor,
+                graph_ids: torch.Tensor) -> AlphaZXDistributionParams:
         """
         TODO: Have the node, phase, and edge prob computations be autoregressive. Compute mixture probabilities last
               to incorporate intermediate embedding updates. Do we need to do layer norm / residual connection between each
@@ -92,4 +95,3 @@ def pad_or_strip(minibatch_actions: torch.Tensor, minibatch_obs: pyg.data.Batch)
         # If the target's last dimension is smaller or equal, slice the source tensor
         padded_minibatch_actions = minibatch_actions[..., :target_size]
     return padded_minibatch_actions
-

@@ -1,15 +1,16 @@
-import random
+from collections.abc import Iterable
 from collections.abc import Iterable
 from typing import Iterator
 
-import uuid
 import networkx as nx
 import torch
 import torch_geometric as pyg
 
 from alphazx.diagram.constants import S_ETYPE_INDEX
-from alphazx.diagram.match import MatchNode, FRightMatch, FRightZMatch, FRightXMatch, FLeftZMatch, FLeftMatch, FLeftXMatch, \
-    BLeftMatch, BRightMatch, YLeftMatch, YRightMatch, YLeftXMatch, YLeftZMatch, YRightZMatch, YRightXMatch, BoundaryMatch, is_boundary, \
+from alphazx.diagram.match import MatchNode, FRightMatch, FRightZMatch, FRightXMatch, FLeftZMatch, FLeftMatch, \
+    FLeftXMatch, \
+    BLeftMatch, BRightMatch, YLeftMatch, YRightMatch, YLeftXMatch, YLeftZMatch, YRightZMatch, YRightXMatch, \
+    BoundaryMatch, is_boundary, \
     is_basis, is_z_basis, is_x_basis, SimpleMatchNode, METADATA
 
 current_index = 0
@@ -364,8 +365,9 @@ class ZXDiagram(nx.MultiGraph):
         yield from self.y_right_matches()
 
     def to_pyg_hdata(self, sort_by_row: bool = False) -> pyg.data.HeteroData:
-        n_types = torch.tensor([METADATA.node_type_abbrev_index_dict[ndata['type']] for _, ndata in self.nodes(data=True)],
-                               dtype=torch.long)
+        n_types = torch.tensor(
+            [METADATA.node_type_abbrev_index_dict[ndata['type']] for _, ndata in self.nodes(data=True)],
+            dtype=torch.long)
         e_types = torch.tensor(
             [METADATA.edge_type_to_index_dict[edata['type']] for _, _, edata in self.edges(data=True)],
             dtype=torch.long)

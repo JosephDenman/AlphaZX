@@ -54,7 +54,8 @@ def b_left_pattern(d: int, bl: int = 0, br: int = 1, tl: int = 2, tr: int = 3) -
 
 
 def basis_to_ntype_indices(basis: Basis) -> tuple[int, int]:
-    return (FRightZMatch.abbrev, FRightXMatch.abbrev) if basis == FRightZMatch.abbrev else (FRightXMatch.abbrev, FRightZMatch.abbrev)
+    return (FRightZMatch.abbrev, FRightXMatch.abbrev) if basis == FRightZMatch.abbrev else (
+    FRightXMatch.abbrev, FRightZMatch.abbrev)
 
 
 def y_left_pattern(d: int, basis: Basis) -> ZXDiagram:

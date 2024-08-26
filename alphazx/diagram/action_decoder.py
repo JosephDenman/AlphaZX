@@ -1,7 +1,6 @@
 import torch
 import torch_geometric as pyg
 
-from alphazx.diagram.match import FRightMatch
 from alphazx.diagram.zx_match_diagram import DataIndexToMatch, ZXMatchDiagram
 from alphazx.models.utils import compute_basis_neighbors
 from alphazx.rewriting.utils import FRightParameters

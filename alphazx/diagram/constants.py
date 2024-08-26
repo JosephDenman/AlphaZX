@@ -11,6 +11,3 @@ SS_ETYPE_NAME = 'simple_super'
 
 SI_ETYPE_INDEX = 3
 SI_ETYPE_NAME = 'inclusion_super'
-
-
-

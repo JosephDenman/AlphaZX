@@ -7,7 +7,7 @@ packages = ["alphazx"]
 name = "AlphaZX"
 version = "0.0.1"
 authors = [
-  { name="Joseph Denman", email="josephrileydenman@gmail.com" },
+    { name = "Joseph Denman", email = "josephrileydenman@gmail.com" },
 ]
 description = "A package for creating and manipulating ZX-calculus diagrams"
 readme = "README.md"

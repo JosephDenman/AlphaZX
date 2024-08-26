@@ -3,12 +3,12 @@ from fractions import Fraction
 import networkx as nx
 import pyzx
 import torch
+from torch_geometric.data import HeteroData, Data
 
 from alphazx.diagram.match import BoundaryMatch, FRightZMatch, FRightXMatch
 from alphazx.diagram.pyzx_nx_conv import ETYPE, NTYPE, PHASE, nx_remove_position_attributes
 from alphazx.diagram.zx_diagram import ZXDiagram
 from alphazx.diagram.zx_match_diagram import to_zx_match_diagram, ZXMatchDiagram
-from torch_geometric.data import HeteroData, Data
 
 
 def graph_to_nx_graph(graph: pyzx.Graph) -> nx.MultiGraph:
@@ -91,8 +91,10 @@ def clifford_zx_diagram(num_qubits: int, depth: int, t_gates: bool = True) -> ZX
     return ZXDiagram(phase_denominator(t_gates), clifford_nx_graph(num_qubits, depth, t_gates))
 
 
-def clifford_pyg_hdata_zx_diagram(num_qubits: int, depth: int, t_gates: bool = True, sort_by_row: bool = False) -> HeteroData:
-    return ZXDiagram(phase_denominator(t_gates), clifford_nx_graph(num_qubits, depth, t_gates)).to_pyg_hdata(sort_by_row)
+def clifford_pyg_hdata_zx_diagram(num_qubits: int, depth: int, t_gates: bool = True,
+                                  sort_by_row: bool = False) -> HeteroData:
+    return ZXDiagram(phase_denominator(t_gates), clifford_nx_graph(num_qubits, depth, t_gates)).to_pyg_hdata(
+        sort_by_row)
 
 
 def clifford_pyg_zx_diagram(num_qubits: int, depth: int, t_gates: bool = True, sort_by_row: bool = False) -> Data:
@@ -103,11 +105,13 @@ def clifford_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool = True)
     return to_zx_match_diagram(clifford_zx_diagram(num_qubits, depth, t_gates))
 
 
-def clifford_pyg_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool = True, with_reverse_mapping: bool = False, sort_by_row: bool = False) -> Data:
+def clifford_pyg_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool = True, with_reverse_mapping: bool = False,
+                                  sort_by_row: bool = False) -> Data:
     return clifford_zx_match_diagram(num_qubits, depth, t_gates).to_pyg_data(with_reverse_mapping, sort_by_row)
 
 
-def clifford_pyg_hdata_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool = True, with_reverse_mapping: bool = False, sort_by_row: bool = False) -> HeteroData:
+def clifford_pyg_hdata_zx_match_diagram(num_qubits: int, depth: int, t_gates: bool = True,
+                                        with_reverse_mapping: bool = False, sort_by_row: bool = False) -> HeteroData:
     return clifford_zx_match_diagram(num_qubits, depth, t_gates).to_pyg_hdata(with_reverse_mapping, sort_by_row)
 
 

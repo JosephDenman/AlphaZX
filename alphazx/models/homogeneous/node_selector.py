@@ -1,7 +1,6 @@
 import torch.nn
 import torch_geometric as pyg
 
-from alphazx.diagram import METADATA
 from alphazx.models import softmax_nonzero_entries, throw_on_nan
 
 
@@ -26,7 +25,8 @@ class NodeSelector(torch.nn.Module):
         dense_logits, _ = pyg.utils.to_dense_batch(x, batch)
         T = 22
         B, N = dense_logits.shape
-        dense_node_types, _ = pyg.utils.to_dense_batch(node_types, batch, batch_size=B, max_num_nodes=N, fill_value=torch.nan)
+        dense_node_types, _ = pyg.utils.to_dense_batch(node_types, batch, batch_size=B, max_num_nodes=N,
+                                                       fill_value=torch.nan)
 
         node_probs = torch.zeros((B, T, N), device=x.device)
         batch_offsets = torch.zeros(B, device=x.device, dtype=torch.int64)

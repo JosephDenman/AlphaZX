@@ -2,6 +2,7 @@ from fractions import Fraction
 from typing import Tuple, List, Dict, Optional
 
 import networkx as nx
+
 from alphazx.diagram.match import MatchNode, is_boundary, is_z_basis, is_x_basis
 from alphazx.diagram.pyzx_nx_conv import PHASE, NTYPE, ROW, COLUMN
 

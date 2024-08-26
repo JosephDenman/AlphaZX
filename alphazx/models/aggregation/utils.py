@@ -29,6 +29,7 @@ class MultiheadAttentionBlock(torch.nn.Module):
         dropout (float, optional): Dropout probability of attention weights.
             (default: :obj:`0`)
     """
+
     def __init__(self, channels: int, heads: int = 1, layer_norm: bool = True,
                  dropout: float = 0.0):
         super().__init__()
@@ -103,6 +104,7 @@ class SetAttentionBlock(torch.nn.Module):
         dropout (float, optional): Dropout probability of attention weights.
             (default: :obj:`0`)
     """
+
     def __init__(self, channels: int, heads: int = 1, layer_norm: bool = True,
                  dropout: float = 0.0):
         super().__init__()
@@ -146,6 +148,7 @@ class InducedSetAttentionBlock(torch.nn.Module):
         dropout (float, optional): Dropout probability of attention weights.
             (default: :obj:`0`)
     """
+
     def __init__(self, channels: int, num_induced_points: int, heads: int = 1,
                  layer_norm: bool = True, dropout: float = 0.0):
         super().__init__()
@@ -195,6 +198,7 @@ class PoolingByMultiheadAttention(torch.nn.Module):
         dropout (float, optional): Dropout probability of attention weights.
             (default: :obj:`0`)
     """
+
     def __init__(self, channels: int, num_seed_points: int = 1, heads: int = 1,
                  layer_norm: bool = True, dropout: float = 0.0):
         super().__init__()

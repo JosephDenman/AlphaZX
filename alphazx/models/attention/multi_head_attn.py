@@ -1,24 +1,23 @@
+import math
+import warnings
 from typing import Optional, Tuple, List
-from torch import Tensor
-from torch.overrides import has_torch_function, handle_torch_function
 
+import torch
+import torch.nn.functional as F
+from torch import Tensor
+from torch.nn.functional import linear
 from torch.nn.init import constant_, xavier_normal_, xavier_uniform_
 from torch.nn.modules.linear import NonDynamicallyQuantizableLinear
 from torch.nn.parameter import Parameter
-from torch.nn.functional import linear
-
-import torch
-import warnings
-import math
-import torch.nn.functional as F
+from torch.overrides import has_torch_function, handle_torch_function
 
 
 def _in_projection_packed(
-    q: Tensor,
-    k: Tensor,
-    v: Tensor,
-    w: Tensor,
-    b: Optional[Tensor] = None,
+        q: Tensor,
+        k: Tensor,
+        v: Tensor,
+        w: Tensor,
+        b: Optional[Tensor] = None,
 ) -> List[Tensor]:
     r"""Perform the in-projection step of the attention operation, using packed weights.
 
@@ -77,15 +76,15 @@ def _in_projection_packed(
 
 
 def _in_projection(
-    q: Tensor,
-    k: Tensor,
-    v: Tensor,
-    w_q: Tensor,
-    w_k: Tensor,
-    w_v: Tensor,
-    b_q: Optional[Tensor] = None,
-    b_k: Optional[Tensor] = None,
-    b_v: Optional[Tensor] = None,
+        q: Tensor,
+        k: Tensor,
+        v: Tensor,
+        w_q: Tensor,
+        w_k: Tensor,
+        w_v: Tensor,
+        b_q: Optional[Tensor] = None,
+        b_k: Optional[Tensor] = None,
+        b_v: Optional[Tensor] = None,
 ) -> Tuple[Tensor, Tensor, Tensor]:
     r"""Perform the in-projection step of the attention operation.
 

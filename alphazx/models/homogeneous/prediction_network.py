@@ -35,7 +35,8 @@ class PredictionNetwork(nn.Module):
         self.value_network.reset_parameters()
         self.policy_network.reset_parameters()
 
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, edge_attr: torch.Tensor, node_type: torch.Tensor, batch: torch.Tensor) -> tuple[AlphaZXDistributionParams, torch.Tensor]:
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, edge_attr: torch.Tensor, node_type: torch.Tensor,
+                batch: torch.Tensor) -> tuple[AlphaZXDistributionParams, torch.Tensor]:
         policy = self.policy_network(x, edge_index, node_type, batch)
         value = self.value_network(x, edge_index, edge_attr, batch)
         return policy, value

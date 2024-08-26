@@ -56,7 +56,8 @@ class AlphaZXModel(nn.Module):
                                                     policy_pooling_dropout,
                                                     value_hidden_channels)
 
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, edge_attr: torch.Tensor, node_type: torch.Tensor, batch: torch.Tensor, pe: torch.Tensor) -> tuple[AlphaZXDistributionParams, torch.Tensor]:
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, edge_attr: torch.Tensor, node_type: torch.Tensor,
+                batch: torch.Tensor, pe: torch.Tensor) -> tuple[AlphaZXDistributionParams, torch.Tensor]:
         x, edge_attr = self.representation_network(x, edge_index, edge_attr, batch, pe)
         policy, value = self.prediction_network(x, edge_index, edge_attr, node_type, batch)
         return policy, value

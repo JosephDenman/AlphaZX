@@ -200,7 +200,9 @@ class AlphaZXDistribution:
         phases = self.sample_phases(nodes)[0]
         new_edges = self.sample_new_edges(nodes)[0]
         transfer_edges = self.sample_transfer_edges(nodes)[0]
-        samples = torch.cat((self.graph_ids.reshape(1, -1, 1), torch.stack((action_types, nodes, phases, new_edges), dim=-1), transfer_edges), dim=-1).long()
+        samples = torch.cat((self.graph_ids.reshape(1, -1, 1),
+                             torch.stack((action_types, nodes, phases, new_edges), dim=-1), transfer_edges),
+                            dim=-1).long()
         return samples
 
     @staticmethod

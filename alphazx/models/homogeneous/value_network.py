@@ -15,27 +15,32 @@ class ValueNetwork(nn.Module):
             "x, edge_index, edge_attr",
             [
                 (
-                    pyg.nn.GATv2Conv(node_embedding_channels, hidden_channels, edge_dim=edge_embedding_channels, add_self_loops=True),
+                    pyg.nn.GATv2Conv(node_embedding_channels, hidden_channels, edge_dim=edge_embedding_channels,
+                                     add_self_loops=True),
                     "x, edge_index, edge_attr -> x",
                 ),
                 nn.ReLU(),
                 (
-                    pyg.nn.GATv2Conv(node_embedding_channels, hidden_channels, edge_dim=edge_embedding_channels, add_self_loops=True),
+                    pyg.nn.GATv2Conv(node_embedding_channels, hidden_channels, edge_dim=edge_embedding_channels,
+                                     add_self_loops=True),
                     "x, edge_index, edge_attr -> x",
                 ),
                 nn.ReLU(),
                 (
-                    pyg.nn.GATv2Conv(node_embedding_channels, hidden_channels, edge_dim=edge_embedding_channels, add_self_loops=True),
+                    pyg.nn.GATv2Conv(node_embedding_channels, hidden_channels, edge_dim=edge_embedding_channels,
+                                     add_self_loops=True),
                     "x, edge_index, edge_attr -> x",
                 ),
                 nn.ReLU(),
                 (
-                    pyg.nn.GATv2Conv(node_embedding_channels, hidden_channels, edge_dim=edge_embedding_channels, add_self_loops=True),
+                    pyg.nn.GATv2Conv(node_embedding_channels, hidden_channels, edge_dim=edge_embedding_channels,
+                                     add_self_loops=True),
                     "x, edge_index, edge_attr -> x",
                 ),
                 nn.ReLU(),
                 (
-                    pyg.nn.GATv2Conv(node_embedding_channels, hidden_channels, edge_dim=edge_embedding_channels, add_self_loops=True),
+                    pyg.nn.GATv2Conv(node_embedding_channels, hidden_channels, edge_dim=edge_embedding_channels,
+                                     add_self_loops=True),
                     "x, edge_index, edge_attr -> x",
                 ),
                 nn.ReLU(),
@@ -49,7 +54,8 @@ class ValueNetwork(nn.Module):
                 nn.ReLU(),
                 nn.Linear(hidden_channels, 1),
             ),
-            nn=nn.Sequential(nn.Linear(hidden_channels, hidden_channels), nn.ReLU(), nn.Linear(hidden_channels, hidden_channels), nn.ReLU()),
+            nn=nn.Sequential(nn.Linear(hidden_channels, hidden_channels), nn.ReLU(),
+                             nn.Linear(hidden_channels, hidden_channels), nn.ReLU()),
         )
         self.ff = nn.Sequential(
             nn.Linear(hidden_channels, hidden_channels),
@@ -64,9 +70,11 @@ class ValueNetwork(nn.Module):
         self.global_attention.reset_parameters()
         self.ff.reset_parameters()
 
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, edge_attr: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, edge_attr: torch.Tensor,
+                batch: torch.Tensor) -> torch.Tensor:
         assert x.shape[-1] == self.node_embedding_channels
-        assert edge_attr.shape[-1] == self.edge_embedding_channels, f'Expected {self.edge_embedding_channels}, received {edge_attr.shape}'
+        assert edge_attr.shape[
+                   -1] == self.edge_embedding_channels, f'Expected {self.edge_embedding_channels}, received {edge_attr.shape}'
         x = self.gnn(x, edge_index, edge_attr)
         x = self.global_attention(x, batch)
         x = self.ff(x)

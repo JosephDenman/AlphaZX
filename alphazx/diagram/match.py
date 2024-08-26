@@ -534,7 +534,8 @@ def from_index_and_node_set(node_type: int, node_set: tuple[int] | list[int] | i
     elif issubclass(constructor, SuperNode):
         return constructor()
     else:
-        raise Exception(f'Attempted to construct a {constructor} node with node type {node_type} and node set {node_set}')
+        raise Exception(
+            f'Attempted to construct a {constructor} node with node type {node_type} and node set {node_set}')
 
 
 def _zx_match_diagram_node_leaf_classes() -> list[Type[ZXMatchDiagramNode]]:

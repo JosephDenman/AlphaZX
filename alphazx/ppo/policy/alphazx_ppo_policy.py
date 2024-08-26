@@ -1,24 +1,19 @@
-from typing import List, Dict, Any, Tuple, Union
-from collections import namedtuple
-import torch
 import copy
-import numpy as np
+from collections import namedtuple
+from typing import List, Dict, Any
+
+import torch
 import torch_geometric as pyg
-
-from ding.torch_utils import Adam, to_device, to_dtype, unsqueeze, ContrastiveLoss
-from ding.rl_utils import ppo_data, ppo_error, ppo_policy_error, ppo_policy_data, get_gae_with_default_last_value, \
-    v_nstep_td_data, v_nstep_td_error, get_nstep_return_data, get_train_sample, gae, gae_data, ppo_error_continuous, \
-    get_gae, ppo_policy_error_continuous
 from ding.model import model_wrap
-
-from alphazx.ppo.utils.model_wrapper import AlphaZXDistributionWrapper
-from alphazx.ppo.utils.split_data_generator import split_data_generator
-from ding.utils import POLICY_REGISTRY, RunningMeanStd
-from ding.utils.data import default_collate, default_decollate
 from ding.policy.base_policy import Policy
 from ding.policy.common_utils import default_preprocess_learn
+from ding.rl_utils import get_train_sample, gae, gae_data, get_gae
+from ding.torch_utils import Adam, to_device, to_dtype, unsqueeze
+from ding.utils import POLICY_REGISTRY, RunningMeanStd
+from ding.utils.data import default_collate, default_decollate
 
 from alphazx.ppo.utils.learn_utils import alphazx_ppo_error, AlphaZXPPOData
+from alphazx.ppo.utils.split_data_generator import split_data_generator
 
 
 @POLICY_REGISTRY.register('alphazx_ppo')
