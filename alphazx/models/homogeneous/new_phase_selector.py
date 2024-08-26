@@ -10,7 +10,7 @@ class NewPhaseSelector(torch.nn.Module):
         super().__init__()
         self.num_possible_phases = num_possible_phases
         self.mlp = pyg.nn.MLP(in_channels=node_embedding_channels, hidden_channels=node_embedding_channels,
-                              out_channels=num_possible_phases, num_layers=2, dropout=dropout, norm='layer_norm')
+                              out_channels=num_possible_phases, num_layers=4, dropout=dropout, norm='layer_norm')
 
     def reset_parameters(self):
         self.mlp.reset_parameters()

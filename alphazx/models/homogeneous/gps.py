@@ -45,7 +45,7 @@ class GPS(torch.nn.Module):
                         attn_kwargs=attn_kwargs,
                         heads=num_attn_heads))
         self.mlp = MLP(in_channels=node_in_channels, hidden_channels=mlp_hidden_channels,
-                       out_channels=node_out_channels, num_layers=2, dropout=0.1, norm='layer_norm')
+                       out_channels=node_out_channels, num_layers=4, dropout=0.1, norm='layer_norm')
 
     def sparse_parameters(self):
         return itertools.chain(self.node_emb.parameters(), self.edge_emb.parameters())

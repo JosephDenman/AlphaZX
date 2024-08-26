@@ -10,7 +10,7 @@ class NodeSelector(torch.nn.Module):
         super().__init__()
         self.num_node_types = num_node_types
         self.mlp = pyg.nn.MLP(in_channels=node_embedding_channels, hidden_channels=node_embedding_channels,
-                              out_channels=1, num_layers=2, dropout=dropout, norm='layer_norm')
+                              out_channels=1, num_layers=4, dropout=dropout, norm='layer_norm')
 
     def reset_parameters(self):
         self.mlp.reset_parameters()
@@ -36,61 +36,6 @@ class NodeSelector(torch.nn.Module):
             node_probs[b, t, batch_offsets[b]] = x[i]
             batch_offsets[b] = batch_offsets[b] + 1
 
-        node_probs = softmax_nonzero_entries(node_probs, dim=-1)
-        throw_on_nan(node_probs)
-        return node_probs
-
-    def forward_with_non_zero_row_bug_1(self, x: torch.Tensor, node_types: torch.Tensor,
-                                        batch: torch.Tensor) -> torch.Tensor:
-        x = self.mlp(x).squeeze(-1)
-        # Create masks for valid node types (1 to 10 inclusive)
-        valid_types_mask = (node_types >= 1) & (node_types <= 10)
-        x[~valid_types_mask] = 0.
-
-        # Convert node logits and node types to dense batch form
-        dense_logits, _ = pyg.utils.to_dense_batch(x, batch)
-        T = 22
-        B, N = dense_logits.shape
-        dense_node_types, _ = pyg.utils.to_dense_batch(node_types, batch, batch_size=B, max_num_nodes=N,
-                                                       fill_value=torch.nan)
-
-        node_probs = torch.zeros((B, T, N), device=x.device)
-        for b in range(B):
-            for i in range(N):
-                node_probs[b, dense_node_types[b, i], i] = dense_logits[b, i]
-
-        node_probs = softmax_nonzero_entries(node_probs, dim=-1)
-        throw_on_nan(node_probs)
-        return node_probs
-
-    def forward_with_non_zero_row_bug_0(self, x: torch.Tensor, node_types: torch.Tensor,
-                                        batch: torch.Tensor) -> torch.Tensor:
-        x = self.mlp(x).squeeze(-1)
-        # Create masks for valid node types (1 to 10 inclusive)
-        valid_types_mask = (node_types >= 1) & (node_types <= 10)
-        masked_logits = x * valid_types_mask.float()
-
-        # Convert node logits and node types to dense batch form
-        dense_logits, _ = pyg.utils.to_dense_batch(masked_logits, batch)
-        T = 22
-        B, N = dense_logits.shape
-        dense_node_types, _ = pyg.utils.to_dense_batch(node_types, batch, batch_size=B, max_num_nodes=N,
-                                                       fill_value=torch.nan)
-
-        # Create output tensor
-        node_probs = torch.zeros((B, T, N), device=x.device)
-
-        # Mask out the logits of invalid types and apply softmax along the node dimension
-        valid_types_mask_dense = (dense_node_types >= 1) & (dense_node_types <= 10)
-        valid_logits = dense_logits * valid_types_mask_dense.float()
-
-        # Generate the type-specific mask
-        type_indices = torch.arange(1, 11, device=x.device).view(1, -1, 1)
-        type_mask = (dense_node_types.unsqueeze(1) == type_indices).float()
-
-        # Multiply probabilities with type mask to scatter into correct type slots
-        expanded_probs = valid_logits.unsqueeze(1) * type_mask
-        node_probs[:, 1:11, :] = expanded_probs
         node_probs = softmax_nonzero_entries(node_probs, dim=-1)
         throw_on_nan(node_probs)
         return node_probs

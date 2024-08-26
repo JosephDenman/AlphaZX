@@ -16,7 +16,7 @@ class RewriteTypeSelector(torch.nn.Module):
         super().__init__()
         self.num_node_types = num_node_types
         self.mlp = pyg.nn.MLP(in_channels=node_embedding_channels, hidden_channels=node_embedding_channels,
-                              out_channels=1, num_layers=2, dropout=pooling_dropout, norm='layer_norm')
+                              out_channels=1, num_layers=4, dropout=pooling_dropout, norm='layer_norm')
 
     def reset_parameters(self):
         self.mixture_mlp.reset_parameters()

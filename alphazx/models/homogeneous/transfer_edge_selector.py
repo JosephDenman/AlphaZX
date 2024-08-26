@@ -25,7 +25,7 @@ class TransferEdgeSelector(torch.nn.Module):
                  gmt_layer_norm: bool = True,
                  gmt_dropout: float = 0.0,
                  mlp_hidden_channels: int = 64,
-                 mlp_num_layers: int = 2,
+                 mlp_num_layers: int = 4,
                  mlp_dropout: float | list[float] = 0.1,
                  mlp_act: Optional[str | Callable] = "relu",
                  mlp_act_first: bool = False,
@@ -59,9 +59,6 @@ class TransferEdgeSelector(torch.nn.Module):
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor, node_types: torch.Tensor,
                 batch: torch.Tensor) -> torch.Tensor:
-        #pr = cProfile.Profile()
-        #pr.enable()
-        # throw_on_nan(x)
         # TODO: Once https://github.com/pytorch/pytorch/issues/41508 is fixed, mask the non-simple edges at the start.
         x = self.neighbor_trans(torch.index_select(x, 0, edge_index[0]), edge_index[1])[0]
         x = self.mlp(x).squeeze(dim=-1)
@@ -71,9 +68,6 @@ class TransferEdgeSelector(torch.nn.Module):
         neighbor_x[~non_simple_node_mask] = torch.zeros_like(neighbor_x[~non_simple_node_mask], dtype=x.dtype,
                                                              device=x.device)
         transfer_probs = pyg.utils.to_dense_batch(neighbor_x, batch)[0]
-        #pr.disable()
-        #pstats.Stats(pr).strip_dirs().sort_stats(
-        #    pstats.SortKey.CUMULATIVE).print_stats(10).dump_stats(f'./transfer_edge_selector.prof')
         return transfer_probs
 
     # def old_forward(self, x: torch.Tensor, edge_index: torch.Tensor, node_types: torch.Tensor,

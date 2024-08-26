@@ -2,6 +2,8 @@
 /tests/diagram/.hypothesis/
 /tests/models/.hypothesis/
 **/__pycache__/
+build/
+dist/
 dist
 AlphaZX.iml
 misc.xml
