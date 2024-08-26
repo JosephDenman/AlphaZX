@@ -1,12 +1,10 @@
-from random import random
-
 import torch_geometric as pyg
 import torch
 from alphazx.diagram import METADATA, POSSIBLE_PHASES, clifford_zx_diagram, to_zx_match_diagram
-from alphazx.distributions import AlphaZXDistribution, AlphaZXDistributionParams
-from alphazx.game import remove_isolated_nodes, remove_self_loop_edges, remove_isolated_components, ZXGame
-from alphazx.models import pre_process, is_all_zero
-from alphazx.models.homogeneous.mcts.alphazx_model import AlphaZXModel
+from alphazx.distributions import AlphaZXDistributionParams
+from alphazx.game import remove_isolated_nodes, remove_self_loop_edges, remove_isolated_components
+from alphazx.models import is_all_zero
+from alphazx.models.homogeneous.alphazx_model import AlphaZXModel
 
 torch.set_default_tensor_type(torch.DoubleTensor)
 torch.manual_seed(10)

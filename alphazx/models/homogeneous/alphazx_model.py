@@ -2,11 +2,10 @@ from typing import Any
 
 import torch
 import torch.nn as nn
-import torch_geometric as pyg
 
 from alphazx.distributions.alpha_zx_dist import AlphaZXDistributionParams
-from alphazx.models.homogeneous.mcts.prediction_network import PredictionNetwork
-from alphazx.models.homogeneous.mcts.representation_network import RepresentationNetwork
+from alphazx.models.homogeneous.prediction_network import PredictionNetwork
+from alphazx.models.homogeneous.representation_network import RepresentationNetwork
 
 
 class AlphaZXModel(nn.Module):

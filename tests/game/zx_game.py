@@ -1,10 +1,7 @@
 import torch
 
 from alphazx.diagram import METADATA, POSSIBLE_PHASES
-from alphazx.distributions import AlphaZXDistribution
-from alphazx.game import ZXGame
-from alphazx.models import pre_process
-from alphazx.models.homogeneous.mcts.alphazx_model import AlphaZXModel
+from alphazx.models.homogeneous.alphazx_model import AlphaZXModel
 
 torch.set_default_tensor_type(torch.DoubleTensor)
 
