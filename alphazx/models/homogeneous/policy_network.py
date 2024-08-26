@@ -67,30 +67,29 @@ def trans_dec_test():
     print(transformer_decoder(tgt, memory))
 
 
-def pad_or_strip(source: torch.Tensor, target_size: int, fill_value: float = 0.) -> torch.Tensor:
+def pad_or_strip(minibatch_actions: torch.Tensor, minibatch_obs: pyg.data.Batch) -> torch.Tensor:
     """
-    Adds or removes padding (with fill value `fill_value`) from the last dimension of `source` so that the last dimension
-    of `source` is the same size as `target_size`. Both tensors are assumed to be three-dimensional. It
-    is possible that the last dimension of `source` is larger or smaller than the last dimension of `target`.
+    Adds or removes padding (with fill value `0`) from the last dimension of `minibatch_actions` so that the last dimension
+    of `minibatch_actions` is the same size as the maximum number of neighbors in `minibatch_obs` plus five. Both tensors
+    are assumed to be three-dimensional.
 
-    :param source: The tensor to be padded.
-    :param target_size: The length of the last dimension of `source` after padding.
-    :param fill_value: The value to pad with.
-
-    :return: The newly padded `source` tensor.
+    :param minibatch_actions: The actions to be padded.
+    :param minibatch_obs: The batch used to calculate the maximum degree over all nodes in a batch.
+    :return: The newly padded `minibatch_actions` tensor.
     """
+    target_size = torch.max(pyg.utils.degree(minibatch_obs.edge_index[0])).int().item() + 5
     # Get the sizes of the source and target tensors
-    source_size = source.size()
+    minibatch_actions_size = minibatch_actions.size()
     # Calculate the size difference in the last dimension
-    diff = target_size - source_size[-1]
+    diff = target_size - minibatch_actions_size[-1]
     if diff > 0:
         # If the target's last dimension is larger, pad the source tensor
-        pad_shape = list(source_size)
+        pad_shape = list(minibatch_actions_size)
         pad_shape[-1] = diff
-        padding = torch.full(pad_shape, fill_value, dtype=source.dtype, device=source.device)
-        padded_source = torch.cat((source, padding), dim=-1)
+        padding = torch.full(pad_shape, 0, dtype=minibatch_actions.dtype, device=minibatch_actions.device)
+        padded_minibatch_actions = torch.cat((minibatch_actions, padding), dim=-1)
     else:
         # If the target's last dimension is smaller or equal, slice the source tensor
-        padded_source = source[..., :target_size]
-    return padded_source
+        padded_minibatch_actions = minibatch_actions[..., :target_size]
+    return padded_minibatch_actions
 
