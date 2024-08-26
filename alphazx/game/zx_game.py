@@ -9,7 +9,7 @@ from alphazx.diagram.match import MatchNode, FRightZMatch, FLeftZMatch, FRightXM
     BRightMatch, BLeftMatch, YRightZMatch, YLeftZMatch, YRightXMatch, YLeftXMatch, METADATA
 from alphazx.diagram.zx_diagram import ZXDiagram
 from alphazx.diagram.zx_match_diagram import ZXMatchDiagram, to_zx_match_diagram, DataIndexToMatch
-from alphazx.rewriting.utils import rewrite, FRightParameters
+from alphazx.rewriting.utils import rewrite
 
 
 def node_index_to_match(node_index: int, match_diagram: ZXMatchDiagram) -> MatchNode:
@@ -22,7 +22,7 @@ def assert_correct_match_instance(expected_class: Type[MatchNode], match: MatchN
 
 
 def tuple_to_match(zx_match_diagram: ZXMatchDiagram, data: Data, action: tuple, data_index: DataIndexToMatch) -> tuple[
-    MatchNode, FRightParameters | None]:
+    MatchNode, tuple[float, int, set[int]] | None]:
     # In this function, the batch dimension of 'action' is always one.
     action_type = action[1] - 11
     match = data_index[action[2]]
@@ -193,7 +193,7 @@ class ZXGame:
         self.diagram_stats = DiagramStats(self.zx_match_diagram)
         self.previous_reward = calculate_reward(old_diagram_stats, self.diagram_stats)
         self.done, done_reward = self.__calculate_done_reward()
-        self.episode_return += self.previous_reward + done_reward
+        self.episode_return += self.previous_reward + done_reward - self.step_penalty * self.episode_length
 
         self.data, self.data_index = self.zx_match_diagram.to_pyg_data(True)
         return self.data, self.previous_reward, self.done, {'diagram_stats': vars(self.diagram_stats)}

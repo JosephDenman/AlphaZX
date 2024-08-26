@@ -3,7 +3,6 @@ import torch_geometric as pyg
 
 from alphazx.diagram.zx_match_diagram import DataIndexToMatch, ZXMatchDiagram
 from alphazx.models.utils import compute_basis_neighbors
-from alphazx.rewriting.utils import FRightParameters
 
 
 def compute_new_phase(cat_phase: torch.Tensor, phase_denominator: int) -> float:
@@ -42,8 +41,8 @@ def compute_transfer_edges(node: int,
 
 
 def compute_f_right_params(action: tuple, data: pyg.data.Data, data_index: DataIndexToMatch,
-                           zx_match_diagram: ZXMatchDiagram) -> FRightParameters:
+                           zx_match_diagram: ZXMatchDiagram) -> tuple[float, int, set[int]]:
     phase = compute_new_phase(action[3], zx_match_diagram.phase_denominator)
     new_edges = compute_num_new_edges(action[4])
     transfer_edges = compute_transfer_edges(action[2], action[5:], data, data_index)
-    return FRightParameters(phase, new_edges, transfer_edges)
+    return phase, new_edges, transfer_edges
