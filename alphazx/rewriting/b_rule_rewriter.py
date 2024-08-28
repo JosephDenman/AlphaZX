@@ -1,5 +1,6 @@
 from alphazx.diagram.match import BLeftMatch, BRightMatch, Basis, MatchNode
 from alphazx.diagram.zx_diagram import ZXDiagram
+from .update_set import UpdateSet
 
 
 def validate_node(basis: Basis, n: int, diagram: ZXDiagram) -> None:
@@ -28,7 +29,7 @@ def are_neighbors(a: int, b: int, diagram: ZXDiagram) -> bool:
     return a in diagram.neighbors(b)
 
 
-def b_left_rewrite(b_left_match: BLeftMatch, diagram: ZXDiagram) -> None:
+def b_left_rewrite(b_left_match: BLeftMatch, diagram: ZXDiagram) -> UpdateSet:
     z, x, m, n = b_left_match
 
     validate_node('z', z, diagram)
@@ -70,8 +71,10 @@ def b_left_rewrite(b_left_match: BLeftMatch, diagram: ZXDiagram) -> None:
     assert_degree(bottom, 3, diagram)
     assert_degree(top, 3, diagram)
 
+    return UpdateSet({z, x, m, n}, {bottom, top}, b_left_match)
 
-def b_right_rewrite(b_right_match: BRightMatch, diagram: ZXDiagram) -> None:
+
+def b_right_rewrite(b_right_match: BRightMatch, diagram: ZXDiagram) -> UpdateSet:
     z, x = b_right_match
 
     validate_node('x', x, diagram)
@@ -111,3 +114,5 @@ def b_right_rewrite(b_right_match: BRightMatch, diagram: ZXDiagram) -> None:
     assert_neighbors(br, z1, diagram)
     assert_neighbors(x2, tl, diagram)
     assert_neighbors(x3, tr, diagram)
+
+    return UpdateSet({z, x}, {z0, z1, x2, x3}, b_right_match)

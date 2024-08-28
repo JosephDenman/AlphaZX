@@ -10,8 +10,7 @@ from alphazx.diagram.zx_diagram import ZXDiagram
 from alphazx.rewriting.b_rule_rewriter import b_right_rewrite, b_left_rewrite
 from alphazx.rewriting.f_rule_rewriter import f_right_rewrite
 from alphazx.rewriting.y_rule_rewriter import y_left_rewrite, y_right_rewrite
-from tests.match_patterns import b_right_pattern, b_left_pattern, y_left_z_pattern, y_left_x_pattern, \
-    y_right_x_pattern, y_right_z_pattern
+from tests.match_patterns import b_right_pattern, b_left_pattern, y_left_z_pattern, y_left_x_pattern, y_right_x_pattern, y_right_z_pattern
 
 # Phase denominator for all diagram
 PD = 4
@@ -120,7 +119,7 @@ class TestBLeftRewrite(unittest.TestCase):
         b_left_rewrite(list(diagram.b_left_matches())[0], diagram)
         assert list(diagram.b_right_matches())[0] == BRightMatch(9, 8)
 
-    def test_self_match_connected_left_right(self):
+    def test_both_end_connected_b_left_match(self):
         """
          z0---x2
         (   X   )
@@ -131,7 +130,7 @@ class TestBLeftRewrite(unittest.TestCase):
         b_left_rewrite(list(diagram.b_left_matches())[0], diagram)
         assert list(diagram.b_right_matches())[0] == BRightMatch(5, 4)
 
-    def test_self_match_connected_right_end(self):
+    def test_right_end_connected_b_left_match(self):
         """
          b4---z0---x2
                  X   )
@@ -143,7 +142,7 @@ class TestBLeftRewrite(unittest.TestCase):
         b_left_rewrite(list(diagram.b_left_matches())[0], diagram)
         assert list(diagram.b_right_matches()) == [BRightMatch(7, 6)]
 
-    def test_self_match_connected_left_end(self):
+    def test_left_end_connected_b_left_match(self):
         """
           z0---x2---b4
          (   X
@@ -158,33 +157,39 @@ class TestBLeftRewrite(unittest.TestCase):
 
 class TestYLeftRewrite(unittest.TestCase):
 
-    def test_self_z_rewrite(self):
+    def test_simple_y_left_z_rewrite(self):
         diagram = y_left_z_pattern(PD)
         b4, b5, b6 = diagram.add_b_nodes(3)
         diagram.add_s_edges_from([(b4, 0), (2, b5), (3, b6)])
         y_left_rewrite(list(diagram.y_left_matches())[0], diagram)
-        assert list(diagram.y_right_matches())[0] == YRightXMatch(0, 1, 2, 3)
+        assert list(diagram.y_right_matches())[0] == YRightXMatch(7, 8, 9, 10)
 
-    def test_self_x_rewrite(self):
+    def test_simple_y_left_x_rewrite(self):
         diagram = y_left_x_pattern(PD)
         b4, b5, b6 = diagram.add_b_nodes(3)
         diagram.add_s_edges_from([(b4, 0), (2, b5), (3, b6)])
-        y_left_rewrite(list(diagram.y_left_matches())[0], diagram)
-        assert list(diagram.y_right_matches())[0] == YRightZMatch(0, 1, 2, 3)
+        update_set = y_left_rewrite(list(diagram.y_left_matches())[0], diagram)
+        for new_node in update_set.added_nodes:
+            print('new_node = ', new_node)
+            print('basis = ', diagram.basis(new_node))
+            print('phase = ', diagram.phase(new_node))
+        print('update_set = ', update_set)
+        print('list(diagram.y_right_matches()) = ', list(diagram.y_right_matches()))
+        assert list(diagram.y_right_matches())[0] == YRightZMatch(7, 8, 9, 10)
 
 
 class TestYRightRewrite(unittest.TestCase):
 
-    def test_self_z_rewrite(self):
+    def test_simple_y_right_z_rewrite(self):
         diagram = y_right_z_pattern(PD)
         b4, b5, b6 = diagram.add_b_nodes(3)
         diagram.add_s_edges_from([(b4, 0), (2, b5), (3, b6)])
         y_right_rewrite(list(diagram.y_right_matches())[0], diagram)
-        assert list(diagram.y_left_matches())[0] == YLeftXMatch(0, 1, 2, 3)
+        assert list(diagram.y_left_matches())[0] == YLeftXMatch(7, 8, 9, 10)
 
-    def test_self_x_rewrite(self):
+    def test_simple_y_right_x_rewrite(self):
         diagram = y_right_x_pattern(PD)
         b4, b5, b6 = diagram.add_b_nodes(3)
         diagram.add_s_edges_from([(b4, 0), (2, b5), (3, b6)])
         y_right_rewrite(list(diagram.y_right_matches())[0], diagram)
-        assert list(diagram.y_left_matches())[0] == YLeftZMatch(0, 1, 2, 3)
+        assert list(diagram.y_left_matches())[0] == YLeftZMatch(7, 8, 9, 10)

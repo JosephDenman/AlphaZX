@@ -19,3 +19,7 @@ classifiers = [
 ]
 [project.urls]
 Homepage = "https://github.com/JosephDenman/AlphaZX.git"
+[tool.pytest.ini_options]
+addopts = [
+    "--import-mode=importlib",
+]

@@ -1,5 +1,4 @@
 from collections.abc import Iterable
-from collections.abc import Iterable
 from typing import Iterator
 
 import networkx as nx
@@ -86,6 +85,9 @@ class ZXDiagram(nx.MultiGraph):
 
     def phases(self) -> dict[int, float]:
         return {n: self.nodes[n][self.PHASE] for n in self.basis_nodes()}
+
+    def basis(self, n: int) -> str:
+        return self.nodes[n][self.NTYPE]
 
     def set_phase(self, n: int, phase: float) -> None:
         assert self.is_basis(n), f'Attempted to set phase of non-basis node {n}'
@@ -345,6 +347,7 @@ class ZXDiagram(nx.MultiGraph):
                     yield YRightZMatch(x0, n, x2, x3)
 
     def y_right_x_matches(self) -> Iterator[YRightXMatch]:
+        # This is for when the center node in the Y right rule match is a Z node with phase - pi * 0.5.
         for n in self.z_nodes():
             if self.degree(n) == 3 and self.phase(n) == -0.5:
                 if all([self.degree(m) == 2 and self.is_x_basis(m) for m in self.neighbors(n)]) and sum(
