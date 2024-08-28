@@ -8,29 +8,15 @@ from alphazx.diagram.match import METADATA, BoundarySuperNode, BoundaryMatch
 torch.set_printoptions(threshold=10_000)
 
 
-def concatenate_by_group(x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
-    index_count = torch.bincount(index)
-    fill_count = index_count.max() - index_count
-    fill_zeros = torch.full_like(x[0], -torch.inf).repeat(fill_count.sum(), *([1] * (len(x.shape) - 1)))
-    fill_index = torch.arange(0, fill_count.shape[0]).repeat_interleave(fill_count)
-    index_ = torch.cat([index, fill_index], dim=0)
-    x_ = torch.cat([x, fill_zeros], dim=0)
-    x_ = x_[torch.argsort(index_, stable=True)].view(index_count.shape[0], index_count.max(), *x.shape[1:])
-    return x_
-
-
 def concatenate_neighbor_features(x: torch.Tensor, edge_index: torch.Tensor,
-                                  batch_size: int | None = None) -> torch.Tensor:
+                                  batch_size: int | None = None) -> tuple[torch.Tensor, torch.Tensor]:
     neighbor_x = torch.index_select(x, 0, edge_index[0])
     x_, mask = pyg.utils.to_dense_batch(neighbor_x, edge_index[1], batch_size=batch_size)
-    # row_mask = torch.any(mask, dim=1)
-    # x_ = x_[row_mask]
-    # mask = mask[row_mask]
     return x_, mask
 
 
 def concatenate_with_neighbor_features(x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
-    neighbor_x = concatenate_neighbor_features(x, edge_index)
+    neighbor_x = concatenate_neighbor_features(x, edge_index)[0]
     x_ = torch.cat([x.unsqueeze(dim=1), neighbor_x], dim=1)
     return x_
 
