@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch_geometric as pyg
 
 from alphazx.distributions.alpha_zx_dist import AlphaZXDistributionParams
+from alphazx.models import softmax_nonzero_entries, throw_on_nan
 from alphazx.models.homogeneous.new_edge_selector import NewEdgeSelector
 from alphazx.models.homogeneous.new_phase_selector import NewPhaseSelector
 from alphazx.models.homogeneous.node_selector import NodeSelector
@@ -16,6 +17,8 @@ class PolicyNetwork(nn.Module):
                  num_possible_phases: int,
                  num_possible_new_edges: int,
                  node_embedding_channels: int,
+                 rewrite_type_out_channels: int,
+                 node_out_channels: int,
                  rts_num_layers: int,
                  ns_num_layers: int,
                  nps_num_layers: int,
@@ -28,8 +31,8 @@ class PolicyNetwork(nn.Module):
         self.num_node_types = num_node_types
         self.num_possible_phases = num_possible_phases
         self.num_possible_new_edges = num_possible_new_edges
-        self.rewrite_type_selector = RewriteTypeSelector(node_embedding_channels, num_node_types, rts_num_layers, dropout)
-        self.node_selector = NodeSelector(node_embedding_channels, num_node_types, ns_num_layers, dropout)
+        self.rewrite_type_selector = RewriteTypeSelector(node_embedding_channels, rewrite_type_out_channels, num_node_types, rts_num_layers, dropout)
+        self.node_selector = NodeSelector(node_embedding_channels, rewrite_type_out_channels, node_out_channels, num_node_types, ns_num_layers, dropout)
         self.new_phase_selector = NewPhaseSelector(node_embedding_channels, num_possible_phases, nps_num_layers, dropout)
         self.new_edge_selector = NewEdgeSelector(node_embedding_channels, num_possible_new_edges, nes_num_layers, dropout)
         self.transfer_edge_selector = TransferEdgeSelector(node_embedding_channels, num_node_types,
@@ -51,8 +54,13 @@ class PolicyNetwork(nn.Module):
               MLP?
         :return: Parameters for the AlphaZXDistribution.
         """
-        mixture_probs = self.rewrite_type_selector(x, node_type, batch)
-        node_probs = self.node_selector(x, node_type, batch)
+        rewrite_type_embedding = self.rewrite_type_selector(x, node_type, batch)
+        print('rewrite_type_embedding.shape = ', rewrite_type_embedding.shape)
+        mixture_probs = softmax_nonzero_entries(rewrite_type_embedding)
+        throw_on_nan(mixture_probs)
+        node_embeddings = self.node_selector(x, rewrite_type_embedding, node_type, batch)
+        node_probs = softmax_nonzero_entries(node_embeddings)
+        throw_on_nan(node_embeddings)
         phase_probs = self.new_phase_selector(x, node_type, batch)
         edge_probs = self.new_edge_selector(x, node_type, batch)
         transfer_edge_probs = self.transfer_edge_selector(x, edge_index, node_type, batch)
