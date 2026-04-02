@@ -30,6 +30,14 @@ class FeatureEmbeddingLayer(torch.nn.Module):
     def forward(self, x: torch.Tensor, edge_attr: torch.Tensor, pe: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         x = self.node_emb(x.long())
         edge_attr = self.edge_emb(edge_attr.long())
+        # Cast pe to match the model's parameter dtype.  The model's dtype is
+        # determined by torch.get_default_dtype() at construction time, while
+        # pe's dtype comes from preprocessing (with_random_walk_pe uses explicit
+        # dtype=torch.float).  When these differ — e.g. if another module set
+        # the global default to float64 before model creation — BatchNorm raises
+        # a mixed-dtype error.  Adapting the input to the model's own parameter
+        # dtype is the standard robust pattern.
+        pe = pe.to(dtype=self.pe_norm.weight.dtype)
         pe = self.pe_norm(pe)
         pe = self.pe_lin(pe)
         x = torch.cat((x, pe), 1)

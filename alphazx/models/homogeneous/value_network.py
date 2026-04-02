@@ -11,7 +11,7 @@ class ValueNetwork(nn.Module):
     def __init__(self,
                  node_in_channels: int,
                  edge_in_channels: int,
-                 hidden_channels: int = 128,
+                 hidden_channels: int = None,
                  gps_num_layers: int = 2,  # Reduced from 4 to prevent over-smoothing
                  gps_heads: int = 4,
                  gps_dropout: float = 0.1,
@@ -24,6 +24,8 @@ class ValueNetwork(nn.Module):
                  gps_mlp_hidden_channels: int = 128,
                  gps_mlp_num_layers: int = 2) -> None:
         super(ValueNetwork, self).__init__()
+        if hidden_channels is None:
+            hidden_channels = node_in_channels
         self.node_in_channels = node_in_channels
         self.edge_in_channels = edge_in_channels
         self.gps = GPS(node_in_channels,
@@ -40,7 +42,7 @@ class ValueNetwork(nn.Module):
                        gps_attn_kwargs,
                        gps_mlp_hidden_channels,
                        gps_mlp_num_layers)
-        self.global_attention = pyg.nn.GlobalAttention(
+        self.global_attention = pyg.nn.aggr.AttentionalAggregation(
             gate_nn=nn.Sequential(
                 nn.Linear(hidden_channels, hidden_channels),
                 nn.ReLU(),

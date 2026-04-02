@@ -110,18 +110,30 @@ class ZXMatchDiagram(nx.DiGraph):
 
     def to_pyg_data(self, with_reverse_mapping: bool = False, sort_by_row: bool = False) -> pyg.data.Data | tuple[
         pyg.data.Data, 'DataIndexToMatch']:
-        # Create a deep copy to avoid modifying the original graph
-        # This keeps the NetworkX graph clean with string types as the source of truth
-        import copy
-        graph_copy = copy.deepcopy(self)
-
-        for n, ndata in graph_copy.nodes(data=True):
+        # Temporarily convert string attributes to tensors in-place, then restore.
+        # This avoids copy.deepcopy of the entire NetworkX DiGraph, which was the
+        # single most expensive operation in the game-play hot path.
+        saved_node_types = {}
+        for n, ndata in self.nodes(data=True):
+            saved_node_types[id(ndata)] = ndata['node_type']
             ndata['node_type'] = torch.tensor(METADATA.node_type_abbrev_index_dict[ndata['node_type']])
-        for _, _, edata in graph_copy.edges(data=True):
+
+        saved_edge_types = {}
+        for u, v, edata in self.edges(data=True):
+            saved_edge_types[id(edata)] = edata['edge_type']
             edata['edge_type'] = torch.tensor(METADATA.edge_type_to_index_dict[edata['edge_type']])
-        data = pyg.utils.from_networkx(graph_copy,
-                                       group_node_attrs=['node_type', 'node_phase', 'node_set'],
-                                       group_edge_attrs=['edge_type', 'edge_size'])
+
+        try:
+            data = pyg.utils.from_networkx(self,
+                                           group_node_attrs=['node_type', 'node_phase', 'node_set'],
+                                           group_edge_attrs=['edge_type', 'edge_size'])
+        finally:
+            # Restore original string attributes so the match diagram stays clean
+            for n, ndata in self.nodes(data=True):
+                ndata['node_type'] = saved_node_types[id(ndata)]
+            for u, v, edata in self.edges(data=True):
+                edata['edge_type'] = saved_edge_types[id(edata)]
+
         data.id = torch.tensor(self.zx_diagram.id, dtype=torch.float64)
         data.node_type = data.x[:, 0].to(dtype=torch.long)
         data.node_phase = data.x[:, 1].to(dtype=torch.float64)

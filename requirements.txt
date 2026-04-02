@@ -1,8 +1,0 @@
-torch~=2.2.2
-networkx==3.1
-pyzx==0.7.3
-hypothesis~=6.80.1
-gym~=0.25.1
-numpy~=1.24.2
-easydict~=1.9
-typing_extensions>=4.8.0

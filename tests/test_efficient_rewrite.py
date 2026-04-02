@@ -20,7 +20,7 @@ from alphazx.rewriting.efficient_rewrite import (
     detect_all_matches_in_neighborhood
 )
 from alphazx.rewriting.utils import rewrite
-from match_patterns import (
+from tests.match_patterns import (
     b_right_pattern, b_left_pattern,
     y_left_z_pattern, y_left_x_pattern,
     y_right_z_pattern, y_right_x_pattern,

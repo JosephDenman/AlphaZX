@@ -394,9 +394,12 @@ class ZXDiagram(nx.MultiGraph):
         return data
 
     def copy(self, as_view=False):
+        # The constructor already copies all nodes, edges, and data from `self`
+        # via super().__init__(incoming_graph_data=self). The previous
+        # add_nodes_from / add_edges_from calls were redundant — and in a
+        # MultiGraph, add_edges_from actually DOUBLES all edges because it
+        # creates new parallel edges for each (u, v) pair.
         diagram_copy = self.__class__(self.phase_denominator, self)
-        diagram_copy.add_nodes_from(self.nodes)
-        diagram_copy.add_edges_from(self.edges)
         diagram_copy.id = self.id
         return diagram_copy
 

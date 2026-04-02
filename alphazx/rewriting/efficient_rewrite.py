@@ -55,6 +55,9 @@ def get_matches_involving_nodes(zx_match_diagram: ZXMatchDiagram, nodes: Set[int
     """
     Get all matches in the match diagram that involve any of the given ZX diagram nodes.
 
+    Uses set intersection for O(min(|match|, |nodes|)) per match instead of
+    O(|match| * |nodes|) from the naive linear scan.
+
     :param zx_match_diagram: The match diagram
     :param nodes: Set of ZX diagram node IDs
     :return: Set of matches involving those nodes
@@ -62,7 +65,10 @@ def get_matches_involving_nodes(zx_match_diagram: ZXMatchDiagram, nodes: Set[int
     matches = set()
     for match_node in zx_match_diagram.nodes():
         if isinstance(match_node, MatchNode):
-            if any(n in nodes for n in match_node.nodes):
+            # _nodes is a tuple; checking membership against the `nodes` set
+            # is O(1) per element.  For small matches (1-4 nodes) this is fast.
+            # We avoid calling the .nodes property which allocates a new list.
+            if not nodes.isdisjoint(match_node._nodes):
                 matches.add(match_node)
     return matches
 

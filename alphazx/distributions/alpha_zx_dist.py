@@ -69,43 +69,32 @@ class AlphaZXDistribution:
                                    Samples drawn from this distribution are all zeros (no edges are selected to be transferred).
         """
         self.graph_ids = params.graph_ids
-        check_non_zero_rows(params.mixture_dist_probs)
         self.mixture_dist_params = params.mixture_dist_probs
         self.B = self.mixture_dist_params.shape[0]
         self.node_dist_params = params.node_dist_probs
-        check_non_zero_rows(params.phase_dist_probs)
         self.phase_dist_params = params.phase_dist_probs
-        check_non_zero_rows(params.new_edge_dist_probs)
         self.new_edge_dist_params = params.new_edge_dist_probs
         self.transfer_edge_dist_params = params.transfer_edge_dist_probs
 
     def sample_action_types(self, k: int) -> torch.Tensor:
-        return Categorical(probs=self.mixture_dist_params, validate_args=True).sample(torch.Size([k]))
+        return Categorical(probs=self.mixture_dist_params, validate_args=False).sample(torch.Size([k]))
 
     def action_type_log_probs(self, action_types: torch.Tensor) -> torch.Tensor:
-        return Categorical(probs=self.mixture_dist_params, validate_args=True).log_prob(action_types)
+        return Categorical(probs=self.mixture_dist_params, validate_args=False).log_prob(action_types)
 
     def select_node_dist_params(self, action_types: torch.Tensor) -> torch.Tensor:
         # Action types should already be in the range [0, num_action_types-1] from the policy network
-        # No need to subtract 11 anymore
-        selected_node_dist_params = self.node_dist_params[torch.arange(self.B), action_types]
-        try:
-            check_non_zero_rows(selected_node_dist_params)
-        except Exception as error:
-            raise error
-        return selected_node_dist_params
+        return self.node_dist_params[torch.arange(self.B), action_types]
 
     def sample_nodes(self, action_types: torch.Tensor) -> torch.Tensor:
         selected_node_dist_params = self.select_node_dist_params(action_types)
-        check_non_zero_rows(selected_node_dist_params)
-        node_dist = Categorical(probs=selected_node_dist_params, validate_args=True)
+        node_dist = Categorical(probs=selected_node_dist_params, validate_args=False)
         sampled_nodes = node_dist.sample(torch.Size([1]))
         return sampled_nodes
 
     def node_log_probs(self, action_types: torch.Tensor, nodes: torch.Tensor) -> torch.Tensor:
         selected_node_dist_params = self.select_node_dist_params(action_types)
-        assert_not_all_zero(selected_node_dist_params)
-        node_dist = Categorical(probs=selected_node_dist_params, validate_args=True)
+        node_dist = Categorical(probs=selected_node_dist_params, validate_args=False)
         log_probs = node_dist.log_prob(nodes)
         return log_probs
 
@@ -122,8 +111,7 @@ class AlphaZXDistribution:
     def sample_features(self, feature_type: str, nodes: torch.Tensor) -> torch.Tensor:
         if feature_type == 'phase' or feature_type == 'new_edge':
             selected_feature_dist_params = self.select_feature_dist_params(feature_type, nodes)
-            assert_not_all_zero(selected_feature_dist_params)
-            feature_dist = Categorical(probs=selected_feature_dist_params, validate_args=True)
+            feature_dist = Categorical(probs=selected_feature_dist_params, validate_args=False)
             sampled_feature = feature_dist.sample(torch.Size([1]))
             return sampled_feature
         else:
@@ -132,8 +120,7 @@ class AlphaZXDistribution:
     def feature_log_probs(self, feature_type: str, nodes: torch.Tensor, features: torch.Tensor) -> torch.Tensor:
         if feature_type == 'phase' or feature_type == 'new_edge':
             selected_feature_dist_params = self.select_feature_dist_params(feature_type, nodes)
-            assert_not_all_zero(selected_feature_dist_params)
-            feature_dist = Categorical(probs=selected_feature_dist_params, validate_args=True)
+            feature_dist = Categorical(probs=selected_feature_dist_params, validate_args=False)
             log_probs = feature_dist.log_prob(features)
             return log_probs
         else:
@@ -176,8 +163,10 @@ class AlphaZXDistribution:
         phases = sampled_actions[:, :, 3]
         new_edges = sampled_actions[:, :, 4]
         transfer_edges = sampled_actions[:, :, 5:]
-        if not torch.equal(graph_ids.long()[0], self.graph_ids.long()):
-            raise Exception(f'Expected graph ids {self.graph_ids.long()}, received {graph_ids.long()[0]}')
+        expected_ids = self.graph_ids.long().flatten()  # (B,) even if scalar
+        received_ids = graph_ids.long()[:, 0]  # first sample per batch entry → (B,)
+        if not torch.equal(received_ids, expected_ids):
+            raise Exception(f'Expected graph ids {expected_ids}, received {received_ids}')
         action_type_log_probs = self.action_type_log_probs(action_types)
         node_log_probs = self.node_log_probs(action_types, nodes)
         phase_log_probs = self.new_phase_log_probs(nodes, phases)
@@ -202,9 +191,14 @@ class AlphaZXDistribution:
         phases = self.sample_phases(nodes)[0]
         new_edges = self.sample_new_edges(nodes)[0]
         transfer_edges = self.sample_transfer_edges(nodes)[0]
-        samples = torch.cat((self.graph_ids.reshape(1, -1, 1),
-                             torch.stack((action_types, nodes, phases, new_edges), dim=-1), transfer_edges),
-                            dim=-1).long()
+        stacked = torch.stack((action_types, nodes, phases, new_edges), dim=-1)  # (K, B, 4)
+        # Categorical.sample returns (sample_shape, *batch_shape) = (K, B, ...).
+        # Transpose to batch-first (B, K, ...) to match log_prob's expected layout.
+        stacked = stacked.transpose(0, 1)  # (B, K, 4)
+        transfer_edges = transfer_edges.transpose(0, 1)  # (B, K, E_trans)
+        B, K, _ = stacked.shape
+        gids = self.graph_ids.reshape(-1, 1, 1).expand(B, K, 1)  # (B, K, 1)
+        samples = torch.cat((gids, stacked, transfer_edges), dim=-1).long()
         return samples
 
     def entropy(self) -> torch.Tensor:
@@ -213,7 +207,7 @@ class AlphaZXDistribution:
         This uses the upper bound: H(mixture) + sum(H(components | mixture))
         """
         # Entropy of the mixture distribution (action type selection)
-        mixture_entropy = Categorical(probs=self.mixture_dist_params).entropy()
+        mixture_entropy = Categorical(probs=self.mixture_dist_params, validate_args=False).entropy()
 
         # Average entropy of node selection across action types
         node_entropies = []
@@ -223,9 +217,9 @@ class AlphaZXDistribution:
                 node_params = self.select_node_dist_params(action_type_tensor)
                 # Only compute entropy if there are valid nodes for this action type
                 if not torch.all(node_params == 0):
-                    node_entropy = Categorical(probs=node_params + 1e-8).entropy()
+                    node_entropy = Categorical(probs=node_params + 1e-8, validate_args=False).entropy()
                     node_entropies.append(node_entropy)
-            except:
+            except Exception:
                 # Skip if no valid nodes for this action type
                 continue
 

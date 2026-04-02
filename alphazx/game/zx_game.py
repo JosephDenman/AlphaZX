@@ -204,7 +204,9 @@ def remove_isolated_components(zx_diagram: ZXDiagram) -> set[int]:
         raise ValueError('Valid diagrams always have at least two boundary nodes')
     b_nodes = zx_diagram.b_nodes()
     removed = set()
-    for c in nx.connected_components(zx_diagram.copy()):
+    # nx.connected_components is read-only; no need to copy the graph.
+    # ZXDiagram extends nx.MultiGraph (undirected), so this works directly.
+    for c in list(nx.connected_components(zx_diagram)):
         if b_nodes.isdisjoint(c):
             removed.update(c)
             zx_diagram.remove_nodes_from(c)

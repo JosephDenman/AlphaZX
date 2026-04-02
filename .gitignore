@@ -1,5 +1,38 @@
-/tests/**/.hypothesis/
+# Python
 /**/__pycache__/
-AlphaZX.iml
-misc.xml
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+build/
 /dist/
+
+# Virtual environments
+/.venv/
+.env
+
+# Testing
+/tests/**/.hypothesis/
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# Type checking / linting
+.mypy_cache/
+.ruff_cache/
+
+# IDE
+/.idea/
+*.iml
+misc.xml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project-specific
+/.claude/
+/checkpoints/
+/tests/checkpoints/

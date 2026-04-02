@@ -91,6 +91,30 @@ def clifford_zx_diagram(num_qubits: int, depth: int, t_gates: bool = True) -> ZX
     return ZXDiagram(phase_denominator(t_gates), clifford_nx_graph(num_qubits, depth, t_gates))
 
 
+def cnot_had_phase_zx_diagram(
+    num_qubits: int,
+    depth: int,
+    p_had: float = 0.2,
+    p_t: float = 0.2,
+) -> ZXDiagram:
+    """Generate a ZX diagram from a random CNOT+Hadamard+Phase circuit.
+
+    Unlike clifford_zx_diagram (which generates a random ZX graph directly),
+    this starts from an actual quantum circuit and converts it to a ZX diagram.
+    The resulting diagram has realistic structure and typically more T-gates
+    available for optimization, making it better suited for training.
+
+    :param num_qubits: Number of qubits.
+    :param depth: Number of gates in the circuit.
+    :param p_had: Probability of Hadamard gates (default 0.2).
+    :param p_t: Probability of T-gates vs other phase gates (default 0.2).
+    """
+    return ZXDiagram(
+        phase_denominator(True),
+        nx_c_not_had_phase_graph(num_qubits, depth, p_had, p_t, clifford=False),
+    )
+
+
 def clifford_pyg_hdata_zx_diagram(num_qubits: int, depth: int, t_gates: bool = True,
                                   sort_by_row: bool = False) -> HeteroData:
     return ZXDiagram(phase_denominator(t_gates), clifford_nx_graph(num_qubits, depth, t_gates)).to_pyg_hdata(

@@ -11,32 +11,44 @@ def with_laplacian_pe(data: pyg.data.Data, pe_dimension: int) -> pyg.data.Data:
 
 
 def with_random_walk_pe(data: pyg.data.Batch, walk_length: int) -> pyg.data.Batch:
-    """Custom random walk PE that uses dense operations to avoid MKL sparse issues on macOS."""
+    """Random walk PE using PyG's built-in sparse AddRandomWalkPE transform.
+
+    This replaces the original dense O(N^2 * walk_length) implementation with
+    PyG's sparse implementation, which is O(E * walk_length) — much faster for
+    the sparse graphs typical in ZX diagrams.
+
+    Falls back to the dense implementation if the sparse version fails (e.g.
+    MKL sparse issues on some macOS configurations).
+    """
+    try:
+        transform = pyg.transforms.AddRandomWalkPE(walk_length=walk_length, attr_name='pe')
+        data = transform(data)
+        # Ensure float32 output
+        data.pe = data.pe.float()
+        return data
+    except Exception:
+        # Fallback to dense implementation for environments where sparse ops fail
+        return _with_random_walk_pe_dense(data, walk_length)
+
+
+def _with_random_walk_pe_dense(data: pyg.data.Batch, walk_length: int) -> pyg.data.Batch:
+    """Dense fallback for random walk PE (original implementation)."""
     edge_index = data.edge_index
     num_nodes = data.num_nodes
-    batch = data.batch if hasattr(data, 'batch') else torch.zeros(num_nodes, dtype=torch.long)
 
-    # Compute row-normalized adjacency matrix (transition matrix) using dense operations
-    # Get degree for normalization
     row, col = edge_index
     deg = degree(row, num_nodes=num_nodes, dtype=torch.float)
-    deg_inv = 1.0 / deg.clamp(min=1)  # Avoid division by zero
+    deg_inv = 1.0 / deg.clamp(min=1)
 
-    # Create dense adjacency matrix
-    adj = to_dense_adj(edge_index, max_num_nodes=num_nodes)[0]  # [num_nodes, num_nodes]
-
-    # Row-normalize to get transition matrix
+    adj = to_dense_adj(edge_index, max_num_nodes=num_nodes)[0].float()
     transition = adj * deg_inv.unsqueeze(1)
 
-    # Compute random walk PE: powers of transition matrix
     pe = torch.zeros(num_nodes, walk_length, device=edge_index.device, dtype=torch.float)
-
-    # Start with identity (walk of length 0 returns to self with prob 1)
     walk = torch.eye(num_nodes, device=edge_index.device, dtype=torch.float)
 
     for k in range(walk_length):
         walk = walk @ transition
-        pe[:, k] = walk.diag()  # Probability of returning to starting node
+        pe[:, k] = walk.diag()
 
     data.pe = pe
     return data
@@ -82,16 +94,18 @@ def with_embeddable_feats_single(data: pyg.data.Data) -> pyg.data.Data:
     return data
 
 
-def pre_process(data: pyg.data.Batch, pe_dimension: int) -> pyg.data.Batch:
-    """Pre-process a batch by processing each graph individually, then re-batching.
+def pre_process(data, pe_dimension: int):
+    """Pre-process graph data by processing each graph individually.
 
-    This ensures pe attributes are properly preserved when later splitting/re-batching.
+    Accepts either a single Data object or a Batch. For a single Data object,
+    delegates directly to pre_process_single. For a Batch, splits into individual
+    Data objects, processes each, and re-batches.
     """
-    # Split into individual Data objects
-    data_list = data.to_data_list()
-
-    # Process each individually
-    processed_list = [pre_process_single(d, pe_dimension) for d in data_list]
-
-    # Re-batch
-    return pyg.data.Batch.from_data_list(processed_list)
+    if isinstance(data, pyg.data.Batch):
+        # Split into individual Data objects
+        data_list = data.to_data_list()
+        processed_list = [pre_process_single(d, pe_dimension) for d in data_list]
+        return pyg.data.Batch.from_data_list(processed_list)
+    else:
+        # Single Data object
+        return pre_process_single(data, pe_dimension)
