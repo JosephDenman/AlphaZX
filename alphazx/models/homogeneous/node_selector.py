@@ -5,39 +5,67 @@ from alphazx.models import softmax_nonzero_entries, throw_on_nan
 
 
 class NodeSelector(torch.nn.Module):
-    def __init__(self, node_embedding_channels: int, num_node_types: int, num_layers: int, dropout: float):
-        super().__init__()
+    def __init__(self, node_in_channels: int, num_node_types: int, num_layers: int, dropout: float):
+        super(NodeSelector, self).__init__()
         self.num_node_types = num_node_types
-        self.mlp = pyg.nn.MLP(in_channels=node_embedding_channels, hidden_channels=node_embedding_channels,
+        self.mlp = pyg.nn.MLP(in_channels=node_in_channels, hidden_channels=node_in_channels,
                               out_channels=1, num_layers=num_layers, dropout=dropout, norm='layer_norm')
 
     def reset_parameters(self):
         self.mlp.reset_parameters()
 
     def forward(self, x: torch.Tensor, node_types: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
+        """
+        Compute node selection probabilities for each action type.
+
+        Output shape: [B, T, N] where:
+        - B = batch size
+        - T = num_node_types (10 match types)
+        - N = max nodes in batch
+
+        For action type t, node_probs[b, t, :] is a valid probability distribution
+        over nodes of type t+1 in batch b. If no such nodes exist, it's all zeros.
+        """
         x = self.mlp(x).squeeze(-1)
 
-        # Mask invalid node types and set their logits to 0
-        valid_types_mask = (node_types >= 1) & (node_types <= 10)
-        x[~valid_types_mask] = 0.
-
-        # Convert node logits and node types to dense batch form
-        dense_logits = pyg.utils.to_dense_batch(x, batch)[0]
+        # Convert to dense batch form
+        dense_logits, mask = pyg.utils.to_dense_batch(x, batch)
         B, N = dense_logits.shape
 
-        dense_node_types = pyg.utils.to_dense_batch(node_types, batch, batch_size=B, max_num_nodes=N,
-                                                    fill_value=torch.nan)[0].long()
+        dense_node_types, _ = pyg.utils.to_dense_batch(node_types, batch, batch_size=B, max_num_nodes=N,
+                                                       fill_value=0)
 
-        # Create a tensor for node probabilities with zeros
-        node_probs = torch.zeros((B, self.num_node_types, N), device=x.device)
+        # Build type mask: [B, T, N] where type_mask[b, t, n] = True iff node n in batch b has type t+1
+        # Using one-hot encoding for efficiency
+        # Clamp node types to valid range [0, T] for one-hot (0 = invalid, 1-10 = valid types)
+        clamped_types = dense_node_types.clamp(0, self.num_node_types)
+        # One-hot gives [B, N, T+1], we want [B, T, N] for types 1-10 (indices 1 to T in one-hot)
+        one_hot = torch.nn.functional.one_hot(clamped_types, self.num_node_types + 1)  # [B, N, T+1]
+        type_mask = one_hot[:, :, 1:].permute(0, 2, 1).bool()  # [B, T, N], excluding index 0
+        # Also mask padding
+        type_mask = type_mask & mask.unsqueeze(1)
 
-        # Scatter the logits to the correct type dimension
-        node_probs.scatter_(1, dense_node_types.unsqueeze(1), dense_logits.unsqueeze(1))
+        # Expand logits to [B, T, N] - same logit for each type dimension
+        # The type_mask ensures only correct type gets non-masked value
+        expanded_logits = dense_logits.unsqueeze(1).expand(-1, self.num_node_types, -1)
 
-        # Apply softmax to non-zero entries
-        node_probs = softmax_nonzero_entries(node_probs, dim=-1)
+        # Masked softmax: set invalid positions to large negative (not -inf to avoid NaN in backward)
+        masked_logits = torch.where(type_mask, expanded_logits,
+                                    torch.full_like(expanded_logits, -1e9))
+
+        # Softmax per type (dim=-1 is over nodes)
+        node_probs = torch.nn.functional.softmax(masked_logits, dim=-1)
+
+        # Zero out invalid positions (softmax gave them tiny values)
+        node_probs = node_probs * type_mask.float()
+
+        # Re-normalize to get valid distributions
+        probs_sum = node_probs.sum(dim=-1, keepdim=True)
+        node_probs = node_probs / (probs_sum + 1e-10)
+        # Zero out types with no valid nodes
+        node_probs = node_probs * (probs_sum > 0).float()
+
         throw_on_nan(node_probs)
-
         return node_probs
 
     # forward_working_primitive

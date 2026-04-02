@@ -223,10 +223,10 @@ def softmax_nonzero_entries(x: torch.Tensor, dim: int = -1) -> torch.Tensor:
 
 
 def assert_not_all_zero(t: torch.Tensor) -> None:
-    if t.dtype != torch.float64:
-        raise ValueError("Tensor is not of type torch.float64")
+    if t.dtype not in (torch.float32, torch.float64):
+        raise ValueError(f"Tensor is not a float type, got {t.dtype}")
     if torch.all(t == 0):
-        raise AssertionError("The tensor contains all zero floating point 64 numbers.")
+        raise AssertionError("The tensor contains all zeros.")
 
 
 def is_all_zero(t: torch.Tensor) -> bool:

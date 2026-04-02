@@ -12,7 +12,7 @@ class NeighborMultisetTransformer(torch.nn.Module):
                  heads: int = 1,
                  layer_norm: bool = True,
                  dropout: float = 0.0):
-        super().__init__()
+        super(NeighborMultisetTransformer, self).__init__()
         self.gmt = pyg.nn.GraphMultisetTransformer(in_channels, k, num_encoder_blocks, num_encoder_blocks, heads,
                                                    # TODO: Reevaluate whether 'False' is correct.
                                                    False, layer_norm, dropout)

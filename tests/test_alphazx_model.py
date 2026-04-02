@@ -22,23 +22,6 @@ repr_gps_edge_embedding_out_channels = 64
 repr_gps_edge_out_channels = 64
 repr_gps_pe_in_channels = pe_dim
 repr_gps_pe_out_channels = pe_dim
-repr_gps_num_layers = 2
-repr_gps_bias = True
-repr_gps_num_attn_heads = 4
-repr_gps_attn_type = 'multihead'
-repr_gps_attn_kwargs = {}
-repr_gps_mlp_hidden_channels = 64
-policy_rewrite_type_out_channels = 32
-policy_node_out_channels = 32
-policy_rts_num_layers = 4
-policy_ns_num_layers = 4
-policy_nps_num_layers = 4
-policy_nes_num_layers = 4
-policy_tes_num_pooling_encoder_blocks = 4
-policy_tes_num_pooling_heads = 4
-policy_tes_pooling_layer_norm = True
-policy_pooling_dropout = 0.1
-value_hidden_channels = 64
 
 model = AlphaZXModel(num_node_types,
                      num_possible_phases,
@@ -47,24 +30,7 @@ model = AlphaZXModel(num_node_types,
                      repr_gps_num_edge_embeddings,
                      repr_gps_edge_embedding_out_channels,
                      repr_gps_pe_in_channels,
-                     repr_gps_pe_out_channels,
-                     repr_gps_num_layers,
-                     repr_gps_bias,
-                     repr_gps_num_attn_heads,
-                     repr_gps_attn_type,
-                     repr_gps_attn_kwargs,
-                     repr_gps_mlp_hidden_channels,
-                     policy_rewrite_type_out_channels,
-                     policy_node_out_channels,
-                     policy_rts_num_layers,
-                     policy_ns_num_layers,
-                     policy_nps_num_layers,
-                     policy_nes_num_layers,
-                     policy_tes_num_pooling_encoder_blocks,
-                     policy_tes_num_pooling_heads,
-                     policy_tes_pooling_layer_norm,
-                     policy_pooling_dropout,
-                     value_hidden_channels)
+                     repr_gps_pe_out_channels)
 
 
 def create_batch_list(num_batches: int, batch_size: int, num_qubits: int, depth: int) -> list[pyg.data.Batch]:

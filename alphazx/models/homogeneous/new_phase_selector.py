@@ -5,10 +5,10 @@ from alphazx.diagram.match import FRightZMatch, FRightXMatch
 
 
 class NewPhaseSelector(torch.nn.Module):
-    def __init__(self, node_embedding_channels: int, num_possible_phases: int, num_layers: int, dropout: float):
-        super().__init__()
+    def __init__(self, node_in_channels: int, num_possible_phases: int, num_layers: int, dropout: float):
+        super(NewPhaseSelector, self).__init__()
         self.num_possible_phases = num_possible_phases
-        self.mlp = pyg.nn.MLP(in_channels=node_embedding_channels, hidden_channels=node_embedding_channels,
+        self.mlp = pyg.nn.MLP(in_channels=node_in_channels, hidden_channels=node_in_channels,
                               out_channels=num_possible_phases, num_layers=num_layers, dropout=dropout, norm='layer_norm')
 
     def reset_parameters(self):

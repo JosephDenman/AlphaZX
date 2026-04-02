@@ -1,9 +1,11 @@
+from typing import Any
+
 import torch
 import torch.nn as nn
 import torch_geometric as pyg
 
 from alphazx.distributions.alpha_zx_dist import AlphaZXDistributionParams
-from alphazx.models import softmax_nonzero_entries, throw_on_nan
+from alphazx.models.homogeneous.gps import GPS
 from alphazx.models.homogeneous.new_edge_selector import NewEdgeSelector
 from alphazx.models.homogeneous.new_phase_selector import NewPhaseSelector
 from alphazx.models.homogeneous.node_selector import NodeSelector
@@ -16,51 +18,68 @@ class PolicyNetwork(nn.Module):
                  num_node_types: int,
                  num_possible_phases: int,
                  num_possible_new_edges: int,
-                 node_embedding_channels: int,
-                 rewrite_type_out_channels: int,
-                 node_out_channels: int,
-                 rts_num_layers: int,
-                 ns_num_layers: int,
-                 nps_num_layers: int,
-                 nes_num_layers: int,
-                 tes_num_pooling_encoder_blocks: int,
-                 tes_num_pooling_heads: int,
-                 tes_pooling_layer_norm: bool,
-                 dropout: float):
+                 node_in_channels: int,
+                 edge_in_channels: int,
+                 gps_num_layers: int = 2,  # Reduced from 4 to prevent over-smoothing
+                 gps_heads: int = 4,
+                 gps_dropout: float = 0.1,
+                 gps_act: str = 'relu',
+                 gps_act_kwargs: dict[str, Any] = None,
+                 gps_norm: str = 'batch_norm',
+                 gps_norm_kwargs: dict[str, Any] = None,
+                 gps_attn_type: str = 'multihead',
+                 gps_attn_kwargs: dict[str, Any] = None,
+                 gps_mlp_hidden_channels: int = 128,
+                 gps_mlp_num_layers: int = 2,
+                 rts_num_layers: int = 2,
+                 ns_num_layers: int = 2,
+                 nps_num_layers: int = 2,
+                 nes_num_layers: int = 2,
+                 tes_num_pooling_encoder_blocks: int = 1,
+                 tes_num_pooling_heads: int = 1,
+                 tes_pooling_layer_norm: bool = True,
+                 dropout: float = 0.1):
         super(PolicyNetwork, self).__init__()
         self.num_node_types = num_node_types
         self.num_possible_phases = num_possible_phases
         self.num_possible_new_edges = num_possible_new_edges
-        self.rewrite_type_selector = RewriteTypeSelector(node_embedding_channels, rewrite_type_out_channels, num_node_types, rts_num_layers, dropout)
-        self.node_selector = NodeSelector(node_embedding_channels, rewrite_type_out_channels, node_out_channels, num_node_types, ns_num_layers, dropout)
-        self.new_phase_selector = NewPhaseSelector(node_embedding_channels, num_possible_phases, nps_num_layers, dropout)
-        self.new_edge_selector = NewEdgeSelector(node_embedding_channels, num_possible_new_edges, nes_num_layers, dropout)
-        self.transfer_edge_selector = TransferEdgeSelector(node_embedding_channels, num_node_types,
+        self.gps = GPS(node_in_channels,
+                       node_in_channels,
+                       edge_in_channels,
+                       gps_num_layers,
+                       gps_heads,
+                       gps_dropout,
+                       gps_act,
+                       gps_act_kwargs,
+                       gps_norm,
+                       gps_norm_kwargs,
+                       gps_attn_type,
+                       gps_attn_kwargs,
+                       gps_mlp_hidden_channels,
+                       gps_mlp_num_layers)
+        # RewriteTypeSelector outputs probabilities for action types (10 match types excluding boundary)
+        self.rewrite_type_selector = RewriteTypeSelector(node_in_channels, 10, rts_num_layers, dropout)
+        # NodeSelector outputs probabilities for each node type (10 match types)
+        self.node_selector = NodeSelector(node_in_channels, 10, ns_num_layers, dropout)
+        self.new_phase_selector = NewPhaseSelector(node_in_channels, num_possible_phases, nps_num_layers, dropout)
+        self.new_edge_selector = NewEdgeSelector(node_in_channels, num_possible_new_edges, nes_num_layers, dropout)
+        self.transfer_edge_selector = TransferEdgeSelector(node_in_channels, num_node_types,
                                                            tes_num_pooling_encoder_blocks, tes_num_pooling_heads,
                                                            tes_pooling_layer_norm, dropout)
 
     def reset_parameters(self):
+        self.gps.reset_parameters()
         self.rewrite_type_selector.reset_parameters()
         self.node_selector.reset_parameters()
         self.new_phase_selector.reset_parameters()
         self.new_edge_selector.reset_parameters()
         self.transfer_edge_selector.reset_parameters()
 
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, node_type: torch.Tensor, batch: torch.Tensor,
-                graph_ids: torch.Tensor) -> AlphaZXDistributionParams:
-        """
-        TODO: Have the node, phase, and edge prob computations be autoregressive. Compute mixture probabilities last
-              to incorporate intermediate embedding updates. Do we need to do layer norm / residual connection between each
-              MLP?
-        :return: Parameters for the AlphaZXDistribution.
-        """
-        rewrite_type_embedding = self.rewrite_type_selector(x, node_type, batch)
-        print('rewrite_type_embedding.shape = ', rewrite_type_embedding.shape)
-        mixture_probs = softmax_nonzero_entries(rewrite_type_embedding)
-        throw_on_nan(mixture_probs)
-        node_embeddings = self.node_selector(x, rewrite_type_embedding, node_type, batch)
-        node_probs = softmax_nonzero_entries(node_embeddings)
-        throw_on_nan(node_embeddings)
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, edge_attr: torch.Tensor, node_type: torch.Tensor,
+                batch: torch.Tensor, graph_ids: torch.Tensor) -> AlphaZXDistributionParams:
+        x = self.gps(x, edge_index, edge_attr, batch)
+        mixture_probs = self.rewrite_type_selector(x, node_type, batch)
+        node_probs = self.node_selector(x, node_type, batch)
         phase_probs = self.new_phase_selector(x, node_type, batch)
         edge_probs = self.new_edge_selector(x, node_type, batch)
         transfer_edge_probs = self.transfer_edge_selector(x, edge_index, node_type, batch)
@@ -70,14 +89,6 @@ class PolicyNetwork(nn.Module):
                                          phase_probs,
                                          edge_probs,
                                          transfer_edge_probs)
-
-
-def trans_dec_test():
-    decoder_layer = nn.TransformerDecoderLayer(d_model=16, nhead=8)
-    transformer_decoder = nn.TransformerDecoder(decoder_layer, num_layers=6)
-    memory = torch.rand(2, 8, 16)
-    tgt = torch.rand(2, 8, 16)
-    print(transformer_decoder(tgt, memory))
 
 
 def pad_or_strip(minibatch_actions: torch.Tensor, minibatch_obs: pyg.data.Batch) -> torch.Tensor:

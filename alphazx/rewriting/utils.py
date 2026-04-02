@@ -27,19 +27,3 @@ def rewrite(diagram: ZXDiagram, match: MatchNode, f_right_params: tuple[float, i
         raise Exception(f'Bug found: unexpected match type {match}')
 
 
-def efficient_rewrite(zx_diagram: ZXDiagram,
-                      zx_match_diagram: ZXMatchDiagram,
-                      match: MatchNode,
-                      f_right_params: tuple[float, int, set[int]] | None = None) -> None:
-    """
-    Performs the given rewrite then checks in the neighborhood of the nodes involved in the rewrite for matches that
-    were removed or during the rewrite. Mutates the input ZX diagram and ZX match diagrams to reflect the changes.
-    Avoids recomputing matches over the entire graph.
-
-    :param zx_diagram:
-    :param zx_match_diagram:
-    :param match:
-    :param f_right_params:
-    :return:
-    """
-    pass

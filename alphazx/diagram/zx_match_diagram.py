@@ -110,11 +110,16 @@ class ZXMatchDiagram(nx.DiGraph):
 
     def to_pyg_data(self, with_reverse_mapping: bool = False, sort_by_row: bool = False) -> pyg.data.Data | tuple[
         pyg.data.Data, 'DataIndexToMatch']:
-        for n, ndata in self.nodes(data=True):
+        # Create a deep copy to avoid modifying the original graph
+        # This keeps the NetworkX graph clean with string types as the source of truth
+        import copy
+        graph_copy = copy.deepcopy(self)
+
+        for n, ndata in graph_copy.nodes(data=True):
             ndata['node_type'] = torch.tensor(METADATA.node_type_abbrev_index_dict[ndata['node_type']])
-        for _, _, edata in self.edges(data=True):
+        for _, _, edata in graph_copy.edges(data=True):
             edata['edge_type'] = torch.tensor(METADATA.edge_type_to_index_dict[edata['edge_type']])
-        data = pyg.utils.from_networkx(self,
+        data = pyg.utils.from_networkx(graph_copy,
                                        group_node_attrs=['node_type', 'node_phase', 'node_set'],
                                        group_edge_attrs=['edge_type', 'edge_size'])
         data.id = torch.tensor(self.zx_diagram.id, dtype=torch.float64)

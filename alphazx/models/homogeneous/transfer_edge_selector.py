@@ -18,12 +18,12 @@ class TransferEdgeSelector(torch.nn.Module):
     def __init__(self,
                  in_channels: int,
                  num_node_types: int,
-                 gmt_num_encoder_blocks: int = 4,
-                 gmt_heads: int = 4,
+                 gmt_num_encoder_blocks: int = 1,
+                 gmt_heads: int = 1,
                  gmt_layer_norm: bool = True,
                  gmt_dropout: float = 0.0,
                  mlp_hidden_channels: int = 64,
-                 mlp_num_layers: int = 4,
+                 mlp_num_layers: int = 2,
                  mlp_dropout: float | list[float] = 0.1,
                  mlp_act: Optional[str | Callable] = "relu",
                  mlp_act_first: bool = False,
@@ -32,7 +32,7 @@ class TransferEdgeSelector(torch.nn.Module):
                  mlp_norm_kwargs: Optional[dict[str, Any]] = None,
                  mlp_plain_last: bool = True,
                  mlp_bias: bool | list[bool] = True):
-        super().__init__()
+        super(TransferEdgeSelector, self).__init__()
         self.num_node_types = num_node_types
         self.neighbor_trans = SetTransformerAggregation(in_channels,
                                                         num_node_types,

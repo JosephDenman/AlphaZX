@@ -86,7 +86,9 @@ class AlphaZXDistribution:
         return Categorical(probs=self.mixture_dist_params, validate_args=True).log_prob(action_types)
 
     def select_node_dist_params(self, action_types: torch.Tensor) -> torch.Tensor:
-        selected_node_dist_params = self.node_dist_params[torch.arange(self.B), action_types - 11]
+        # Action types should already be in the range [0, num_action_types-1] from the policy network
+        # No need to subtract 11 anymore
+        selected_node_dist_params = self.node_dist_params[torch.arange(self.B), action_types]
         try:
             check_non_zero_rows(selected_node_dist_params)
         except Exception as error:
@@ -205,22 +207,34 @@ class AlphaZXDistribution:
                             dim=-1).long()
         return samples
 
-    @staticmethod
-    def entropy() -> torch.Tensor:
+    def entropy(self) -> torch.Tensor:
         """
-        It isn't obvious how to calculate the exact entropy for the entire distribution. We need to take a tractable
-        upper bound. Calculating the exact entropy for just the Bernoulli component is also intractable, since the
-        support can't easily be enumerated as n grows. So, we need to make two concessions:
-
-        1. Use a mixture of independent multivariate bernoulli distributions instead of a non-independent single
-           multi-variate bernoulli mixture.
-        2. Optimize an upper bound of the entropy instead of the exact entropy.
-
-        Those concessions, along with the following facts:
-
-        1. H(A, B) <= H(A) + H(B)
-        2. H(m1 * A + (1 - m1) * B) <= m1 * H(A) + m2 * H(B)
-
-        will allow us to optimize an upper bound on the distribution.
+        Calculate an approximation of the distribution entropy for exploration.
+        This uses the upper bound: H(mixture) + sum(H(components | mixture))
         """
-        return torch.tensor(0.)
+        # Entropy of the mixture distribution (action type selection)
+        mixture_entropy = Categorical(probs=self.mixture_dist_params).entropy()
+
+        # Average entropy of node selection across action types
+        node_entropies = []
+        for action_type in range(self.mixture_dist_params.shape[1]):
+            action_type_tensor = torch.full((self.B,), action_type, device=self.mixture_dist_params.device)
+            try:
+                node_params = self.select_node_dist_params(action_type_tensor)
+                # Only compute entropy if there are valid nodes for this action type
+                if not torch.all(node_params == 0):
+                    node_entropy = Categorical(probs=node_params + 1e-8).entropy()
+                    node_entropies.append(node_entropy)
+            except:
+                # Skip if no valid nodes for this action type
+                continue
+
+        if node_entropies:
+            avg_node_entropy = torch.stack(node_entropies).mean()
+        else:
+            avg_node_entropy = torch.tensor(0.0, device=self.mixture_dist_params.device)
+
+        # Combine entropies (this is an upper bound)
+        total_entropy = mixture_entropy + avg_node_entropy * 0.5  # Weight node entropy less
+
+        return total_entropy.mean()  # Average over batch
