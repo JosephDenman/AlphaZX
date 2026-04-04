@@ -14,12 +14,12 @@ def add_attr_dicts(hdata: pyg.data.HeteroData) -> None:
         if hdata[ntype].x.shape[0] == 0:
             del hdata[ntype]
         else:
-            hdata[ntype].node_phase = hdata[ntype].x[:, 0].to(torch.float64)
+            hdata[ntype].node_phase = hdata[ntype].x[:, 0].to(torch.float32)
     for etype in METADATA.edge_types:
         if hdata[etype].edge_index.shape[1] == 0:
             del hdata[etype]
         else:
-            hdata[etype].edge_size = hdata[etype].edge_attr[:, 0].to(torch.float64)
+            hdata[etype].edge_size = hdata[etype].edge_attr[:, 0].to(torch.float32)
 
 
 def compute_edge_type_attr(m: ZXMatchDiagramNode, n: ZXMatchDiagramNode) -> tuple[str, str, str]:
@@ -134,9 +134,9 @@ class ZXMatchDiagram(nx.DiGraph):
             for u, v, edata in self.edges(data=True):
                 edata['edge_type'] = saved_edge_types[id(edata)]
 
-        data.id = torch.tensor(self.zx_diagram.id, dtype=torch.float64)
+        data.id = torch.tensor(self.zx_diagram.id, dtype=torch.float32)
         data.node_type = data.x[:, 0].to(dtype=torch.long)
-        data.node_phase = data.x[:, 1].to(dtype=torch.float64)
+        data.node_phase = data.x[:, 1].to(dtype=torch.float32)
         data.node_set = data.x[:, 2:].to(dtype=torch.long)
         # TODO: For some reason 'data.sort' does not work...
         data.edge_index, data.edge_attr = pyg.utils.sort_edge_index(data.edge_index, data.edge_attr,

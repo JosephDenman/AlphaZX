@@ -64,7 +64,9 @@ class ValueNetwork(nn.Module):
     def reset_parameters(self):
         self.gps.reset_parameters()
         self.global_attention.reset_parameters()
-        self.ff.reset_parameters()
+        for module in self.ff:
+            if hasattr(module, 'reset_parameters'):
+                module.reset_parameters()
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor, edge_attr: torch.Tensor,
                 batch: torch.Tensor) -> torch.Tensor:

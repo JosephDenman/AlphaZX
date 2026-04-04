@@ -32,9 +32,11 @@ import torch
 from alphazx.diagram import METADATA, POSSIBLE_PHASES
 from alphazx.models.homogeneous.alphazx_model import AlphaZXModel
 from alphazx.mcts.config import MCTSConfig
+from alphazx.mcts.curriculum import CurriculumScheduler, CurriculumConfig
 from alphazx.mcts.trainer import Trainer, TrainerConfig
 from alphazx.mcts.replay_buffer import ReplayBuffer
 from alphazx.mcts.evaluator import Evaluator
+from alphazx.mcts.tb_logger import TBLogger
 
 
 def parse_args() -> argparse.Namespace:
@@ -45,9 +47,9 @@ def parse_args() -> argparse.Namespace:
     # --- Circuit parameters ---
     circuit = parser.add_argument_group('Circuit generation')
     circuit.add_argument('--num-qubits', type=int, default=10,
-                         help='Number of qubits in training circuits (default: 5)')
+                         help='Number of qubits in training circuits (default: 10)')
     circuit.add_argument('--depth', type=int, default=10,
-                         help='Depth of training circuits (default: 5)')
+                         help='Depth of training circuits (default: 10)')
     circuit.add_argument('--max-episode-length', type=int, default=100,
                          help='Max steps per episode (default: 100)')
     circuit.add_argument('--circuit-type', choices=['cnot_had_phase', 'clifford'],
@@ -57,19 +59,19 @@ def parse_args() -> argparse.Namespace:
                          help='Hadamard gate probability for CNOT_HAD_PHASE (default: 0.2)')
     circuit.add_argument('--p-t', type=float, default=0.4,
                          help='T-gate probability for CNOT_HAD_PHASE (default: 0.4)')
-    circuit.add_argument('--max-t-gate-increase', type=int, default=5,
-                         help='Terminate episode if T-gates exceed initial by this much (default: 5, 0=disable)')
+    circuit.add_argument('--max-t-gate-increase', type=int, default=10,
+                         help='Terminate episode if T-gates exceed initial by this much (default: 10, 0=disable)')
     circuit.add_argument('--min-initial-t-gates', type=int, default=2,
                          help='Re-roll circuits with fewer T-gates than this (default: 2)')
 
     # --- Model architecture ---
     model_group = parser.add_argument_group('Model architecture')
     model_group.add_argument('--node-channels', type=int, default=4,
-                             help='Node embedding dimension (default: 64)')
+                             help='Node embedding dimension (default: 4)')
     model_group.add_argument('--edge-channels', type=int, default=4,
-                             help='Edge embedding dimension (default: 64)')
+                             help='Edge embedding dimension (default: 4)')
     model_group.add_argument('--pe-dim', type=int, default=4,
-                             help='Positional encoding dimension (default: 20)')
+                             help='Positional encoding dimension (default: 4)')
 
     # --- MCTS parameters ---
     mcts = parser.add_argument_group('MCTS')
@@ -81,6 +83,10 @@ def parse_args() -> argparse.Namespace:
                       help='Progressive widening exponent (default: 0.5)')
     mcts.add_argument('--temperature', type=float, default=1.0,
                       help='MCTS temperature for self-play (default: 1.0)')
+    mcts.add_argument('--leaf-batch-size', type=int, default=8,
+                      help='Batch size for leaf evaluation in MCTS (default: 8). '
+                           'Higher values give more NN throughput but less accurate '
+                           'visit counts within each wave. Set to 1 to disable batching.')
 
     # --- Training parameters ---
     train = parser.add_argument_group('Training')
@@ -119,6 +125,33 @@ def parse_args() -> argparse.Namespace:
     ev.add_argument('--no-pyzx-comparison', action='store_true',
                     help='Disable PyZX baseline comparison')
 
+    # --- Curriculum learning ---
+    cur = parser.add_argument_group('Curriculum learning')
+    cur.add_argument('--curriculum', action='store_true',
+                     help='Enable curriculum learning (start with small circuits, '
+                          'progressively increase difficulty)')
+    cur.add_argument('--curriculum-strategy', choices=['performance', 'linear'],
+                     default='performance',
+                     help='Advancement strategy (default: performance)')
+    cur.add_argument('--curriculum-start-qubits', type=int, default=2,
+                     help='Starting number of qubits (default: 2)')
+    cur.add_argument('--curriculum-start-depth', type=int, default=3,
+                     help='Starting circuit depth (default: 3)')
+    cur.add_argument('--curriculum-advance-threshold', type=float, default=0.5,
+                     help='T-gate reduction ratio required to advance (default: 0.5)')
+    cur.add_argument('--curriculum-advance-window', type=int, default=3,
+                     help='Consecutive iterations meeting threshold to advance (default: 3)')
+    cur.add_argument('--curriculum-linear-every', type=int, default=10,
+                     help='For linear strategy: advance every N iterations (default: 10)')
+    cur.add_argument('--curriculum-qubit-step', type=int, default=1,
+                     help='Qubits added per advancement (default: 1)')
+    cur.add_argument('--curriculum-depth-step', type=int, default=2,
+                     help='Depth added per advancement (default: 2)')
+    cur.add_argument('--curriculum-mix-easier', type=float, default=0.1,
+                     help='Fraction of games at easier difficulty (default: 0.1)')
+    cur.add_argument('--curriculum-mix-harder', type=float, default=0.1,
+                     help='Fraction of games at harder difficulty (default: 0.1)')
+
     # --- Checkpointing ---
     ckpt = parser.add_argument_group('Checkpointing')
     ckpt.add_argument('--checkpoint-dir', type=str, default='checkpoints',
@@ -131,6 +164,13 @@ def parse_args() -> argparse.Namespace:
     # --- Device ---
     parser.add_argument('--device', type=str, default=None,
                         help='Device (auto-detected if not specified)')
+
+    # --- TensorBoard ---
+    tb = parser.add_argument_group('TensorBoard')
+    tb.add_argument('--tensorboard-dir', type=str, default='runs/alphazx',
+                    help='TensorBoard log directory (default: runs/alphazx)')
+    tb.add_argument('--no-tensorboard', action='store_true',
+                    help='Disable TensorBoard logging')
 
     # --- Logging ---
     parser.add_argument('--log-level', choices=['DEBUG', 'INFO', 'WARNING'],
@@ -169,6 +209,7 @@ def build_mcts_config(args: argparse.Namespace) -> MCTSConfig:
         p_t=args.p_t,
         max_t_gate_increase=args.max_t_gate_increase,
         min_initial_t_gates=args.min_initial_t_gates,
+        leaf_batch_size=args.leaf_batch_size,
     )
 
 
@@ -188,7 +229,31 @@ def build_trainer_config(args: argparse.Namespace) -> TrainerConfig:
         eval_games=args.eval_games,
         checkpoint_interval=args.checkpoint_interval,
         checkpoint_dir=args.checkpoint_dir,
+        tensorboard=not args.no_tensorboard,
+        tensorboard_dir=args.tensorboard_dir,
     )
+
+
+def build_curriculum(args: argparse.Namespace) -> Optional[CurriculumScheduler]:
+    """Build CurriculumScheduler from command-line arguments, or None if disabled."""
+    if not args.curriculum:
+        return None
+    config = CurriculumConfig(
+        enabled=True,
+        start_num_qubits=args.curriculum_start_qubits,
+        start_depth=args.curriculum_start_depth,
+        target_num_qubits=args.num_qubits,
+        target_depth=args.depth,
+        strategy=args.curriculum_strategy,
+        advance_threshold=args.curriculum_advance_threshold,
+        advance_window=args.curriculum_advance_window,
+        linear_advance_every=args.curriculum_linear_every,
+        qubit_step=args.curriculum_qubit_step,
+        depth_step=args.curriculum_depth_step,
+        mix_easier_fraction=args.curriculum_mix_easier,
+        mix_harder_fraction=args.curriculum_mix_harder,
+    )
+    return CurriculumScheduler(config)
 
 
 def detect_device(requested: Optional[str]) -> torch.device:
@@ -221,6 +286,7 @@ def main():
     mcts_config = build_mcts_config(args)
     trainer_config = build_trainer_config(args)
     replay_buffer = ReplayBuffer(capacity=args.buffer_capacity)
+    curriculum = build_curriculum(args)
 
     # Count parameters
     num_params = sum(p.numel() for p in model.parameters())
@@ -236,6 +302,16 @@ def main():
             eval_temperature=args.eval_temperature,
         )
 
+    # TensorBoard logger
+    tb_logger = None
+    if trainer_config.tensorboard:
+        tb_logger = TBLogger(
+            log_dir=trainer_config.tensorboard_dir,
+            enabled=True,
+        )
+        logger.info(f"TensorBoard: {trainer_config.tensorboard_dir}")
+        logger.info(f"  View with: tensorboard --logdir {trainer_config.tensorboard_dir}")
+
     # Build or resume trainer
     if args.resume:
         logger.info(f"Resuming from checkpoint: {args.resume}")
@@ -243,6 +319,9 @@ def main():
             model, args.resume, mcts_config, trainer_config, replay_buffer, device
         )
         trainer.evaluator = evaluator
+        trainer.tb_logger = tb_logger
+        if curriculum and trainer.curriculum is None:
+            trainer.curriculum = curriculum
     else:
         trainer = Trainer(
             model=model,
@@ -251,10 +330,19 @@ def main():
             replay_buffer=replay_buffer,
             device=device,
             evaluator=evaluator,
+            tb_logger=tb_logger,
+            curriculum=curriculum,
         )
 
     # Log configuration summary
-    logger.info(f"Circuit: {args.num_qubits} qubits, depth {args.depth}")
+    if curriculum:
+        logger.info(
+            f"Curriculum: {curriculum.config.start_num_qubits}q/d{curriculum.config.start_depth} → "
+            f"{args.num_qubits}q/d{args.depth} "
+            f"({curriculum.config.strategy}, {len(curriculum.levels)} levels)"
+        )
+    else:
+        logger.info(f"Circuit: {args.num_qubits} qubits, depth {args.depth}")
     logger.info(f"MCTS: {args.num_simulations} simulations, c_puct={args.c_puct}")
     logger.info(f"Training: {args.num_iterations} iterations, "
                 f"{args.self_play_games} games/iter, "

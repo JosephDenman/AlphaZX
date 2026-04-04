@@ -32,6 +32,60 @@ from alphazx.game.zx_game import (
 )
 from alphazx.rewriting.efficient_rewrite import efficient_rewrite
 
+from alphazx.diagram.match import METADATA
+
+
+def _clone_match_diagram(src: ZXMatchDiagram, new_zx_diagram: ZXDiagram) -> ZXMatchDiagram:
+    """
+    Create an independent shallow copy of a ZXMatchDiagram, bypassing __init__.
+
+    This copies the underlying nx.DiGraph data (nodes, edges, attribute dicts)
+    directly, then copies the custom instance attributes (type-specific node sets,
+    super_nodes, etc.) and re-points the zx_diagram reference to `new_zx_diagram`.
+
+    This is O(V + E) in the match diagram size — far cheaper than recomputing
+    all matches from scratch via to_zx_match_diagram(), which involves pattern
+    detection across the entire ZX diagram.
+    """
+    # Create an empty ZXMatchDiagram-shaped object without calling __init__.
+    # object.__new__ skips __init__ entirely.
+    clone = object.__new__(ZXMatchDiagram)
+
+    # Initialize the nx.DiGraph base class directly
+    nx.DiGraph.__init__(clone)
+
+    # Copy graph-level attributes
+    clone.graph.update(src.graph)
+
+    # Copy nodes with shallow-copied attribute dicts.
+    # Use nx.DiGraph methods directly to bypass ZXMatchDiagram.add_node, which
+    # would recompute attributes and double-add to type-specific sets.
+    nx.DiGraph.add_nodes_from(clone, ((n, d.copy()) for n, d in src._node.items()))
+
+    # Copy edges with shallow-copied attribute dicts.
+    # Use nx.DiGraph.add_edges_from to bypass ZXMatchDiagram.add_edge, which
+    # would recompute edge attributes and add reverse edges (already present).
+    nx.DiGraph.add_edges_from(
+        clone,
+        ((u, v, datadict.copy())
+         for u, nbrs in src._adj.items()
+         for v, datadict in nbrs.items())
+    )
+
+    # Copy ZXMatchDiagram-specific instance attributes
+    clone.zx_diagram = new_zx_diagram
+    clone.phase_denominator = new_zx_diagram.phase_denominator
+    clone.node_attrs = new_zx_diagram.node_attrs
+    clone.edge_attrs = new_zx_diagram.edge_attrs
+    clone.super_nodes = set(src.super_nodes)
+
+    # Copy all type-specific node sets (frz_nodes, frx_nodes, flz_nodes, etc.)
+    for abbrev in METADATA.match_node_type_abbrevs:
+        attr_name = f'{abbrev}_nodes'
+        setattr(clone, attr_name, set(getattr(src, attr_name)))
+
+    return clone
+
 
 class GameState:
     """
@@ -77,15 +131,23 @@ class GameState:
         """
         Create an independent copy of this state for tree branching.
 
-        The ZXDiagram is copied via its .copy() method (efficient: uses add_nodes_from/add_edges_from).
-        The ZXMatchDiagram is recomputed from the copied diagram. This is necessary because the
-        match diagram references the original ZXDiagram internally (zx_match_diagram.zx_diagram),
-        and those references must point to the new copy.
+        The ZXDiagram is copied via its .copy() method.
+        The ZXMatchDiagram is cloned by copying the underlying nx.DiGraph data structures
+        directly (bypassing ZXMatchDiagram.__init__ and its overridden add_node/add_edge,
+        which would recompute attributes and double-add to type sets). This replaces the
+        previous approach of calling to_zx_match_diagram() from scratch, which was the
+        dominant bottleneck in MCTS search (~5-15s per search of 100 simulations).
+
+        Safety:
+        - MatchNode/SuperNode objects are immutable (used as dict keys) — shared safely.
+        - Node/edge attribute dicts are shallow-copied, so mutations don't propagate.
+        - The type-specific node sets (frz_nodes, etc.) are shallow-copied sets.
+        - The zx_diagram reference is updated so future add_node/add_edge calls
+          (during efficient_rewrite in apply_action) read from the new diagram.
         """
         diagram_copy = self.zx_diagram.copy()
-        match_diagram_copy = to_zx_match_diagram(diagram_copy)
+        match_diagram_copy = _clone_match_diagram(self.zx_match_diagram, diagram_copy)
         cloned = GameState(diagram_copy, match_diagram_copy)
-        # Don't copy _data — it will be lazily recomputed if needed
         return cloned
 
     def ensure_data(self) -> tuple[Data, DataIndexToMatch]:
@@ -161,7 +223,6 @@ class GameState:
         Uses the match node type sets on the ZXMatchDiagram for O(1) check
         instead of iterating all nodes.
         """
-        from alphazx.diagram.match import METADATA
         for abbrev in METADATA.match_node_type_abbrevs:
             type_set = getattr(self.zx_match_diagram, f'{abbrev}_nodes', None)
             if type_set and len(type_set) > 0:

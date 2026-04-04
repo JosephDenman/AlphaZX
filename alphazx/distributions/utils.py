@@ -119,12 +119,13 @@ def insert_random_integers(tensor: torch.Tensor, num_inserts: int, insert_val: i
     # New length after inserting integers
     new_length = original_length + num_inserts
     # Create an index tensor of size new_length, filled with values that are within the range of original_length
-    # This will be used to scatter the original tensor values into the new tensor, leaving spaces for the inserted integers
+    # This will be used to place the original tensor values into the new tensor, leaving spaces for the inserted integers
     indices = torch.randperm(new_length)[:original_length]
     # Create a new tensor filled with the insert_val with the new length
     new_tensor = torch.full((new_length,), insert_val, dtype=tensor.dtype)
-    # Scatter the original tensor values into the new tensor
-    new_tensor.scatter_(0, indices, tensor)
+    # Place the original tensor values into the new tensor using index assignment
+    # (equivalent to scatter_ but avoids MPS compatibility issues)
+    new_tensor[indices] = tensor
     return new_tensor
 
 

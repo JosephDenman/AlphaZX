@@ -22,6 +22,8 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
+from collections import Counter
+
 from alphazx.diagram.diagram_generators import clifford_zx_diagram, cnot_had_phase_zx_diagram
 from alphazx.game.zx_game import num_non_clifford_gates as num_non_clifford_gates_diagram
 from alphazx.game.zx_game import num_non_clifford_gates
@@ -32,6 +34,21 @@ from alphazx.mcts.replay_buffer import TrainingExample, ReplayBuffer
 from torch_geometric.data import Data
 
 logger = logging.getLogger(__name__)
+
+# Human-readable names for action type indices (action_type field in the action tuple).
+# action_type 0 → FRightZ (index 1), action_type 1 → FRightX (index 2), etc.
+ACTION_TYPE_NAMES = {
+    0: "f-right-z",
+    1: "f-right-x",
+    2: "f-left-z",
+    3: "f-left-x",
+    4: "b-right",
+    5: "b-left",
+    6: "y-right-z",
+    7: "y-left-z",
+    8: "y-right-x",
+    9: "y-left-x",
+}
 
 
 @dataclass
@@ -106,6 +123,9 @@ class SelfPlayWorker:
         _t_preprocess = 0.0
         _t_apply = 0.0
 
+        # Track action types used during this episode
+        _action_type_counts = Counter()
+
         while num_steps < self.config.max_episode_length:
             if state.is_terminal() or not state.has_legal_actions():
                 break
@@ -165,6 +185,17 @@ class SelfPlayWorker:
             step_rewards.append(reward)
             total_reward += reward
             num_steps += 1
+
+            # Log per-step action detail
+            action_type_idx = action[1] if len(action) > 1 else -1
+            action_name = ACTION_TYPE_NAMES.get(action_type_idx, f"unknown({action_type_idx})")
+            _action_type_counts[action_name] += 1
+            new_t = state.num_non_clifford
+            logger.debug(
+                f"  step {num_steps}: {action_name}, "
+                f"reward={reward:+.2f}, "
+                f"t_gates={new_t} ({new_t - initial_t_gates:+d})"
+            )
 
             if done:
                 break
@@ -242,6 +273,9 @@ class SelfPlayWorker:
 
         # Log per-episode timing breakdown for profiling
         if num_steps > 0:
+            action_dist = ", ".join(
+                f"{name}={count}" for name, count in _action_type_counts.most_common()
+            )
             logger.debug(
                 f"Episode timing: mcts={_t_mcts:.2f}s, "
                 f"preprocess={_t_preprocess:.2f}s, "
@@ -249,6 +283,7 @@ class SelfPlayWorker:
                 f"other={wall_time - _t_mcts - _t_preprocess - _t_apply:.2f}s "
                 f"(total={wall_time:.2f}s, {num_steps} steps)"
             )
+            logger.debug(f"Episode actions: {action_dist}")
 
         return EpisodeResult(
             num_steps=num_steps,

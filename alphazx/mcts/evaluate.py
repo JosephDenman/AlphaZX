@@ -145,28 +145,16 @@ def evaluate_states_batch(
         return [result]
 
     # Preprocess each state individually (PE computation is per-graph).
-    # Use float32 context to protect against global dtype pollution
-    # (e.g. test_zx_game.py sets torch.float64 at module level).
-    prev_dtype = torch.get_default_dtype()
-    try:
-        torch.set_default_dtype(torch.float32)
-        data_list = []
-        for s in states:
-            d = s.data.clone()
-            # Cast input float tensors to float32
-            for key in d.keys():
-                attr = d[key]
-                if isinstance(attr, torch.Tensor) and attr.is_floating_point():
-                    d[key] = attr.float()
-            d = pre_process_single(d, pe_dim)
-            # Cast output float tensors to float32 (PE may still be float64)
-            for key in d.keys():
-                attr = d[key]
-                if isinstance(attr, torch.Tensor) and attr.is_floating_point():
-                    d[key] = attr.float()
-            data_list.append(d)
-    finally:
-        torch.set_default_dtype(prev_dtype)
+    # Use the shared _preprocess_data_for_model helper which handles float32
+    # casting and dtype context management.
+    data_list = []
+    for s in states:
+        d = s.data.clone()
+        d = _preprocess_data_for_model(d, pe_dim)
+        # Cache preprocessed data on the state so self_play's
+        # _preprocess_state can reuse it instead of recomputing PE.
+        s._cached_preprocessed_data = d
+        data_list.append(d)
     batch = Batch.from_data_list(data_list).to(device)
 
     # Collect the original graph IDs before batching (as a stacked tensor)

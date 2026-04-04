@@ -27,15 +27,21 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+import math
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 
+from collections import Counter
+
 from alphazx.distributions.alpha_zx_dist import AlphaZXDistribution
 from alphazx.mcts.config import MCTSConfig
+from alphazx.mcts.curriculum import CurriculumScheduler, CurriculumConfig
 from alphazx.mcts.evaluate import evaluate_state, compute_action_prior
 from alphazx.mcts.replay_buffer import ReplayBuffer, TrainingExample
-from alphazx.mcts.self_play import SelfPlayManager, EpisodeResult
+from alphazx.mcts.self_play import SelfPlayManager, EpisodeResult, ACTION_TYPE_NAMES
+from alphazx.mcts.tb_logger import TBLogger, SelfPlayStats, TrainStepDiagnostics
 from alphazx.models.pre_process import pre_process_single
 
 logger = logging.getLogger(__name__)
@@ -94,6 +100,13 @@ class TrainerConfig:
     """Minimum replay buffer size before training starts.
     This prevents training on too few examples early on."""
 
+    # --- TensorBoard ---
+    tensorboard: bool = True
+    """Enable TensorBoard logging."""
+
+    tensorboard_dir: str = 'runs/alphazx'
+    """Directory for TensorBoard event files."""
+
 
 @dataclass
 class TrainStepMetrics:
@@ -136,6 +149,8 @@ class Trainer:
         replay_buffer: ReplayBuffer,
         device: torch.device = torch.device('cpu'),
         evaluator=None,  # Optional: alphazx.mcts.evaluator.Evaluator
+        tb_logger: Optional[TBLogger] = None,
+        curriculum: Optional[CurriculumScheduler] = None,
     ):
         self.model = model
         self.mcts_config = mcts_config
@@ -143,6 +158,8 @@ class Trainer:
         self.replay_buffer = replay_buffer
         self.device = device
         self.evaluator = evaluator
+        self.tb_logger = tb_logger
+        self.curriculum = curriculum
 
         # Self-play manager
         self.self_play_manager = SelfPlayManager(
@@ -151,6 +168,11 @@ class Trainer:
             replay_buffer=replay_buffer,
             device=device,
         )
+
+        # If curriculum is enabled, apply the initial difficulty level
+        if self.curriculum and self.curriculum.config.enabled:
+            mcts_config.num_qubits = self.curriculum.current_num_qubits
+            mcts_config.depth = self.curriculum.current_depth
 
         # Optimizer
         self.optimizer = optim.AdamW(
@@ -210,10 +232,21 @@ class Trainer:
                     num_games=self.trainer_config.eval_games,
                 )
                 logger.info(f"Eval: {eval_results}")
+                if self.tb_logger:
+                    self.tb_logger.log_evaluation(iteration, eval_results)
+
+            # Model histograms (once per iteration, not per step)
+            if self.tb_logger:
+                self.tb_logger.log_model_histograms(iteration, self.model)
+                self.tb_logger.flush()
 
             # Checkpoint
             if iteration % self.trainer_config.checkpoint_interval == 0:
                 self._save_checkpoint(checkpoint_dir, iteration)
+
+        # Close TensorBoard writer at the end of training
+        if self.tb_logger:
+            self.tb_logger.close()
 
         return all_metrics
 
@@ -222,15 +255,41 @@ class Trainer:
         cfg = self.trainer_config
 
         # --- Self-play phase ---
+        # If curriculum is active with mixed-difficulty sampling, generate
+        # games at different difficulty levels within the same iteration.
         self.model.eval()
         sp_start = time.time()
-        results = self.self_play_manager.generate_games(cfg.num_self_play_games)
+
+        if self.curriculum and self.curriculum.config.enabled:
+            results = self._generate_curriculum_games(cfg.num_self_play_games)
+        else:
+            results = self.self_play_manager.generate_games(cfg.num_self_play_games)
+
         sp_time = time.time() - sp_start
 
         # Compute self-play statistics
-        avg_steps = sum(r.num_steps for r in results) / max(1, len(results))
-        avg_t_reduced = sum(r.t_gates_reduced for r in results) / max(1, len(results))
-        simplification_rate = sum(1 for r in results if r.simplified) / max(1, len(results))
+        n_games = max(1, len(results))
+        avg_steps = sum(r.num_steps for r in results) / n_games
+        avg_t_reduced = sum(r.t_gates_reduced for r in results) / n_games
+        simplification_rate = sum(1 for r in results if r.simplified) / n_games
+
+        # --- Curriculum update ---
+        if self.curriculum:
+            avg_initial_t = sum(r.initial_t_gates for r in results) / n_games
+            advanced = self.curriculum.update(
+                self.mcts_config,
+                self.current_iteration,
+                avg_t_reduced,
+                avg_initial_t,
+                simplification_rate,
+            )
+            if self.tb_logger:
+                self._log_curriculum(advanced)
+
+        # Collect extended self-play stats for TensorBoard
+        if self.tb_logger:
+            sp_stats = self._collect_self_play_stats(results, sp_time)
+            self.tb_logger.log_self_play(self.current_iteration, sp_stats)
 
         # --- Training phase ---
         self.model.train()
@@ -243,11 +302,15 @@ class Trainer:
         # Only train if we have enough data
         if len(self.replay_buffer) >= cfg.min_buffer_size:
             for step in range(cfg.training_steps):
-                metrics = self._train_step()
-                policy_losses.append(metrics.policy_loss)
-                value_losses.append(metrics.value_loss)
-                total_losses.append(metrics.total_loss)
+                diag = self._train_step()
+                policy_losses.append(diag.policy_loss)
+                value_losses.append(diag.value_loss)
+                total_losses.append(diag.total_loss)
                 self.total_training_steps += 1
+
+                # Log per-step metrics to TensorBoard
+                if self.tb_logger:
+                    self.tb_logger.log_train_step(self.total_training_steps, diag)
         else:
             logger.info(
                 f"Buffer size {len(self.replay_buffer)} < min {cfg.min_buffer_size}, "
@@ -255,6 +318,18 @@ class Trainer:
             )
 
         train_time = time.time() - train_start
+
+        # Log iteration-level training aggregates
+        if self.tb_logger:
+            self.tb_logger.log_iteration_training(
+                iteration=self.current_iteration,
+                avg_policy_loss=_safe_mean(policy_losses),
+                avg_value_loss=_safe_mean(value_losses),
+                avg_total_loss=_safe_mean(total_losses),
+                training_time=train_time,
+                buffer_size=len(self.replay_buffer),
+                buffer_total_added=self.replay_buffer.total_added,
+            )
 
         return IterationMetrics(
             iteration=self.current_iteration,
@@ -270,7 +345,7 @@ class Trainer:
             buffer_size=len(self.replay_buffer),
         )
 
-    def _train_step(self) -> TrainStepMetrics:
+    def _train_step(self) -> TrainStepDiagnostics:
         """Execute a single training step on a minibatch from the replay buffer.
 
         Policy loss: For each example, we compute the KL divergence (equivalent to
@@ -285,6 +360,8 @@ class Trainer:
         component methods, same as compute_action_prior().
 
         Value loss: MSE between predicted value and episode outcome.
+
+        Returns TrainStepDiagnostics with extended metrics for TensorBoard.
         """
         cfg = self.trainer_config
         examples = self.replay_buffer.sample(cfg.batch_size)
@@ -299,6 +376,9 @@ class Trainer:
         # on leaf tensors detach from the computation graph and break gradient flow.
         policy_loss_terms: list[torch.Tensor] = []
         value_loss_terms: list[torch.Tensor] = []
+        value_targets_list: list[float] = []
+        value_preds_list: list[float] = []
+        policy_entropies: list[float] = []
 
         for example in examples:
             data = example.state_data.clone().to(self.device)
@@ -313,6 +393,17 @@ class Trainer:
                 data.id.to(self.device),
             )
             distribution = AlphaZXDistribution(dist_params)
+
+            # Track value predictions and targets for diagnostics
+            value_preds_list.append(pred_value.squeeze().item())
+            value_targets_list.append(example.value_target)
+
+            # Compute MCTS policy entropy: H(π) = -Σ π(a) log π(a)
+            entropy = 0.0
+            for prob in example.mcts_policy.values():
+                if prob > 1e-8:
+                    entropy -= prob * math.log(prob)
+            policy_entropies.append(entropy)
 
             # --- Policy loss ---
             # Cross-entropy: -Σ_a π(a) * log p(a)
@@ -337,7 +428,7 @@ class Trainer:
             value_loss_terms.append(example_value_loss)
 
         if not value_loss_terms:
-            return TrainStepMetrics(0.0, 0.0, 0.0)
+            return TrainStepDiagnostics()
 
         # Average over the batch — torch.stack keeps the computation graph intact
         num_valid = len(value_loss_terms)
@@ -353,18 +444,40 @@ class Trainer:
         self.optimizer.zero_grad()
         total_loss.backward()
 
+        # Compute gradient norm before clipping (for diagnostics)
+        grad_norm = 0.0
+        for p in self.model.parameters():
+            if p.grad is not None:
+                grad_norm += p.grad.data.norm(2).item() ** 2
+        grad_norm = grad_norm ** 0.5
+
         if cfg.max_grad_norm > 0:
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), cfg.max_grad_norm)
 
         self.optimizer.step()
 
+        current_lr = self.optimizer.param_groups[0]['lr']
         if self.scheduler is not None:
             self.scheduler.step()
 
-        return TrainStepMetrics(
+        # Compute value target statistics
+        vt_mean = _safe_mean(value_targets_list)
+        vt_std = (
+            (sum((v - vt_mean) ** 2 for v in value_targets_list) / max(1, len(value_targets_list))) ** 0.5
+            if value_targets_list else 0.0
+        )
+
+        return TrainStepDiagnostics(
             policy_loss=avg_policy_loss.item(),
             value_loss=avg_value_loss.item(),
             total_loss=total_loss.item(),
+            grad_norm=grad_norm,
+            learning_rate=current_lr,
+            value_target_mean=vt_mean,
+            value_target_std=vt_std,
+            value_prediction_mean=_safe_mean(value_preds_list),
+            mcts_policy_entropy=_safe_mean(policy_entropies),
+            num_valid_examples=num_valid,
         )
 
     def _compute_log_prob(
@@ -396,6 +509,127 @@ class Trainer:
 
         return log_prob
 
+    def _collect_self_play_stats(
+        self,
+        results: list[EpisodeResult],
+        sp_time: float,
+    ) -> SelfPlayStats:
+        """Collect extended statistics from self-play results for TensorBoard.
+
+        Extracts per-node-type counts from initial and final game states,
+        action type distributions, and other detailed metrics that go beyond
+        the basic IterationMetrics.
+        """
+        from alphazx.diagram.match import METADATA
+
+        n = max(1, len(results))
+        total_examples = sum(len(r.examples) for r in results)
+
+        # Aggregate action type counts across all games
+        action_type_counts = Counter()
+        for r in results:
+            for ex in r.examples:
+                for action in ex.mcts_policy.keys():
+                    if len(action) > 1:
+                        action_type_idx = action[1]
+                        action_name = ACTION_TYPE_NAMES.get(
+                            action_type_idx, f"unknown({action_type_idx})"
+                        )
+                        action_type_counts[action_name] += 1
+
+        # Per-node-type counts from the match diagram
+        # We can extract these from the EpisodeResult's first and last examples
+        # by counting node_type values in the PyG data
+        initial_counts: dict[str, float] = {}
+        final_counts: dict[str, float] = {}
+
+        abbrevs = METADATA.node_type_abbrevs
+        abbrev_index = METADATA.node_type_abbrev_index_dict
+
+        for r in results:
+            if r.examples:
+                # Initial state: first example's state_data
+                first_data = r.examples[0].state_data
+                if hasattr(first_data, 'node_type') and first_data.node_type is not None:
+                    nt = first_data.node_type
+                    for abbrev in abbrevs:
+                        idx = abbrev_index[abbrev]
+                        count = (nt == idx).sum().item()
+                        initial_counts[abbrev] = initial_counts.get(abbrev, 0) + count
+
+                # Final state: last example's state_data
+                last_data = r.examples[-1].state_data
+                if hasattr(last_data, 'node_type') and last_data.node_type is not None:
+                    nt = last_data.node_type
+                    for abbrev in abbrevs:
+                        idx = abbrev_index[abbrev]
+                        count = (nt == idx).sum().item()
+                        final_counts[abbrev] = final_counts.get(abbrev, 0) + count
+
+        # Average over games
+        initial_avg = {k: v / n for k, v in initial_counts.items()}
+        final_avg = {k: v / n for k, v in final_counts.items()}
+
+        return SelfPlayStats(
+            num_games=len(results),
+            total_examples=total_examples,
+            avg_steps=sum(r.num_steps for r in results) / n,
+            avg_t_gates_reduced=sum(r.t_gates_reduced for r in results) / n,
+            simplification_rate=sum(1 for r in results if r.simplified) / n,
+            avg_initial_t_gates=sum(r.initial_t_gates for r in results) / n,
+            avg_final_t_gates=sum(r.final_t_gates for r in results) / n,
+            avg_reward=sum(r.total_reward for r in results) / n,
+            games_with_t_increase=sum(
+                1 for r in results if r.final_t_gates > r.initial_t_gates
+            ),
+            self_play_time=sp_time,
+            initial_node_type_counts=initial_avg,
+            final_node_type_counts=final_avg,
+            action_type_counts=action_type_counts,
+        )
+
+    def _generate_curriculum_games(
+        self, num_games: int,
+    ) -> list[EpisodeResult]:
+        """Generate self-play games with mixed-difficulty sampling.
+
+        Most games use the current curriculum level.  A fraction use easier
+        or harder levels to smooth transitions and prevent forgetting.
+        """
+        difficulty_levels = self.curriculum.get_mixed_difficulty_levels(num_games)
+        results = []
+
+        for i, (nq, depth) in enumerate(difficulty_levels):
+            # Temporarily override config for this game
+            saved_q = self.mcts_config.num_qubits
+            saved_d = self.mcts_config.depth
+            self.mcts_config.num_qubits = nq
+            self.mcts_config.depth = depth
+
+            try:
+                game_results = self.self_play_manager.generate_games(1)
+                results.extend(game_results)
+            finally:
+                # Restore (update() will set the current level's values)
+                self.mcts_config.num_qubits = saved_q
+                self.mcts_config.depth = saved_d
+
+        return results
+
+    def _log_curriculum(self, advanced: bool) -> None:
+        """Log curriculum state to TensorBoard."""
+        if not self.tb_logger or not self.tb_logger._writer:
+            return
+        iteration = self.current_iteration
+        c = self.curriculum
+        w = self.tb_logger._writer
+        w.add_scalar('curriculum/level', c.current_level, iteration)
+        w.add_scalar('curriculum/num_qubits', c.current_num_qubits, iteration)
+        w.add_scalar('curriculum/depth', c.current_depth, iteration)
+        w.add_scalar('curriculum/at_target', int(c.at_target), iteration)
+        if advanced:
+            w.add_scalar('curriculum/advanced_at_iteration', iteration, iteration)
+
     def _save_checkpoint(self, checkpoint_dir: Path, iteration: int) -> None:
         """Save model and optimizer state."""
         checkpoint = {
@@ -408,6 +642,8 @@ class Trainer:
         }
         if self.scheduler is not None:
             checkpoint['scheduler_state_dict'] = self.scheduler.state_dict()
+        if self.curriculum is not None:
+            checkpoint['curriculum_state_dict'] = self.curriculum.state_dict()
 
         path = checkpoint_dir / f'checkpoint_iter_{iteration:04d}.pt'
         torch.save(checkpoint, path)
@@ -443,6 +679,12 @@ class Trainer:
 
         if 'scheduler_state_dict' in checkpoint and trainer.scheduler is not None:
             trainer.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+
+        if 'curriculum_state_dict' in checkpoint and trainer.curriculum is not None:
+            trainer.curriculum.load_state_dict(checkpoint['curriculum_state_dict'])
+            # Re-apply the restored curriculum level to MCTSConfig
+            mcts_config.num_qubits = trainer.curriculum.current_num_qubits
+            mcts_config.depth = trainer.curriculum.current_depth
 
         return trainer
 

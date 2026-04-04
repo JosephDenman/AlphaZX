@@ -1,5 +1,5 @@
 """
-Sampled MCTS search.
+Sampled MCTS search with batched leaf evaluation.
 
 This implements AlphaZero-style MCTS with progressive widening, adapted
 for the structured action space of ZX-calculus diagram simplification.
@@ -9,13 +9,19 @@ Key differences from standard AlphaZero MCTS:
 2. Children are added progressively as a node accumulates visits.
 3. Duplicate samples (same action sampled twice) are detected and collapsed.
 4. The policy prior for PUCT is computed from the cached distribution via log_prob.
+5. Leaf nodes are evaluated in batches for efficiency (virtual loss prevents
+   path duplication within each wave).
 
-The search loop:
-    for each simulation:
-        1. SELECT: walk down tree using PUCT until reaching a leaf or widening point
-        2. EXPAND: if widening, sample a new action and create a child; OR
-                   if leaf, evaluate with neural network
-        3. BACKPROPAGATE: propagate the value estimate back up to root
+The search loop (batched):
+    while simulations remain:
+        WAVE (batch_size simulations):
+            for each simulation:
+                1. SELECT: walk down tree using PUCT until leaf or widen point
+                2. If leaf needs NN eval: collect it, apply virtual loss to path
+                3. If terminal or already expanded: note value for backprop
+            BATCH EVALUATE all collected leaves at once
+            REMOVE virtual loss from all paths
+            BACKPROPAGATE all simulations
 """
 
 from __future__ import annotations
@@ -32,13 +38,13 @@ import torch.nn as nn
 from alphazx.mcts.config import MCTSConfig
 from alphazx.mcts.game_state import GameState
 from alphazx.mcts.node import MCTSNode
-from alphazx.mcts.evaluate import evaluate_state, compute_action_prior
+from alphazx.mcts.evaluate import evaluate_state, evaluate_states_batch, compute_action_prior
 
 logger = logging.getLogger(__name__)
 
 
 class MCTS:
-    """Sampled Monte Carlo Tree Search with progressive widening."""
+    """Sampled Monte Carlo Tree Search with progressive widening and batched evaluation."""
 
     def __init__(self, model: nn.Module, config: MCTSConfig):
         self.model = model
@@ -53,6 +59,11 @@ class MCTS:
         """
         Run MCTS from the given root state and return a policy target.
 
+        Simulations are run in waves of `config.leaf_batch_size`. Within each
+        wave, virtual loss is applied to encourage path diversity, and all
+        unexpanded leaves are batch-evaluated in a single neural network
+        forward pass.
+
         :param root_state: The current game state to search from
         :param device: Device for neural network inference
         :return: Dictionary mapping action tuples to visit-count-based probabilities.
@@ -60,7 +71,7 @@ class MCTS:
         """
         root = MCTSNode(state=root_state)
 
-        # Evaluate and expand the root node
+        # Evaluate and expand the root node (always single-state)
         self._expand_node(root, device)
 
         # Track how many root children have received Dirichlet noise so far.
@@ -73,47 +84,104 @@ class MCTS:
         _n_expand = 0
         _n_clone = 0
 
-        # Run simulations
-        for _ in range(self.config.num_simulations):
-            node = root
-            search_path = [node]
+        leaf_batch_size = self.config.leaf_batch_size
+        sims_done = 0
 
-            # === SELECT ===
-            while node.is_expanded and not node.is_terminal:
-                if node.should_widen(self.config):
-                    # Progressive widening: sample a new child
+        while sims_done < self.config.num_simulations:
+            wave_size = min(leaf_batch_size, self.config.num_simulations - sims_done)
+
+            # ================================================================
+            # Phase 1: Selection — run wave_size simulations, collecting leaves
+            # ================================================================
+            wave = []  # list of (leaf_node, search_path, needs_nn_eval)
+            unique_eval_nodes = {}  # id(node) -> node (dedup within wave)
+
+            for _ in range(wave_size):
+                node = root
+                search_path = [node]
+
+                # === SELECT ===
+                while node.is_expanded and not node.is_terminal:
+                    if node.should_widen(self.config):
+                        # Progressive widening: sample a new child
+                        _t0 = time.time()
+                        new_child = self._try_add_child(node)
+                        _t_clone += time.time() - _t0
+                        _n_clone += 1
+                        if new_child is not None:
+                            if node is root:
+                                self._apply_root_noise_if_needed(root)
+                            search_path.append(new_child)
+                            node = new_child
+                            break  # New child is unexpanded — will be evaluated
+
+                    if not node.children:
+                        break
+
+                    # Select best existing child
+                    node = node.select_child(self.config)
+                    search_path.append(node)
+
+                # Classify this simulation's leaf
+                needs_eval = not node.is_expanded and not node.is_terminal
+                if needs_eval:
+                    unique_eval_nodes[id(node)] = node
+
+                wave.append((node, search_path, needs_eval))
+
+                # Virtual loss: increment visit counts on path nodes to
+                # discourage subsequent simulations in this wave from
+                # selecting the same path.
+                if needs_eval:
+                    for n in search_path:
+                        n.visit_count += 1
+
+                sims_done += 1
+
+            # ================================================================
+            # Phase 2: Batch evaluate all unique unexpanded leaves
+            # ================================================================
+            if unique_eval_nodes:
+                eval_nodes = list(unique_eval_nodes.values())
+                _t0 = time.time()
+                states = [n.state for n in eval_nodes]
+                results = evaluate_states_batch(
+                    self.model, states, self.config.pe_dim, device
+                )
+                _t_expand += time.time() - _t0
+                _n_expand += len(eval_nodes)
+
+                for eval_node, (dist, value) in zip(eval_nodes, results):
+                    eval_node._cached_distribution = dist
+                    eval_node._cached_value = value
+                    eval_node.is_expanded = True
+                    # Create an initial child so PUCT has something to work with
                     _t0 = time.time()
-                    new_child = self._try_add_child(node)
+                    self._try_add_child(eval_node)
                     _t_clone += time.time() - _t0
                     _n_clone += 1
-                    if new_child is not None:
-                        if node is root:
-                            self._apply_root_noise_if_needed(root)
-                        search_path.append(new_child)
-                        node = new_child
-                        break  # Evaluate the new leaf
 
-                if not node.children:
-                    break
+            # ================================================================
+            # Phase 3: Remove virtual loss, then real backpropagation
+            # ================================================================
+            # First, undo all virtual losses
+            for leaf, search_path, needs_eval in wave:
+                if needs_eval:
+                    for n in search_path:
+                        n.visit_count -= 1
 
-                # Select best existing child
-                node = node.select_child(self.config)
-                search_path.append(node)
+            # Then, backpropagate each simulation with real values
+            for leaf, search_path, needs_eval in wave:
+                if leaf.is_terminal:
+                    value = 0.0
+                elif leaf._cached_value is not None:
+                    value = leaf._cached_value
+                else:
+                    value = 0.0
+                leaf.backpropagate(value, self.config.gamma)
 
-            # === EXPAND & EVALUATE ===
-            value = 0.0
-            if node.is_terminal:
-                value = 0.0
-            elif not node.is_expanded:
-                _t0 = time.time()
-                value = self._expand_node(node, device)
-                _t_expand += time.time() - _t0
-                _n_expand += 1
-            else:
-                value = node._cached_value if node._cached_value is not None else 0.0
-
-            # === BACKPROPAGATE ===
-            node.backpropagate(value, self.config.gamma)
+            # Re-apply Dirichlet noise if root children changed during this wave
+            self._apply_root_noise_if_needed(root)
 
         logger.debug(
             f"MCTS search: {self.config.num_simulations} sims, "
@@ -128,6 +196,9 @@ class MCTS:
     def _expand_node(self, node: MCTSNode, device: torch.device) -> float:
         """
         Evaluate a node with the neural network and mark it as expanded.
+
+        Used only for the root node (which is always evaluated individually).
+        All other nodes are batch-evaluated in the search loop.
 
         Returns the value estimate for backpropagation.
         """
@@ -201,7 +272,7 @@ class MCTS:
         To ensure every root child gets exploration noise, we re-generate
         and re-apply noise whenever the child count changes.
 
-        Each child's prior is: (1 - ε) * network_prior + ε * noise[i]
+        Each child's prior is: (1 - epsilon) * network_prior + epsilon * noise[i]
 
         To re-apply correctly, we store the original network prior
         (child._original_prior) so that re-noising doesn't compound.
@@ -226,11 +297,11 @@ class MCTS:
         """
         Convert root visit counts into a probability distribution (the MCTS policy target).
 
-        With temperature τ:
-            π(a) = N(a)^(1/τ) / Σ_a' N(a')^(1/τ)
+        With temperature tau:
+            pi(a) = N(a)^(1/tau) / sum_a' N(a')^(1/tau)
 
-        τ = 1.0: proportional to visits (more exploration, used for training)
-        τ → 0:   greedy (pick the most visited action, used for evaluation)
+        tau = 1.0: proportional to visits (more exploration, used for training)
+        tau -> 0:  greedy (pick the most visited action, used for evaluation)
         """
         if not root.children:
             return {}

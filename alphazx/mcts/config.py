@@ -58,10 +58,13 @@ class MCTSConfig:
     pe_dim: int = 20
     """Dimension of random-walk positional encoding used in preprocessing."""
 
-    # --- Virtual loss (for future parallel MCTS) ---
-    virtual_loss: float = 0.0
-    """Virtual loss added during selection to discourage threads from
-    exploring the same path. 0.0 disables (single-threaded search)."""
+    # --- Batched leaf evaluation ---
+    leaf_batch_size: int = 8
+    """Number of leaf nodes to collect before batch-evaluating with the neural
+    network.  Batching turns N sequential forward passes into ceil(N/batch_size)
+    batched passes, giving ~3-5x speedup on the NN portion of MCTS.
+    Virtual loss is applied during each wave to encourage path diversity.
+    Set to 1 to disable batching (sequential evaluation, original behavior)."""
 
     # --- Game parameters (used when creating fresh games for self-play) ---
     num_qubits: int = 5
@@ -71,7 +74,7 @@ class MCTSConfig:
     simplified_reward: float = 1000.0
 
     # --- Episode termination ---
-    max_t_gate_increase: int = 5
+    max_t_gate_increase: int = 10
     """Terminate episode early if T-gates exceed initial count by this amount.
     Prevents runaway degeneration where the agent spends 100 steps making
     the diagram progressively worse. Set to 0 to disable."""

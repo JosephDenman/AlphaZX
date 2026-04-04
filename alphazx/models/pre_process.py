@@ -10,6 +10,13 @@ def with_laplacian_pe(data: pyg.data.Data, pe_dimension: int) -> pyg.data.Data:
         data)
 
 
+def _is_mps_device(data) -> bool:
+    """Check if any tensor in the data is on MPS."""
+    if hasattr(data, 'edge_index') and data.edge_index is not None:
+        return data.edge_index.device.type == 'mps'
+    return False
+
+
 def with_random_walk_pe(data: pyg.data.Batch, walk_length: int) -> pyg.data.Batch:
     """Random walk PE using PyG's built-in sparse AddRandomWalkPE transform.
 
@@ -18,21 +25,40 @@ def with_random_walk_pe(data: pyg.data.Batch, walk_length: int) -> pyg.data.Batc
     the sparse graphs typical in ZX diagrams.
 
     Falls back to the dense implementation if the sparse version fails (e.g.
-    MKL sparse issues on some macOS configurations).
+    MKL sparse issues on some macOS configurations, or MPS device limitations).
+
+    When data is on MPS, computation is performed on CPU and the result is moved
+    back, because MPS does not support the sparse ops used by AddRandomWalkPE
+    or the dense matrix operations in the fallback.
     """
+    # MPS doesn't support sparse ops or to_dense_adj reliably.
+    # Move data to CPU for PE computation, then move the result back.
+    original_device = data.edge_index.device if data.edge_index is not None else torch.device('cpu')
+    if original_device.type == 'mps':
+        data = data.cpu()
+
     try:
         transform = pyg.transforms.AddRandomWalkPE(walk_length=walk_length, attr_name='pe')
         data = transform(data)
         # Ensure float32 output
         data.pe = data.pe.float()
-        return data
     except Exception:
         # Fallback to dense implementation for environments where sparse ops fail
-        return _with_random_walk_pe_dense(data, walk_length)
+        data = _with_random_walk_pe_dense(data, walk_length)
+
+    if original_device.type == 'mps':
+        data = data.to(original_device)
+
+    return data
 
 
 def _with_random_walk_pe_dense(data: pyg.data.Batch, walk_length: int) -> pyg.data.Batch:
-    """Dense fallback for random walk PE (original implementation)."""
+    """Dense fallback for random walk PE (original implementation).
+
+    Always runs on CPU to avoid MPS issues with to_dense_adj and matrix powers.
+    The caller is responsible for moving data to CPU before calling and back to
+    the target device afterwards.
+    """
     edge_index = data.edge_index
     num_nodes = data.num_nodes
 

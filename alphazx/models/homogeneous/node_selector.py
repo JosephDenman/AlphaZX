@@ -36,11 +36,15 @@ class NodeSelector(torch.nn.Module):
                                                        fill_value=0)
 
         # Build type mask: [B, T, N] where type_mask[b, t, n] = True iff node n in batch b has type t+1
-        # Using one-hot encoding for efficiency
-        # Clamp node types to valid range [0, T] for one-hot (0 = invalid, 1-10 = valid types)
-        clamped_types = dense_node_types.clamp(0, self.num_node_types)
+        # Using one-hot encoding for efficiency.
+        # IMPORTANT: Only match node types 1-10 are valid for selection. Super nodes (11-21),
+        # boundary nodes (0), and padding (0) must map to one-hot index 0, which gets excluded
+        # by the [:, :, 1:] slice below. We zero out any type outside [1, T] rather than
+        # clamping, because clamping would alias super nodes onto the last match type.
+        safe_types = dense_node_types.clone()
+        safe_types[(safe_types < 1) | (safe_types > self.num_node_types)] = 0
         # One-hot gives [B, N, T+1], we want [B, T, N] for types 1-10 (indices 1 to T in one-hot)
-        one_hot = torch.nn.functional.one_hot(clamped_types, self.num_node_types + 1)  # [B, N, T+1]
+        one_hot = torch.nn.functional.one_hot(safe_types, self.num_node_types + 1)  # [B, N, T+1]
         type_mask = one_hot[:, :, 1:].permute(0, 2, 1).bool()  # [B, T, N], excluding index 0
         # Also mask padding
         type_mask = type_mask & mask.unsqueeze(1)

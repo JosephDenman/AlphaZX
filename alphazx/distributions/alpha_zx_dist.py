@@ -88,6 +88,16 @@ class AlphaZXDistribution:
 
     def sample_nodes(self, action_types: torch.Tensor) -> torch.Tensor:
         selected_node_dist_params = self.select_node_dist_params(action_types)
+        # Guard against all-zero probability rows which cause NaN after
+        # Categorical's internal normalization (0/0) and crash torch.multinomial.
+        # This can occur for action types with no valid nodes in the graph.
+        selected_node_dist_params = selected_node_dist_params.clamp(min=0)
+        row_sums = selected_node_dist_params.sum(dim=-1, keepdim=True)
+        selected_node_dist_params = torch.where(
+            row_sums > 0,
+            selected_node_dist_params,
+            torch.ones_like(selected_node_dist_params),
+        )
         node_dist = Categorical(probs=selected_node_dist_params, validate_args=False)
         sampled_nodes = node_dist.sample(torch.Size([1]))
         return sampled_nodes
@@ -111,6 +121,14 @@ class AlphaZXDistribution:
     def sample_features(self, feature_type: str, nodes: torch.Tensor) -> torch.Tensor:
         if feature_type == 'phase' or feature_type == 'new_edge':
             selected_feature_dist_params = self.select_feature_dist_params(feature_type, nodes)
+            # Guard against all-zero rows (see sample_nodes for explanation)
+            selected_feature_dist_params = selected_feature_dist_params.clamp(min=0)
+            row_sums = selected_feature_dist_params.sum(dim=-1, keepdim=True)
+            selected_feature_dist_params = torch.where(
+                row_sums > 0,
+                selected_feature_dist_params,
+                torch.ones_like(selected_feature_dist_params),
+            )
             feature_dist = Categorical(probs=selected_feature_dist_params, validate_args=False)
             sampled_feature = feature_dist.sample(torch.Size([1]))
             return sampled_feature
@@ -152,11 +170,12 @@ class AlphaZXDistribution:
     def log_prob(self, sampled_actions: torch.Tensor) -> torch.Tensor:
         """
         :param sampled_actions: B x K x L tensor of actions. Each action has the form
-                                [type, node, phase, new edges, old edges ...], where all entries after node are 0
-                                for non-f-right actions. All actions are padded to the same length with zeroes.
+                                [graph_id, type, node, phase, new edges, old edges ...], where all entries after node
+                                are 0 for non-f-right actions. All actions are padded to the same length with zeroes.
                                 sampled_actions_batch[b] is the set of actions sampled at some step in a trajectory.
-        :return: The log probability of each sampled action.
+        :return: (B, K) tensor of log probabilities for each sampled action.
         """
+        B, K, L = sampled_actions.shape
         graph_ids = sampled_actions[:, :, 0]
         action_types = sampled_actions[:, :, 1]
         nodes = sampled_actions[:, :, 2]
@@ -167,15 +186,51 @@ class AlphaZXDistribution:
         received_ids = graph_ids.long()[:, 0]  # first sample per batch entry → (B,)
         if not torch.equal(received_ids, expected_ids):
             raise Exception(f'Expected graph ids {expected_ids}, received {received_ids}')
-        action_type_log_probs = self.action_type_log_probs(action_types)
-        node_log_probs = self.node_log_probs(action_types, nodes)
-        phase_log_probs = self.new_phase_log_probs(nodes, phases)
-        new_edge_log_probs = self.new_edge_log_probs(nodes, new_edges)
-        transfer_edge_log_probs = self.transfer_edge_log_probs(nodes, transfer_edges)
+
+        # Flatten (B, K) → (B*K,) so component methods (which expect a [B] batch dim) work.
+        # We temporarily expand the distribution params to repeat each batch entry K times.
+        flat_action_types = action_types.reshape(B * K)
+        flat_nodes = nodes.reshape(B * K)
+        flat_phases = phases.reshape(B * K)
+        flat_new_edges = new_edges.reshape(B * K)
+        flat_transfer_edges = transfer_edges.reshape(B * K, -1)
+
+        # Save original state and expand params for B*K batch
+        orig_B = self.B
+        orig_mixture = self.mixture_dist_params
+        orig_node = self.node_dist_params
+        orig_phase = self.phase_dist_params
+        orig_new_edge = self.new_edge_dist_params
+        orig_transfer_edge = self.transfer_edge_dist_params
+
+        # Repeat each batch entry K times: [B, ...] → [B, 1, ...] → [B, K, ...] → [B*K, ...]
+        self.B = B * K
+        self.mixture_dist_params = orig_mixture.unsqueeze(1).expand(-1, K, -1).reshape(B * K, -1)
+        self.node_dist_params = orig_node.unsqueeze(1).expand(-1, K, *orig_node.shape[1:]).reshape(B * K, *orig_node.shape[1:])
+        self.phase_dist_params = orig_phase.unsqueeze(1).expand(-1, K, *orig_phase.shape[1:]).reshape(B * K, *orig_phase.shape[1:])
+        self.new_edge_dist_params = orig_new_edge.unsqueeze(1).expand(-1, K, *orig_new_edge.shape[1:]).reshape(B * K, *orig_new_edge.shape[1:])
+        self.transfer_edge_dist_params = orig_transfer_edge.unsqueeze(1).expand(-1, K, *orig_transfer_edge.shape[1:]).reshape(B * K, *orig_transfer_edge.shape[1:])
+
+        try:
+            action_type_log_probs = self.action_type_log_probs(flat_action_types)
+            node_log_probs = self.node_log_probs(flat_action_types, flat_nodes)
+            phase_log_probs = self.new_phase_log_probs(flat_nodes, flat_phases)
+            new_edge_log_probs = self.new_edge_log_probs(flat_nodes, flat_new_edges)
+            transfer_edge_log_probs = self.transfer_edge_log_probs(flat_nodes, flat_transfer_edges)
+        finally:
+            # Restore original state
+            self.B = orig_B
+            self.mixture_dist_params = orig_mixture
+            self.node_dist_params = orig_node
+            self.phase_dist_params = orig_phase
+            self.new_edge_dist_params = orig_new_edge
+            self.transfer_edge_dist_params = orig_transfer_edge
+
         stacked_probs = torch.stack(
             (action_type_log_probs, node_log_probs, phase_log_probs, new_edge_log_probs, transfer_edge_log_probs),
             dim=-1)
-        return stacked_probs.sum(dim=-1)
+        # Reshape from (B*K,) back to (B, K)
+        return stacked_probs.sum(dim=-1).reshape(B, K)
 
     def sample(self, k: int) -> torch.Tensor:
         """
