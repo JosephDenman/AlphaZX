@@ -89,16 +89,16 @@ def _make_dist_params(
     raw = (torch.rand(B, T) + 0.01) * has_nodes.float()
     mixture = raw / raw.sum(dim=-1, keepdim=True)
 
-    # --- phase probs [B, N, P] ---
-    phase_raw = torch.rand(B, N, P) + 0.01
+    # --- phase probs [B, T, N, P] (conditioned on action type) ---
+    phase_raw = torch.rand(B, T, N, P) + 0.01
     phase_probs = phase_raw / phase_raw.sum(dim=-1, keepdim=True)
 
-    # --- new edge probs [B, N, E_new] ---
-    edge_raw = torch.rand(B, N, E_new) + 0.01
+    # --- new edge probs [B, T, N, E_new] ---
+    edge_raw = torch.rand(B, T, N, E_new) + 0.01
     new_edge_probs = edge_raw / edge_raw.sum(dim=-1, keepdim=True)
 
-    # --- transfer edge probs [B, N, E_trans] --- in [0, 1]
-    transfer_probs = torch.sigmoid(torch.randn(B, N, E_trans))
+    # --- transfer edge probs [B, T, N, E_trans] --- in [0, 1]
+    transfer_probs = torch.sigmoid(torch.randn(B, T, N, E_trans))
 
     # --- graph ids ---
     graph_ids = torch.arange(B)
@@ -424,9 +424,9 @@ class TestAlphaZXDistributionLogProb:
 
         lp_type = dist.action_type_log_probs(action_types)
         lp_node = dist.node_log_probs(action_types, nodes)
-        lp_phase = dist.new_phase_log_probs(nodes, phases)
-        lp_edge = dist.new_edge_log_probs(nodes, new_edges)
-        lp_transfer = dist.transfer_edge_log_probs(nodes, transfer_edges)
+        lp_phase = dist.new_phase_log_probs(action_types, nodes, phases)
+        lp_edge = dist.new_edge_log_probs(action_types, nodes, new_edges)
+        lp_transfer = dist.transfer_edge_log_probs(action_types, nodes, transfer_edges)
 
         component_sum = lp_type + lp_node + lp_phase + lp_edge + lp_transfer
         assert torch.allclose(total_lp, component_sum, atol=1e-5)
@@ -450,14 +450,14 @@ class TestAlphaZXDistributionLogProb:
         # Node: all mass on node 0 for type 0
         node_probs = torch.zeros(B, T, N)
         node_probs[0, 0, 0] = 1.0
-        # Phase: all mass on phase 0
-        phase_probs = torch.zeros(B, N, NUM_PHASES)
-        phase_probs[:, :, 0] = 1.0
-        # New edges: all mass on 0
-        new_edge_probs = torch.zeros(B, N, NUM_NEW_EDGES)
-        new_edge_probs[:, :, 0] = 1.0
-        # Transfer: all zeros (deterministic)
-        transfer_probs = torch.zeros(B, N, 4)
+        # Phase: all mass on phase 0 (now [B, T, N, P])
+        phase_probs = torch.zeros(B, T, N, NUM_PHASES)
+        phase_probs[:, :, :, 0] = 1.0
+        # New edges: all mass on 0 (now [B, T, N, E_new])
+        new_edge_probs = torch.zeros(B, T, N, NUM_NEW_EDGES)
+        new_edge_probs[:, :, :, 0] = 1.0
+        # Transfer: all zeros (deterministic) (now [B, T, N, E_trans])
+        transfer_probs = torch.zeros(B, T, N, 4)
 
         params = AlphaZXDistributionParams(
             graph_ids=torch.tensor([0]),
@@ -560,17 +560,19 @@ class TestAlphaZXDistributionComponentLogProbs:
         E = 4
         params = _make_dist_params(batch_size=2, num_nodes=5, max_degree=E)
         dist = AlphaZXDistribution(params)
-        nodes = torch.tensor([[0, 1], [2, 3]])  # (B=2, K=2)
+        action_types = torch.tensor([[0, 1], [2, 0]])  # (B=2, K=2)
+        nodes = torch.tensor([[0, 1], [2, 3]])
         transfer = torch.randint(0, 2, (2, 2, E)).float()
-        lp = dist.transfer_edge_log_probs(nodes, transfer)
+        lp = dist.transfer_edge_log_probs(action_types, nodes, transfer)
         assert lp.shape == (2, 2)
 
     def test_phase_log_probs_shape(self):
         params = _make_dist_params(batch_size=2, num_nodes=5)
         dist = AlphaZXDistribution(params)
+        action_types = torch.tensor([[0, 1], [2, 0]])
         nodes = torch.tensor([[0, 1], [2, 3]])
         phases = torch.tensor([[0, 2], [1, 0]])
-        lp = dist.new_phase_log_probs(nodes, phases)
+        lp = dist.new_phase_log_probs(action_types, nodes, phases)
         assert lp.shape == (2, 2)
 
 
@@ -596,11 +598,11 @@ class TestAlphaZXDistributionEntropy:
         mixture[0, 0] = 1.0
         node_probs = torch.zeros(B, T, N)
         node_probs[0, 0, 0] = 1.0
-        phase_probs = torch.zeros(B, N, NUM_PHASES)
-        phase_probs[:, :, 0] = 1.0
-        new_edge_probs = torch.zeros(B, N, NUM_NEW_EDGES)
-        new_edge_probs[:, :, 0] = 1.0
-        transfer_probs = torch.zeros(B, N, 2)
+        phase_probs = torch.zeros(B, T, N, NUM_PHASES)
+        phase_probs[:, :, :, 0] = 1.0
+        new_edge_probs = torch.zeros(B, T, N, NUM_NEW_EDGES)
+        new_edge_probs[:, :, :, 0] = 1.0
+        transfer_probs = torch.zeros(B, T, N, 2)
 
         params = AlphaZXDistributionParams(
             graph_ids=torch.tensor([0]),
@@ -620,9 +622,9 @@ class TestAlphaZXDistributionEntropy:
         B, T, N = 1, NUM_ACTION_TYPES, 5
         mixture_uniform = torch.ones(B, T) / T
         node_uniform = torch.ones(B, T, N) / N
-        phase_probs = torch.ones(B, N, NUM_PHASES) / NUM_PHASES
-        edge_probs = torch.ones(B, N, NUM_NEW_EDGES) / NUM_NEW_EDGES
-        transfer_probs = torch.full((B, N, 3), 0.5)
+        phase_probs = torch.ones(B, T, N, NUM_PHASES) / NUM_PHASES
+        edge_probs = torch.ones(B, T, N, NUM_NEW_EDGES) / NUM_NEW_EDGES
+        transfer_probs = torch.full((B, T, N, 3), 0.5)
 
         params_uniform = AlphaZXDistributionParams(
             graph_ids=torch.tensor([0]),
@@ -852,7 +854,8 @@ class TestEdgeCases:
     def test_zero_transfer_edge_params(self):
         """Transfer probs all zero should produce all-zero transfer edges."""
         params = _make_dist_params(batch_size=1, num_nodes=3, max_degree=4)
-        transfer = torch.zeros(1, 3, 4)
+        T = params.transfer_edge_dist_probs.shape[1]
+        transfer = torch.zeros(1, T, 3, 4)
         params = params._replace(transfer_edge_dist_probs=transfer)
         dist = AlphaZXDistribution(params)
         samples = dist.sample(10)
@@ -862,7 +865,8 @@ class TestEdgeCases:
     def test_one_transfer_edge_params(self):
         """Transfer probs all 1.0 should produce all-one transfer edges."""
         params = _make_dist_params(batch_size=1, num_nodes=3, max_degree=4)
-        transfer = torch.ones(1, 3, 4)
+        T = params.transfer_edge_dist_probs.shape[1]
+        transfer = torch.ones(1, T, 3, 4)
         params = params._replace(transfer_edge_dist_probs=transfer)
         dist = AlphaZXDistribution(params)
         samples = dist.sample(10)

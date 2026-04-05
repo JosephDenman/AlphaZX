@@ -232,15 +232,14 @@ def compute_action_prior(
     # P(node | action_type)
     total_log_prob += distribution.node_log_probs(action_type, node).item()
 
-    # P(phase | node) — for non-F-right actions, phase_dist_params are uniform/zero,
-    # but the log_prob still returns a valid value
-    total_log_prob += distribution.new_phase_log_probs(node, phase).item()
+    # P(phase | action_type, node)
+    total_log_prob += distribution.new_phase_log_probs(action_type, node, phase).item()
 
-    # P(new_edges | node)
-    total_log_prob += distribution.new_edge_log_probs(node, new_edges).item()
+    # P(new_edges | action_type, node)
+    total_log_prob += distribution.new_edge_log_probs(action_type, node, new_edges).item()
 
-    # P(transfer_edges | node)
-    total_log_prob += distribution.transfer_edge_log_probs(node, transfer_edges).item()
+    # P(transfer_edges | action_type, node)
+    total_log_prob += distribution.transfer_edge_log_probs(action_type, node, transfer_edges).item()
 
     prob = max(1e-8, min(1.0, math.exp(total_log_prob)))
     return prob

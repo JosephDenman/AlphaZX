@@ -53,6 +53,7 @@ class ZXDiagram(nx.MultiGraph):
                     raise Exception(f'Node {n} has unexpected type')
 
     def __validate_and_add_phase(self, n: int, phase: float):
+        phase = phase % 2  # Normalize to [0, 2): ZX phases are mod 2π
         # Validate phase
         if not self.is_valid_phase(phase):
             raise ValueError(
@@ -91,6 +92,7 @@ class ZXDiagram(nx.MultiGraph):
 
     def set_phase(self, n: int, phase: float) -> None:
         assert self.is_basis(n), f'Attempted to set phase of non-basis node {n}'
+        phase = phase % 2  # Normalize to [0, 2): ZX phases are mod 2π
         assert self.is_valid_phase(
             phase), f'Phase {phase} is invalid for diagram with phase denominator {self.phase_denominator}'
         self.nodes[n][self.PHASE] = phase
@@ -121,6 +123,7 @@ class ZXDiagram(nx.MultiGraph):
         (self._x_nodes_set.add if self.is_x_basis(n) else self._z_nodes_set.add)(n)
 
     def add_x_node(self, phase: float) -> int:
+        phase = phase % 2  # Normalize to [0, 2): ZX phases are mod 2π
         assert self.is_valid_phase(
             phase), f'Phase {phase} for X-basis node is invalid for diagram with phase denominator {self.phase_denominator}'
         new_x = self.__next_node()
@@ -154,6 +157,7 @@ class ZXDiagram(nx.MultiGraph):
         self._x_nodes_set.remove(n)
 
     def add_z_node(self, phase: float) -> int:
+        phase = phase % 2  # Normalize to [0, 2): ZX phases are mod 2π
         assert self.is_valid_phase(
             phase), f'Phase {phase} for Z-basis node is invalid for diagram with phase denominator {self.phase_denominator}'
         new_z = self.__next_node()

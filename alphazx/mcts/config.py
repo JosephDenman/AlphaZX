@@ -74,7 +74,7 @@ class MCTSConfig:
     simplified_reward: float = 1000.0
 
     # --- Episode termination ---
-    max_t_gate_increase: int = 10
+    max_t_gate_increase: int = 5
     """Terminate episode early if T-gates exceed initial count by this amount.
     Prevents runaway degeneration where the agent spends 100 steps making
     the diagram progressively worse. Set to 0 to disable."""

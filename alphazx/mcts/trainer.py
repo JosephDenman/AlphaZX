@@ -35,7 +35,9 @@ import torch.optim as optim
 
 from collections import Counter
 
-from alphazx.distributions.alpha_zx_dist import AlphaZXDistribution
+from torch_geometric.data import Batch
+
+from alphazx.distributions.alpha_zx_dist import AlphaZXDistribution, AlphaZXDistributionParams
 from alphazx.mcts.config import MCTSConfig
 from alphazx.mcts.curriculum import CurriculumScheduler, CurriculumConfig
 from alphazx.mcts.evaluate import evaluate_state, compute_action_prior
@@ -348,16 +350,14 @@ class Trainer:
     def _train_step(self) -> TrainStepDiagnostics:
         """Execute a single training step on a minibatch from the replay buffer.
 
-        Policy loss: For each example, we compute the KL divergence (equivalent to
-        cross-entropy up to a constant) between the MCTS policy and the model's
-        predicted action probabilities.
+        Uses a BATCHED forward pass through the GNN for efficiency: all examples
+        in the minibatch are packed into a single PyG Batch and processed in one
+        forward pass.  The distribution parameters are then sliced per-example
+        for policy loss computation (each example has a different MCTS action set).
 
-        Specifically, for MCTS policy π and model probability p:
+        Policy loss: cross-entropy between MCTS visit-count distribution π and
+        the model's predicted action probabilities p:
             policy_loss = -Σ_a π(a) * log p(a)
-
-        where the sum is over all actions in the MCTS policy (the actions that
-        were sampled during search). We compute p(a) using the model's distribution
-        component methods, same as compute_action_prior().
 
         Value loss: MSE between predicted value and episode outcome.
 
@@ -366,81 +366,73 @@ class Trainer:
         cfg = self.trainer_config
         examples = self.replay_buffer.sample(cfg.batch_size)
 
-        # Process examples one at a time because each has a different graph structure
-        # and different action sets. Batching the forward pass would require the
-        # evaluate_states_batch infrastructure, which adds complexity for uncertain
-        # gain at this stage. Sequential per-example processing is clearer and correct.
-        #
-        # IMPORTANT: we accumulate losses into a Python list and sum at the end
-        # rather than doing in-place +=/-= on leaf tensors, because in-place ops
-        # on leaf tensors detach from the computation graph and break gradient flow.
+        # --- Batched forward pass ---
+        # Pack all examples into a single PyG Batch.  Batch.from_data_list
+        # concatenates node/edge features and offsets edge indices correctly
+        # for variable-size graphs.
+        data_list = [ex.state_data.clone().to(self.device) for ex in examples]
+        batch = Batch.from_data_list(data_list).to(self.device)
+        graph_ids = torch.stack([d.id for d in data_list]).to(self.device)
+
+        dist_params, pred_values = self.model(
+            batch.x, batch.edge_index, batch.edge_attr,
+            batch.node_type,
+            batch.batch,
+            batch.pe,
+            graph_ids,
+        )
+
+        # --- Value loss (fully batched) ---
+        value_targets = torch.tensor(
+            [ex.value_target for ex in examples], dtype=torch.float32, device=self.device
+        )
+        pred_values_flat = pred_values.squeeze(-1)
+        value_loss = ((pred_values_flat - value_targets) ** 2).mean()
+
+        # --- Policy loss (per-example, on sliced distribution params) ---
+        # Each example has a different MCTS action set, so we split the batched
+        # distribution params and compute cross-entropy individually.  The tensor
+        # slicing preserves the computation graph for gradient flow.
         policy_loss_terms: list[torch.Tensor] = []
-        value_loss_terms: list[torch.Tensor] = []
-        value_targets_list: list[float] = []
-        value_preds_list: list[float] = []
         policy_entropies: list[float] = []
 
-        for example in examples:
-            data = example.state_data.clone().to(self.device)
-            batch_tensor = torch.zeros(data.x.shape[0], dtype=torch.long, device=self.device)
-
-            # Forward pass
-            dist_params, pred_value = self.model(
-                data.x, data.edge_index, data.edge_attr,
-                data.node_type,
-                batch_tensor,
-                data.pe,
-                data.id.to(self.device),
+        for i, example in enumerate(examples):
+            single_params = AlphaZXDistributionParams(
+                graph_ids=dist_params.graph_ids[i:i+1],
+                mixture_dist_probs=dist_params.mixture_dist_probs[i:i+1],
+                node_dist_probs=dist_params.node_dist_probs[i:i+1],
+                phase_dist_probs=dist_params.phase_dist_probs[i:i+1],
+                new_edge_dist_probs=dist_params.new_edge_dist_probs[i:i+1],
+                transfer_edge_dist_probs=dist_params.transfer_edge_dist_probs[i:i+1],
             )
-            distribution = AlphaZXDistribution(dist_params)
+            distribution = AlphaZXDistribution(single_params)
 
-            # Track value predictions and targets for diagnostics
-            value_preds_list.append(pred_value.squeeze().item())
-            value_targets_list.append(example.value_target)
-
-            # Compute MCTS policy entropy: H(π) = -Σ π(a) log π(a)
+            # MCTS policy entropy: H(π) = -Σ π(a) log π(a)
             entropy = 0.0
             for prob in example.mcts_policy.values():
                 if prob > 1e-8:
                     entropy -= prob * math.log(prob)
             policy_entropies.append(entropy)
 
-            # --- Policy loss ---
             # Cross-entropy: -Σ_a π(a) * log p(a)
-            # where π(a) is the MCTS visit-count probability
-            # and p(a) is the model's predicted probability for action a
             action_log_probs: list[torch.Tensor] = []
             for action, mcts_prob in example.mcts_policy.items():
                 if mcts_prob < 1e-8:
-                    continue  # Skip near-zero entries
+                    continue
                 log_prob = self._compute_log_prob(distribution, action)
                 action_log_probs.append(-mcts_prob * log_prob)
 
             if action_log_probs:
-                example_policy_loss = torch.stack(action_log_probs).sum()
-                policy_loss_terms.append(example_policy_loss)
+                policy_loss_terms.append(torch.stack(action_log_probs).sum())
 
-            # --- Value loss ---
-            value_target = torch.tensor(
-                example.value_target, dtype=torch.float32, device=self.device
-            )
-            example_value_loss = (pred_value.squeeze() - value_target) ** 2
-            value_loss_terms.append(example_value_loss)
-
-        if not value_loss_terms:
+        if not policy_loss_terms:
             return TrainStepDiagnostics()
 
-        # Average over the batch — torch.stack keeps the computation graph intact
-        num_valid = len(value_loss_terms)
-        avg_policy_loss = (
-            torch.stack(policy_loss_terms).sum() / num_valid
-            if policy_loss_terms
-            else torch.tensor(0.0, device=self.device)
-        )
-        avg_value_loss = torch.stack(value_loss_terms).sum() / num_valid
-        total_loss = avg_policy_loss + cfg.c_value * avg_value_loss
+        num_examples = len(examples)
+        avg_policy_loss = torch.stack(policy_loss_terms).sum() / num_examples
+        total_loss = avg_policy_loss + cfg.c_value * value_loss
 
-        # Backward pass
+        # --- Backward pass ---
         self.optimizer.zero_grad()
         total_loss.backward()
 
@@ -460,7 +452,9 @@ class Trainer:
         if self.scheduler is not None:
             self.scheduler.step()
 
-        # Compute value target statistics
+        # --- Diagnostics ---
+        value_preds_list = pred_values_flat.detach().cpu().flatten().tolist()
+        value_targets_list = value_targets.detach().cpu().flatten().tolist()
         vt_mean = _safe_mean(value_targets_list)
         vt_std = (
             (sum((v - vt_mean) ** 2 for v in value_targets_list) / max(1, len(value_targets_list))) ** 0.5
@@ -469,7 +463,7 @@ class Trainer:
 
         return TrainStepDiagnostics(
             policy_loss=avg_policy_loss.item(),
-            value_loss=avg_value_loss.item(),
+            value_loss=value_loss.item(),
             total_loss=total_loss.item(),
             grad_norm=grad_norm,
             learning_rate=current_lr,
@@ -477,7 +471,7 @@ class Trainer:
             value_target_std=vt_std,
             value_prediction_mean=_safe_mean(value_preds_list),
             mcts_policy_entropy=_safe_mean(policy_entropies),
-            num_valid_examples=num_valid,
+            num_valid_examples=num_examples,
         )
 
     def _compute_log_prob(
@@ -498,13 +492,14 @@ class Trainer:
             [list(action[5:])], dtype=torch.float32, device=self.device
         )
 
-        # Sum log probabilities of each component
+        # Sum log probabilities of each component.
+        # Phase, edge, and transfer selectors are conditioned on action_type.
         log_prob = (
             distribution.action_type_log_probs(action_type)
             + distribution.node_log_probs(action_type, node)
-            + distribution.new_phase_log_probs(node, phase)
-            + distribution.new_edge_log_probs(node, new_edges)
-            + distribution.transfer_edge_log_probs(node, transfer_edges)
+            + distribution.new_phase_log_probs(action_type, node, phase)
+            + distribution.new_edge_log_probs(action_type, node, new_edges)
+            + distribution.transfer_edge_log_probs(action_type, node, transfer_edges)
         )
 
         return log_prob

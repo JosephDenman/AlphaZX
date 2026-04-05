@@ -14,6 +14,9 @@ from alphazx.models.homogeneous.transfer_edge_selector import TransferEdgeSelect
 
 
 class PolicyNetwork(nn.Module):
+    # Number of non-boundary match types (FRZ, FRX, FLZ, FLX, BR, BL, YRZ, YRX, YLZ, YLX)
+    NUM_ACTION_TYPES = 10
+
     def __init__(self,
                  num_node_types: int,
                  num_possible_phases: int,
@@ -38,11 +41,13 @@ class PolicyNetwork(nn.Module):
                  tes_num_pooling_encoder_blocks: int = 1,
                  tes_num_pooling_heads: int = 1,
                  tes_pooling_layer_norm: bool = True,
-                 dropout: float = 0.1):
+                 dropout: float = 0.1,
+                 num_scoring_heads: int = 8):
         super(PolicyNetwork, self).__init__()
         self.num_node_types = num_node_types
         self.num_possible_phases = num_possible_phases
         self.num_possible_new_edges = num_possible_new_edges
+        T = self.NUM_ACTION_TYPES
         self.gps = GPS(node_in_channels,
                        node_in_channels,
                        edge_in_channels,
@@ -58,14 +63,27 @@ class PolicyNetwork(nn.Module):
                        gps_mlp_hidden_channels,
                        gps_mlp_num_layers)
         # RewriteTypeSelector outputs probabilities for action types (10 match types excluding boundary)
-        self.rewrite_type_selector = RewriteTypeSelector(node_in_channels, 10, rts_num_layers, dropout)
+        self.rewrite_type_selector = RewriteTypeSelector(
+            node_in_channels, T, rts_num_layers, dropout, num_scoring_heads,
+        )
         # NodeSelector outputs probabilities for each node type (10 match types)
-        self.node_selector = NodeSelector(node_in_channels, 10, ns_num_layers, dropout)
-        self.new_phase_selector = NewPhaseSelector(node_in_channels, num_possible_phases, nps_num_layers, dropout)
-        self.new_edge_selector = NewEdgeSelector(node_in_channels, num_possible_new_edges, nes_num_layers, dropout)
-        self.transfer_edge_selector = TransferEdgeSelector(node_in_channels, num_node_types,
-                                                           tes_num_pooling_encoder_blocks, tes_num_pooling_heads,
-                                                           tes_pooling_layer_norm, dropout)
+        self.node_selector = NodeSelector(
+            node_in_channels, T, ns_num_layers, dropout, num_scoring_heads,
+        )
+        # Phase, edge, transfer selectors are conditioned on action type via
+        # concatenated type embeddings (Approach 1).  Output shapes include
+        # the T dimension: [B, T, N, ...].
+        self.new_phase_selector = NewPhaseSelector(
+            node_in_channels, T, num_possible_phases, nps_num_layers, dropout,
+        )
+        self.new_edge_selector = NewEdgeSelector(
+            node_in_channels, T, num_possible_new_edges, nes_num_layers, dropout,
+        )
+        self.transfer_edge_selector = TransferEdgeSelector(
+            node_in_channels, num_node_types, T,
+            tes_num_pooling_encoder_blocks, tes_num_pooling_heads,
+            tes_pooling_layer_norm, dropout,
+        )
 
     def reset_parameters(self):
         self.gps.reset_parameters()

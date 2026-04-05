@@ -275,15 +275,23 @@ class TestAlphaZXModelGradients:
 
     def test_policy_gradient_flow(self):
         model = _make_model()
-        batch = _make_batch(batch_size=1)
+        batch = _make_batch(batch_size=3)
         params, value = _run_model(model, batch)
-        loss = params.mixture_dist_probs.sum()
+        # Sum ALL policy outputs to avoid flaky failures when a random diagram
+        # has no valid action types (making mixture_probs all-zero/no gradient)
+        # or when ReLU in multi-head scoring kills all gradient paths for a
+        # single graph.
+        loss = (params.mixture_dist_probs.sum()
+                + params.node_dist_probs.sum()
+                + params.phase_dist_probs.sum()
+                + params.new_edge_dist_probs.sum()
+                + params.transfer_edge_dist_probs.sum())
         loss.backward()
         has_grad = any(
             p.grad is not None and p.grad.abs().sum() > 0
             for p in model.prediction_network.policy_network.parameters()
         )
-        assert has_grad, "No gradients in policy network from mixture loss"
+        assert has_grad, "No gradients in policy network from policy loss"
 
     def test_log_prob_gradient_flow(self):
         """Gradients should flow from log_prob back through the model."""

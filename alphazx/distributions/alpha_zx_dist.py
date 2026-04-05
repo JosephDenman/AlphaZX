@@ -53,20 +53,16 @@ class AlphaZXDistribution:
 
     def __init__(self, params: AlphaZXDistributionParams):
         """
-        :param params: A dictionary of tensors representing the parameters of the distribution. It contains the following keys:
-        mixture_dist_params: B x T tensor of mixture probabilities. mixture_dist_params[b] is the mixture probabilities
-                             at some step in a trajectory. It is assumed to be a softmax output of a DNN. When B = 1,
-                             we are in the MCTS portion of the algorithm.
-        node_dist_params: B x T x N tensor of node selection probabilities. For a node n that is not of type t in batch b,
-                          node_dist_params[b, t, n] = 0.
-        phase_dist_params: B x N x P tensor of phase probabilities. For a node n in batch b that does not
-                           represent an f-right match, phase_dist_params[b, n] = torch.zeroes((P, ))
-        new_edge_dist_params: B x N x E_new tensor of new edge probabilities. For a node n in batch b that does not
-                              represent an f-right match, new_edges_dist_params[b, n] is all zeros.
-        transfer_edge_dist_params: B x N x E_trans tensor of probabilities for each node. For a node n in batch b
-                                   that does not represent an f-right match, transfer_edges_dist_params[b, n] has a single 1 entry
-                                   in the top left corner of the innermost 2D tensor. All other entries in the innermost 2D tensor are 0.
-                                   Samples drawn from this distribution are all zeros (no edges are selected to be transferred).
+        :param params: A named-tuple of tensors representing the distribution parameters.
+
+        mixture_dist_params: B x T tensor of mixture (action-type) probabilities.
+        node_dist_params: B x T x N tensor of node selection probabilities.
+        phase_dist_params: B x T x N x P tensor of phase probabilities,
+            conditioned on action type.  For non-F-right (node, type) pairs the
+            distribution is deterministic [1, 0, …, 0].
+        new_edge_dist_params: B x T x N x E_new, same convention.
+        transfer_edge_dist_params: B x T x N x E_trans Bernoulli probabilities,
+            conditioned on action type.  Zero for non-F-right (node, type) pairs.
         """
         self.graph_ids = params.graph_ids
         self.mixture_dist_params = params.mixture_dist_probs
@@ -108,19 +104,27 @@ class AlphaZXDistribution:
         log_probs = node_dist.log_prob(nodes)
         return log_probs
 
-    def select_feature_dist_params(self, feature_type: str, nodes: torch.Tensor) -> torch.Tensor:
+    def select_feature_dist_params(
+        self, feature_type: str, action_types: torch.Tensor, nodes: torch.Tensor,
+    ) -> torch.Tensor:
+        """Index into [B, T, N, ...] params using (batch, action_type, node)."""
+        batch_idx = torch.arange(self.B, device=nodes.device)
         if feature_type == 'phase':
-            return self.phase_dist_params[torch.arange(self.B), nodes]
+            return self.phase_dist_params[batch_idx, action_types, nodes]
         elif feature_type == 'new_edge':
-            return self.new_edge_dist_params[torch.arange(self.B), nodes]
+            return self.new_edge_dist_params[batch_idx, action_types, nodes]
         elif feature_type == 'transfer_edge':
-            return self.transfer_edge_dist_params[torch.arange(self.B), nodes]
+            return self.transfer_edge_dist_params[batch_idx, action_types, nodes]
         else:
             raise Exception('Not implemented')
 
-    def sample_features(self, feature_type: str, nodes: torch.Tensor) -> torch.Tensor:
+    def sample_features(
+        self, feature_type: str, action_types: torch.Tensor, nodes: torch.Tensor,
+    ) -> torch.Tensor:
         if feature_type == 'phase' or feature_type == 'new_edge':
-            selected_feature_dist_params = self.select_feature_dist_params(feature_type, nodes)
+            selected_feature_dist_params = self.select_feature_dist_params(
+                feature_type, action_types, nodes,
+            )
             # Guard against all-zero rows (see sample_nodes for explanation)
             selected_feature_dist_params = selected_feature_dist_params.clamp(min=0)
             row_sums = selected_feature_dist_params.sum(dim=-1, keepdim=True)
@@ -135,33 +139,74 @@ class AlphaZXDistribution:
         else:
             raise Exception('Not implemented')
 
-    def feature_log_probs(self, feature_type: str, nodes: torch.Tensor, features: torch.Tensor) -> torch.Tensor:
+    def feature_log_probs(
+        self,
+        feature_type: str,
+        action_types: torch.Tensor,
+        nodes: torch.Tensor,
+        features: torch.Tensor,
+    ) -> torch.Tensor:
         if feature_type == 'phase' or feature_type == 'new_edge':
-            selected_feature_dist_params = self.select_feature_dist_params(feature_type, nodes)
+            selected_feature_dist_params = self.select_feature_dist_params(
+                feature_type, action_types, nodes,
+            )
             feature_dist = Categorical(probs=selected_feature_dist_params, validate_args=False)
             log_probs = feature_dist.log_prob(features)
             return log_probs
         else:
             raise Exception('Not implemented')
 
-    def sample_phases(self, nodes: torch.Tensor) -> torch.Tensor:
-        return self.sample_features('phase', nodes)
+    def sample_phases(self, action_types: torch.Tensor, nodes: torch.Tensor) -> torch.Tensor:
+        return self.sample_features('phase', action_types, nodes)
 
-    def new_phase_log_probs(self, nodes: torch.Tensor, phases: torch.Tensor) -> torch.Tensor:
-        return self.feature_log_probs('phase', nodes, phases)
+    def new_phase_log_probs(
+        self, action_types: torch.Tensor, nodes: torch.Tensor, phases: torch.Tensor,
+    ) -> torch.Tensor:
+        return self.feature_log_probs('phase', action_types, nodes, phases)
 
-    def sample_new_edges(self, nodes: torch.Tensor) -> torch.Tensor:
-        return self.sample_features('new_edge', nodes)
+    def sample_new_edges(self, action_types: torch.Tensor, nodes: torch.Tensor) -> torch.Tensor:
+        return self.sample_features('new_edge', action_types, nodes)
 
-    def new_edge_log_probs(self, nodes: torch.Tensor, new_edges: torch.Tensor) -> torch.Tensor:
-        return self.feature_log_probs('new_edge', nodes, new_edges)
+    def new_edge_log_probs(
+        self, action_types: torch.Tensor, nodes: torch.Tensor, new_edges: torch.Tensor,
+    ) -> torch.Tensor:
+        return self.feature_log_probs('new_edge', action_types, nodes, new_edges)
 
-    def sample_transfer_edges(self, nodes: torch.Tensor) -> torch.Tensor:
-        selected_feature_dist_params = self.select_feature_dist_params('transfer_edge', nodes)
+    def sample_transfer_edges(
+        self, action_types: torch.Tensor, nodes: torch.Tensor,
+    ) -> torch.Tensor:
+        selected_feature_dist_params = self.select_feature_dist_params(
+            'transfer_edge', action_types, nodes,
+        )
         return MultivariateBernoulli(selected_feature_dist_params).sample(torch.Size([1]))
 
-    def transfer_edge_log_probs(self, nodes: torch.Tensor, transfer_edges: torch.Tensor) -> torch.Tensor:
-        selected_feature_dist_params = self.select_feature_dist_params('transfer_edge', nodes)
+    def transfer_edge_log_probs(
+        self, action_types: torch.Tensor, nodes: torch.Tensor, transfer_edges: torch.Tensor,
+    ) -> torch.Tensor:
+        selected_feature_dist_params = self.select_feature_dist_params(
+            'transfer_edge', action_types, nodes,
+        )
+        # The stored action may have a different number of transfer edges than
+        # the model's output (E_trans depends on max degree in the graph at the
+        # time of the forward pass vs. the graph at the time of play).  Align
+        # by padding the shorter side with zeros.
+        E_model = selected_feature_dist_params.shape[-1]
+        E_action = transfer_edges.shape[-1]
+        if E_action < E_model:
+            pad = torch.zeros(
+                *transfer_edges.shape[:-1], E_model - E_action,
+                dtype=transfer_edges.dtype, device=transfer_edges.device,
+            )
+            transfer_edges = torch.cat([transfer_edges, pad], dim=-1)
+        elif E_model < E_action:
+            pad = torch.zeros(
+                *selected_feature_dist_params.shape[:-1], E_action - E_model,
+                dtype=selected_feature_dist_params.dtype,
+                device=selected_feature_dist_params.device,
+            )
+            selected_feature_dist_params = torch.cat(
+                [selected_feature_dist_params, pad], dim=-1,
+            )
         return MultivariateBernoulli(selected_feature_dist_params).log_prob(transfer_edges.float())
 
     def probs(self, sampled_actions: torch.Tensor) -> torch.Tensor:
@@ -214,9 +259,9 @@ class AlphaZXDistribution:
         try:
             action_type_log_probs = self.action_type_log_probs(flat_action_types)
             node_log_probs = self.node_log_probs(flat_action_types, flat_nodes)
-            phase_log_probs = self.new_phase_log_probs(flat_nodes, flat_phases)
-            new_edge_log_probs = self.new_edge_log_probs(flat_nodes, flat_new_edges)
-            transfer_edge_log_probs = self.transfer_edge_log_probs(flat_nodes, flat_transfer_edges)
+            phase_log_probs = self.new_phase_log_probs(flat_action_types, flat_nodes, flat_phases)
+            new_edge_log_probs = self.new_edge_log_probs(flat_action_types, flat_nodes, flat_new_edges)
+            transfer_edge_log_probs = self.transfer_edge_log_probs(flat_action_types, flat_nodes, flat_transfer_edges)
         finally:
             # Restore original state
             self.B = orig_B
@@ -243,9 +288,9 @@ class AlphaZXDistribution:
         """
         action_types = self.sample_action_types(k)
         nodes = self.sample_nodes(action_types)[0]
-        phases = self.sample_phases(nodes)[0]
-        new_edges = self.sample_new_edges(nodes)[0]
-        transfer_edges = self.sample_transfer_edges(nodes)[0]
+        phases = self.sample_phases(action_types, nodes)[0]
+        new_edges = self.sample_new_edges(action_types, nodes)[0]
+        transfer_edges = self.sample_transfer_edges(action_types, nodes)[0]
         stacked = torch.stack((action_types, nodes, phases, new_edges), dim=-1)  # (K, B, 4)
         # Categorical.sample returns (sample_shape, *batch_shape) = (K, B, ...).
         # Transpose to batch-first (B, K, ...) to match log_prob's expected layout.

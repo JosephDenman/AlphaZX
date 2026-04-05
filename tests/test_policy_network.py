@@ -240,6 +240,7 @@ class TestNewPhaseSelector:
     def setup(self):
         self.selector = NewPhaseSelector(
             node_in_channels=NODE_CHANNELS + PE_DIM,
+            num_action_types=NUM_NODE_TYPES,
             num_possible_phases=NUM_POSSIBLE_PHASES,
             num_layers=2,
             dropout=0.1,
@@ -258,36 +259,41 @@ class TestNewPhaseSelector:
         with torch.no_grad():
             probs = self.selector(x, node_types, batch)
         B = batch.max().item() + 1
+        T = NUM_NODE_TYPES
         N = pyg.utils.to_dense_batch(x, batch)[0].shape[1]
-        assert probs.shape == (B, N, NUM_POSSIBLE_PHASES)
+        assert probs.shape == (B, T, N, NUM_POSSIBLE_PHASES)
 
     def test_non_simple_nodes_get_deterministic_phase(self):
-        """Non-FRight nodes should have all probability on phase index 0."""
+        """Non-FRight nodes should have all probability on phase index 0 for every action type."""
         x, node_types, batch = self._make_input()
         with torch.no_grad():
             probs = self.selector(x, node_types, batch)
         dense_types, _ = pyg.utils.to_dense_batch(node_types, batch, fill_value=float('nan'))
         B, N = dense_types.shape
+        T = NUM_NODE_TYPES
         for b in range(B):
             for n in range(N):
                 nt = dense_types[b, n].item()
                 if nt != FRightZMatch.index and nt != FRightXMatch.index:
                     if not (nt != nt):  # not NaN (padding)
-                        assert torch.isclose(probs[b, n, 0], torch.tensor(1.0), atol=1e-5)
-                        assert probs[b, n, 1:].sum() < 1e-5
+                        for t in range(T):
+                            assert torch.isclose(probs[b, t, n, 0], torch.tensor(1.0), atol=1e-5)
+                            assert probs[b, t, n, 1:].sum() < 1e-5
 
     def test_simple_nodes_sum_to_one(self):
-        """FRight nodes should have phase probabilities summing to 1."""
+        """FRight nodes should have phase probabilities summing to 1 for each action type."""
         x, node_types, batch = self._make_input()
         with torch.no_grad():
             probs = self.selector(x, node_types, batch)
         dense_types, _ = pyg.utils.to_dense_batch(node_types, batch, fill_value=float('nan'))
         B, N = dense_types.shape
+        T = NUM_NODE_TYPES
         for b in range(B):
             for n in range(N):
                 nt = dense_types[b, n].item()
                 if nt == FRightZMatch.index or nt == FRightXMatch.index:
-                    assert torch.isclose(probs[b, n].sum(), torch.tensor(1.0), atol=1e-5)
+                    for t in range(T):
+                        assert torch.isclose(probs[b, t, n].sum(), torch.tensor(1.0), atol=1e-5)
 
 
 # ===========================================================================
@@ -302,6 +308,7 @@ class TestNewEdgeSelector:
     def setup(self):
         self.selector = NewEdgeSelector(
             node_in_channels=NODE_CHANNELS + PE_DIM,
+            num_action_types=NUM_NODE_TYPES,
             num_possible_new_edges=NUM_POSSIBLE_NEW_EDGES,
             num_layers=2,
             dropout=0.1,
@@ -319,22 +326,25 @@ class TestNewEdgeSelector:
         with torch.no_grad():
             probs = self.selector(x, node_types, batch)
         B = batch.max().item() + 1
+        T = NUM_NODE_TYPES
         N = pyg.utils.to_dense_batch(x, batch)[0].shape[1]
-        assert probs.shape == (B, N, NUM_POSSIBLE_NEW_EDGES)
+        assert probs.shape == (B, T, N, NUM_POSSIBLE_NEW_EDGES)
 
     def test_non_simple_nodes_get_deterministic_edge(self):
-        """Non-FRight nodes should have all probability on edge index 0."""
+        """Non-FRight nodes should have all probability on edge index 0 for every action type."""
         x, node_types, batch = self._make_input()
         with torch.no_grad():
             probs = self.selector(x, node_types, batch)
         dense_types, _ = pyg.utils.to_dense_batch(node_types, batch, fill_value=float('nan'))
         B, N = dense_types.shape
+        T = NUM_NODE_TYPES
         for b in range(B):
             for n in range(N):
                 nt = dense_types[b, n].item()
                 if nt != FRightZMatch.index and nt != FRightXMatch.index:
                     if not (nt != nt):  # not NaN (padding)
-                        assert torch.isclose(probs[b, n, 0], torch.tensor(1.0), atol=1e-5)
+                        for t in range(T):
+                            assert torch.isclose(probs[b, t, n, 0], torch.tensor(1.0), atol=1e-5)
 
     def test_simple_nodes_sum_to_one(self):
         x, node_types, batch = self._make_input()
@@ -342,11 +352,13 @@ class TestNewEdgeSelector:
             probs = self.selector(x, node_types, batch)
         dense_types, _ = pyg.utils.to_dense_batch(node_types, batch, fill_value=float('nan'))
         B, N = dense_types.shape
+        T = NUM_NODE_TYPES
         for b in range(B):
             for n in range(N):
                 nt = dense_types[b, n].item()
                 if nt == FRightZMatch.index or nt == FRightXMatch.index:
-                    assert torch.isclose(probs[b, n].sum(), torch.tensor(1.0), atol=1e-5)
+                    for t in range(T):
+                        assert torch.isclose(probs[b, t, n].sum(), torch.tensor(1.0), atol=1e-5)
 
 
 # ===========================================================================
@@ -411,13 +423,17 @@ class TestPolicyNetworkForward:
     def test_phase_probs_shape(self):
         params = self._run_forward()
         B = self.batch.batch.max().item() + 1
+        # [B, T, N, P]
         assert params.phase_dist_probs.shape[0] == B
+        assert params.phase_dist_probs.shape[1] == NUM_NODE_TYPES
         assert params.phase_dist_probs.shape[-1] == NUM_POSSIBLE_PHASES
 
     def test_new_edge_probs_shape(self):
         params = self._run_forward()
         B = self.batch.batch.max().item() + 1
+        # [B, T, N, E_new]
         assert params.new_edge_dist_probs.shape[0] == B
+        assert params.new_edge_dist_probs.shape[1] == NUM_NODE_TYPES
         assert params.new_edge_dist_probs.shape[-1] == NUM_POSSIBLE_NEW_EDGES
 
     def test_no_nan_in_any_output(self):
@@ -572,9 +588,9 @@ class TestResetParameters:
         s.reset_parameters()
 
     def test_new_phase_selector_reset(self):
-        s = NewPhaseSelector(NODE_CHANNELS + PE_DIM, NUM_POSSIBLE_PHASES, 2, 0.1)
+        s = NewPhaseSelector(NODE_CHANNELS + PE_DIM, NUM_NODE_TYPES, NUM_POSSIBLE_PHASES, 2, 0.1)
         s.reset_parameters()
 
     def test_new_edge_selector_reset(self):
-        s = NewEdgeSelector(NODE_CHANNELS + PE_DIM, NUM_POSSIBLE_NEW_EDGES, 2, 0.1)
+        s = NewEdgeSelector(NODE_CHANNELS + PE_DIM, NUM_NODE_TYPES, NUM_POSSIBLE_NEW_EDGES, 2, 0.1)
         s.reset_parameters()

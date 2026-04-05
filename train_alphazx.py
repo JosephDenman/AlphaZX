@@ -59,24 +59,24 @@ def parse_args() -> argparse.Namespace:
                          help='Hadamard gate probability for CNOT_HAD_PHASE (default: 0.2)')
     circuit.add_argument('--p-t', type=float, default=0.4,
                          help='T-gate probability for CNOT_HAD_PHASE (default: 0.4)')
-    circuit.add_argument('--max-t-gate-increase', type=int, default=10,
-                         help='Terminate episode if T-gates exceed initial by this much (default: 10, 0=disable)')
+    circuit.add_argument('--max-t-gate-increase', type=int, default=5,
+                         help='Terminate episode if T-gates exceed initial by this much (default: 5, 0=disable)')
     circuit.add_argument('--min-initial-t-gates', type=int, default=2,
                          help='Re-roll circuits with fewer T-gates than this (default: 2)')
 
     # --- Model architecture ---
     model_group = parser.add_argument_group('Model architecture')
-    model_group.add_argument('--node-channels', type=int, default=4,
-                             help='Node embedding dimension (default: 4)')
-    model_group.add_argument('--edge-channels', type=int, default=4,
-                             help='Edge embedding dimension (default: 4)')
-    model_group.add_argument('--pe-dim', type=int, default=4,
-                             help='Positional encoding dimension (default: 4)')
+    model_group.add_argument('--node-channels', type=int, default=64,
+                             help='Node embedding dimension (default: 64)')
+    model_group.add_argument('--edge-channels', type=int, default=64,
+                             help='Edge embedding dimension (default: 64)')
+    model_group.add_argument('--pe-dim', type=int, default=20,
+                             help='Positional encoding dimension (default: 20)')
 
     # --- MCTS parameters ---
     mcts = parser.add_argument_group('MCTS')
-    mcts.add_argument('--num-simulations', type=int, default=100,
-                      help='MCTS simulations per move (default: 100)')
+    mcts.add_argument('--num-simulations', type=int, default=50,
+                      help='MCTS simulations per move (default: 50)')
     mcts.add_argument('--c-puct', type=float, default=1.5,
                       help='PUCT exploration constant (default: 1.5)')
     mcts.add_argument('--pw-alpha', type=float, default=0.5,
@@ -92,10 +92,10 @@ def parse_args() -> argparse.Namespace:
     train = parser.add_argument_group('Training')
     train.add_argument('--num-iterations', type=int, default=100,
                        help='Number of training iterations (default: 100)')
-    train.add_argument('--self-play-games', type=int, default=100,
-                       help='Self-play games per iteration (default: 100)')
-    train.add_argument('--training-steps', type=int, default=1000,
-                       help='Gradient steps per iteration (default: 1000)')
+    train.add_argument('--self-play-games', type=int, default=50,
+                       help='Self-play games per iteration (default: 50)')
+    train.add_argument('--training-steps', type=int, default=200,
+                       help='Gradient steps per iteration (default: 200)')
     train.add_argument('--batch-size', type=int, default=32,
                        help='Training batch size (default: 32)')
     train.add_argument('--lr', type=float, default=1e-3,
@@ -105,7 +105,7 @@ def parse_args() -> argparse.Namespace:
     train.add_argument('--c-value', type=float, default=1.0,
                        help='Value loss weight (default: 1.0)')
     train.add_argument('--lr-schedule', choices=['cosine', 'constant', 'step'],
-                       default='cosine', help='LR schedule (default: cosine)')
+                       default='constant', help='LR schedule (default: constant)')
 
     # --- Replay buffer ---
     buf = parser.add_argument_group('Replay buffer')
@@ -137,10 +137,10 @@ def parse_args() -> argparse.Namespace:
                      help='Starting number of qubits (default: 2)')
     cur.add_argument('--curriculum-start-depth', type=int, default=3,
                      help='Starting circuit depth (default: 3)')
-    cur.add_argument('--curriculum-advance-threshold', type=float, default=0.5,
-                     help='T-gate reduction ratio required to advance (default: 0.5)')
-    cur.add_argument('--curriculum-advance-window', type=int, default=3,
-                     help='Consecutive iterations meeting threshold to advance (default: 3)')
+    cur.add_argument('--curriculum-advance-threshold', type=float, default=0.15,
+                     help='T-gate reduction ratio required to advance (default: 0.15)')
+    cur.add_argument('--curriculum-advance-window', type=int, default=2,
+                     help='Consecutive iterations meeting threshold to advance (default: 2)')
     cur.add_argument('--curriculum-linear-every', type=int, default=10,
                      help='For linear strategy: advance every N iterations (default: 10)')
     cur.add_argument('--curriculum-qubit-step', type=int, default=1,
