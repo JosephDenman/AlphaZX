@@ -125,43 +125,19 @@ class RewardBreakdown:
 
 def calculate_reward(old_diagram_stats: DiagramStats, new_diagram_stats: DiagramStats) -> tuple[float, RewardBreakdown]:
     """
-    Shaped reward function that provides more frequent feedback.
-    Returns both the total reward and a breakdown of components.
+    Clean reward function focused solely on T-gate reduction.
+
+    Previous shaped rewards (node/edge/match bonuses) added noise that confused
+    the value network — positive signal for structurally meaningless moves that
+    don't reduce T-gates. Keeping it simple: +1 per T-gate removed, -1 per added.
     """
     breakdown = RewardBreakdown()
 
-    # Primary reward: Non-Clifford gate reduction (T-gates)
+    # Only reward: T-gate reduction (positive) or increase (negative)
     t_gate_reduction = old_diagram_stats.num_non_clifford_gates - new_diagram_stats.num_non_clifford_gates
-    breakdown.t_gate_reward = t_gate_reduction * 10.0
+    breakdown.t_gate_reward = float(t_gate_reduction)
 
-    # Secondary rewards for progress indicators
-    node_reduction = old_diagram_stats.num_nodes - new_diagram_stats.num_nodes
-    edge_reduction = old_diagram_stats.num_edges - new_diagram_stats.num_edges
-
-    # Small positive rewards for simplification
-    if node_reduction > 0:
-        breakdown.node_reward = node_reduction * 0.1
-    # Penalty for increasing complexity
-    if node_reduction < 0:
-        breakdown.node_reward = node_reduction * 0.2
-
-    if edge_reduction > 0:
-        breakdown.edge_reward = edge_reduction * 0.05
-    if edge_reduction < 0:
-        breakdown.edge_reward = edge_reduction * 0.1
-
-    # Small rewards for reducing specific match types (indicates progress)
-    old_stats_dict = vars(old_diagram_stats)
-    new_stats_dict = vars(new_diagram_stats)
-
-    # Reward reduction in complex matches (indicates simplification)
-    for match_type in ['br_nodes', 'bl_nodes', 'yrz_nodes', 'ylz_nodes', 'yrx_nodes', 'ylx_nodes']:
-        if match_type in old_stats_dict and match_type in new_stats_dict:
-            reduction = old_stats_dict[match_type] - new_stats_dict[match_type]
-            if reduction > 0:
-                breakdown.match_reward += reduction * 0.2
-
-    breakdown.total = breakdown.t_gate_reward + breakdown.node_reward + breakdown.edge_reward + breakdown.match_reward
+    breakdown.total = breakdown.t_gate_reward
     return breakdown.total, breakdown
 
 

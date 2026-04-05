@@ -14,6 +14,41 @@ from alphazx.diagram.match import MatchNode, FRightMatch, FRightZMatch, FRightXM
 
 current_index = 0
 
+# Tolerance for floating-point phase comparisons (phases are multiples of 1/d
+# where d is the phase denominator, so rounding errors are small).
+_PHASE_EPS = 1e-9
+
+
+def _phase_eq(a: float, b: float) -> bool:
+    """Compare two normalized phases for equality, tolerating float rounding."""
+    return abs(a - b) < _PHASE_EPS
+
+
+def _y_left_sort_key(phase: float) -> float:
+    """Sort key for Y-left leaf nodes.
+
+    In a Y-left match the three leaf phases (mod 2) are {1.5, 0.5, 0.5}
+    (i.e. {-π/2, π/2, π/2} after normalization). We want the 1.5 node
+    first, then the two 0.5 nodes — matching the original ordering where
+    -0.5 < 0.5.  Mapping: 1.5 → -0.5, everything else identity.
+    """
+    if _phase_eq(phase, 1.5):
+        return -0.5
+    return phase
+
+
+def _y_right_sort_key(phase: float) -> float:
+    """Sort key for Y-right leaf nodes.
+
+    In a Y-right match the three leaf phases (mod 2) are {0.5, 1.5, 1.5}
+    (i.e. {π/2, -π/2, -π/2} after normalization). We want the 0.5 node
+    first (highest under the original ordering), then the two 1.5 nodes.
+    Mapping: 0.5 → -1 (sorts first), 1.5 → 0 (sorts second).
+    """
+    if _phase_eq(phase, 0.5):
+        return -1.0
+    return 0.0
+
 
 class ZXDiagram(nx.MultiGraph):
     NTYPE = 'type'
@@ -325,18 +360,23 @@ class ZXDiagram(nx.MultiGraph):
     def y_left_z_matches(self) -> Iterator[YLeftZMatch]:
         for n in self.x_nodes():
             if self.degree(n) == 3 and self.phase(n) == 0:
-                if all([self.degree(m) == 2 and self.is_z_basis(m) for m in self.neighbors(n)]) and sum(
-                        [self.phase(m) for m in self.neighbors(n)]) == 0.5:
-                    z0, z2, z3 = sorted(self.neighbors(n), key=lambda m: self.phase(m))
-                    yield YLeftZMatch(z0, n, z2, z3)
+                neighbors = list(self.neighbors(n))
+                if all(self.degree(m) == 2 and self.is_z_basis(m) for m in neighbors):
+                    phase_sum = sum(self.phase(m) for m in neighbors) % 2
+                    if _phase_eq(phase_sum, 0.5):
+                        # Sort so the -π/4 node (phase 1.5 after normalization) comes first
+                        z0, z2, z3 = sorted(neighbors, key=lambda m: _y_left_sort_key(self.phase(m)))
+                        yield YLeftZMatch(z0, n, z2, z3)
 
     def y_left_x_matches(self) -> Iterator[YLeftXMatch]:
         for n in self.z_nodes():
             if self.degree(n) == 3 and self.phase(n) == 0:
-                if all([self.degree(m) == 2 and self.is_x_basis(m) for m in self.neighbors(n)]) and sum(
-                        [self.phase(m) for m in self.neighbors(n)]) == 0.5:
-                    x0, x2, x3 = sorted(self.neighbors(n), key=lambda m: self.phase(m))
-                    yield YLeftXMatch(x0, n, x2, x3)
+                neighbors = list(self.neighbors(n))
+                if all(self.degree(m) == 2 and self.is_x_basis(m) for m in neighbors):
+                    phase_sum = sum(self.phase(m) for m in neighbors) % 2
+                    if _phase_eq(phase_sum, 0.5):
+                        x0, x2, x3 = sorted(neighbors, key=lambda m: _y_left_sort_key(self.phase(m)))
+                        yield YLeftXMatch(x0, n, x2, x3)
 
     def y_left_matches(self) -> Iterator[YLeftMatch]:
         yield from self.y_left_z_matches()
@@ -344,20 +384,24 @@ class ZXDiagram(nx.MultiGraph):
 
     def y_right_z_matches(self) -> Iterator[YRightZMatch]:
         for n in self.x_nodes():
-            if self.degree(n) == 3 and self.phase(n) == -0.5:
-                if all([self.degree(m) == 2 and self.is_z_basis(m) for m in self.neighbors(n)]) and sum(
-                        [self.phase(m) for m in self.neighbors(n)]) == -0.5:
-                    x0, x2, x3 = sorted(self.neighbors(n), key=lambda m: self.phase(m), reverse=True)
-                    yield YRightZMatch(x0, n, x2, x3)
+            if self.degree(n) == 3 and _phase_eq(self.phase(n), 1.5):
+                neighbors = list(self.neighbors(n))
+                if all(self.degree(m) == 2 and self.is_z_basis(m) for m in neighbors):
+                    phase_sum = sum(self.phase(m) for m in neighbors) % 2
+                    if _phase_eq(phase_sum, 1.5):
+                        # Sort so the +π/4 node (phase 0.5) comes first
+                        x0, x2, x3 = sorted(neighbors, key=lambda m: _y_right_sort_key(self.phase(m)))
+                        yield YRightZMatch(x0, n, x2, x3)
 
     def y_right_x_matches(self) -> Iterator[YRightXMatch]:
-        # This is for when the center node in the Y right rule match is a Z node with phase - pi * 0.5.
         for n in self.z_nodes():
-            if self.degree(n) == 3 and self.phase(n) == -0.5:
-                if all([self.degree(m) == 2 and self.is_x_basis(m) for m in self.neighbors(n)]) and sum(
-                        [self.phase(m) for m in self.neighbors(n)]) == -0.5:
-                    x0, x2, x3 = sorted(self.neighbors(n), key=lambda m: self.phase(m), reverse=True)
-                    yield YRightXMatch(x0, n, x2, x3)
+            if self.degree(n) == 3 and _phase_eq(self.phase(n), 1.5):
+                neighbors = list(self.neighbors(n))
+                if all(self.degree(m) == 2 and self.is_x_basis(m) for m in neighbors):
+                    phase_sum = sum(self.phase(m) for m in neighbors) % 2
+                    if _phase_eq(phase_sum, 1.5):
+                        x0, x2, x3 = sorted(neighbors, key=lambda m: _y_right_sort_key(self.phase(m)))
+                        yield YRightXMatch(x0, n, x2, x3)
 
     def y_right_matches(self) -> Iterator[YRightMatch]:
         yield from self.y_right_z_matches()

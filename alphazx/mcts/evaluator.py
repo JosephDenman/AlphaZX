@@ -20,7 +20,10 @@ import pyzx
 import torch
 import torch.nn as nn
 
-from alphazx.diagram.diagram_generators import clifford_zx_diagram, cnot_had_phase_zx_diagram
+from alphazx.diagram.diagram_generators import (
+    clifford_zx_diagram, cnot_had_phase_zx_diagram,
+    clifford_zx_diagram_with_pyzx, cnot_had_phase_zx_diagram_with_pyzx,
+)
 from alphazx.game.zx_game import num_non_clifford_gates
 from alphazx.mcts.config import MCTSConfig
 from alphazx.mcts.game_state import GameState
@@ -116,7 +119,7 @@ class Evaluator:
         :param num_games: Number of evaluation games to play.
         :param num_qubits: Override circuit size (defaults to mcts_config).
         :param depth: Override circuit depth (defaults to mcts_config).
-        :param fixed_circuits: Optional list of ZXDiagrams to evaluate on.
+        :param fixed_circuits: Optional list of (ZXDiagram, pyzx_graph) tuples.
                                If provided, num_games is ignored.
         :return: EvalSummary with aggregated statistics.
         """
@@ -136,9 +139,26 @@ class Evaluator:
         results: list[EvalGameResult] = []
 
         try:
-            circuits_to_eval = fixed_circuits or [None] * num_games
-            for i, circuit in enumerate(circuits_to_eval):
-                result = self._play_eval_game(mcts, circuit, nq, d)
+            if fixed_circuits is not None:
+                # fixed_circuits can be list of (ZXDiagram, pyzx_graph) tuples
+                # or list of ZXDiagrams (backward compat)
+                circuits_to_eval = fixed_circuits
+            else:
+                # Pre-generate all eval circuits so both agent and PyZX
+                # use the exact same circuit for apples-to-apples comparison.
+                circuits_to_eval = []
+                for _ in range(num_games):
+                    diagram, pyzx_graph = self._generate_eval_circuit(nq, d)
+                    circuits_to_eval.append((diagram, pyzx_graph))
+
+            for i, item in enumerate(circuits_to_eval):
+                # Handle both tuple (diagram, pyzx_graph) and bare diagram
+                if isinstance(item, tuple):
+                    diagram, pyzx_graph = item
+                else:
+                    diagram, pyzx_graph = item, None
+
+                result = self._play_eval_game(mcts, diagram, pyzx_graph)
                 results.append(result)
                 logger.debug(
                     f"Eval game {i+1}: "
@@ -154,36 +174,37 @@ class Evaluator:
         wall_time = time.time() - start_time
         return self._aggregate_results(results, wall_time)
 
-    def _play_eval_game(
-        self,
-        mcts: MCTS,
-        start_diagram,
-        num_qubits: int,
-        depth: int,
-    ) -> EvalGameResult:
-        """Play a single evaluation game with near-greedy MCTS."""
-
-        # Create initial state using the configured circuit generator
-        if start_diagram is not None:
-            diagram = start_diagram.copy()
-        elif self.base_config.circuit_type == 'cnot_had_phase':
-            diagram = cnot_had_phase_zx_diagram(
+    def _generate_eval_circuit(
+        self, num_qubits: int, depth: int,
+    ) -> tuple:
+        """Generate a circuit and return both ZXDiagram and PyZX graph."""
+        if self.base_config.circuit_type == 'cnot_had_phase':
+            return cnot_had_phase_zx_diagram_with_pyzx(
                 num_qubits, depth,
                 self.base_config.p_had, self.base_config.p_t,
             )
         else:
-            diagram = clifford_zx_diagram(num_qubits, depth, t_gates=True)
+            return clifford_zx_diagram_with_pyzx(num_qubits, depth, t_gates=True)
 
-        state = GameState.from_diagram(diagram)
+    def _play_eval_game(
+        self,
+        mcts: MCTS,
+        diagram,
+        pyzx_graph=None,
+    ) -> EvalGameResult:
+        """Play a single evaluation game with near-greedy MCTS.
+
+        Both the agent and PyZX baseline operate on the SAME circuit for
+        a fair apples-to-apples comparison.
+        """
+        state = GameState.from_diagram(diagram.copy())
         initial_t_gates = state.num_non_clifford
 
         # Run PyZX simplification on the same circuit for comparison
         pyzx_t_gates = None
         pyzx_reduced = None
-        if self.compare_pyzx:
-            pyzx_t_gates, pyzx_reduced = self._run_pyzx_baseline(
-                diagram, initial_t_gates
-            )
+        if self.compare_pyzx and pyzx_graph is not None:
+            pyzx_t_gates, pyzx_reduced = self._run_pyzx_baseline(pyzx_graph)
 
         # Play the game with MCTS
         num_steps = 0
@@ -219,35 +240,19 @@ class Evaluator:
 
     def _run_pyzx_baseline(
         self,
-        diagram,
-        initial_t_gates: int,
+        pyzx_graph,
     ) -> tuple[int, int]:
-        """Run PyZX's full_reduce on the circuit and return T-gate count.
+        """Run PyZX's full_reduce on the SAME circuit the agent evaluated.
 
-        PyZX operates on its own graph format, so we re-generate the circuit
-        from the same parameters. Since ZXDiagram is an nx graph, we need to
-        convert back to PyZX format. For simplicity, we generate a fresh PyZX
-        circuit with the same parameters — note this won't be the exact same
-        circuit, so the comparison is statistical (average over many games).
-
-        For a fair comparison on the exact same circuit, we would need a
-        ZXDiagram → PyZX converter, which is future work.
+        This now takes the original PyZX graph (before simplification) and runs
+        full_reduce on a copy, giving a true apples-to-apples comparison.
         """
         try:
-            # Generate a comparable circuit in PyZX format
-            pyzx_circuit = pyzx.generate.cliffords(
-                self.base_config.num_qubits,
-                self.base_config.depth,
-                True,  # no_hadamard=True
-                True,  # t_gates=True
-            )
-            pyzx_graph = pyzx_circuit.copy()
-            pyzx.full_reduce(pyzx_graph)
-            # Count T-gates in the simplified graph
-            pyzx_t_count = pyzx.tcount(pyzx_graph)
-            initial_pyzx_t = pyzx.tcount(pyzx_circuit)
-            pyzx_reduced = initial_pyzx_t - pyzx_t_count
-            return pyzx_t_count, pyzx_reduced
+            initial_t = pyzx.tcount(pyzx_graph)
+            reduced_graph = pyzx_graph.copy()
+            pyzx.full_reduce(reduced_graph)
+            final_t = pyzx.tcount(reduced_graph)
+            return final_t, initial_t - final_t
         except Exception as e:
             logger.warning(f"PyZX baseline failed: {e}")
             return None, None

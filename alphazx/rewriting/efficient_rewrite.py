@@ -255,10 +255,12 @@ def detect_y_right_z_matches_in_neighborhood(
     Detect YRightZMatch instances where at least one node is in neighborhood.
 
     YRightZMatch requires:
-    - Center node is X-basis with degree 3 and phase -0.5
+    - Center node is X-basis with degree 3 and phase 1.5 (= -0.5 mod 2)
     - All 3 neighbors are Z-basis with degree 2
-    - Sum of neighbor phases = -0.5
+    - Sum of neighbor phases mod 2 = 1.5 (= -0.5 mod 2)
     """
+    from alphazx.diagram.zx_diagram import _phase_eq, _y_right_sort_key
+
     for center in neighborhood:
         if not zx_diagram.has_node(center):
             continue
@@ -266,7 +268,7 @@ def detect_y_right_z_matches_in_neighborhood(
             continue
         if zx_diagram.degree(center) != 3:
             continue
-        if zx_diagram.phase(center) != -0.5:
+        if not _phase_eq(zx_diagram.phase(center), 1.5):
             continue
 
         neighbors = list(zx_diagram.neighbors(center))
@@ -277,13 +279,13 @@ def detect_y_right_z_matches_in_neighborhood(
         if not all(zx_diagram.is_z_basis(n) and zx_diagram.degree(n) == 2 for n in neighbors):
             continue
 
-        # Check phase sum
-        phase_sum = sum(zx_diagram.phase(n) for n in neighbors)
-        if phase_sum != -0.5:
+        # Check phase sum (mod 2 to handle normalized phases)
+        phase_sum = sum(zx_diagram.phase(n) for n in neighbors) % 2
+        if not _phase_eq(phase_sum, 1.5):
             continue
 
-        # Sort by phase (descending) to match expected order
-        sorted_neighbors = sorted(neighbors, key=lambda n: zx_diagram.phase(n), reverse=True)
+        # Sort: 0.5 node first, then the two 1.5 nodes
+        sorted_neighbors = sorted(neighbors, key=lambda n: _y_right_sort_key(zx_diagram.phase(n)))
         yield YRightZMatch(sorted_neighbors[0], center, sorted_neighbors[1], sorted_neighbors[2])
 
 
@@ -295,10 +297,12 @@ def detect_y_right_x_matches_in_neighborhood(
     Detect YRightXMatch instances where at least one node is in neighborhood.
 
     YRightXMatch requires:
-    - Center node is Z-basis with degree 3 and phase -0.5
+    - Center node is Z-basis with degree 3 and phase 1.5 (= -0.5 mod 2)
     - All 3 neighbors are X-basis with degree 2
-    - Sum of neighbor phases = -0.5
+    - Sum of neighbor phases mod 2 = 1.5 (= -0.5 mod 2)
     """
+    from alphazx.diagram.zx_diagram import _phase_eq, _y_right_sort_key
+
     for center in neighborhood:
         if not zx_diagram.has_node(center):
             continue
@@ -306,7 +310,7 @@ def detect_y_right_x_matches_in_neighborhood(
             continue
         if zx_diagram.degree(center) != 3:
             continue
-        if zx_diagram.phase(center) != -0.5:
+        if not _phase_eq(zx_diagram.phase(center), 1.5):
             continue
 
         neighbors = list(zx_diagram.neighbors(center))
@@ -316,11 +320,11 @@ def detect_y_right_x_matches_in_neighborhood(
         if not all(zx_diagram.is_x_basis(n) and zx_diagram.degree(n) == 2 for n in neighbors):
             continue
 
-        phase_sum = sum(zx_diagram.phase(n) for n in neighbors)
-        if phase_sum != -0.5:
+        phase_sum = sum(zx_diagram.phase(n) for n in neighbors) % 2
+        if not _phase_eq(phase_sum, 1.5):
             continue
 
-        sorted_neighbors = sorted(neighbors, key=lambda n: zx_diagram.phase(n), reverse=True)
+        sorted_neighbors = sorted(neighbors, key=lambda n: _y_right_sort_key(zx_diagram.phase(n)))
         yield YRightXMatch(sorted_neighbors[0], center, sorted_neighbors[1], sorted_neighbors[2])
 
 
@@ -334,8 +338,10 @@ def detect_y_left_z_matches_in_neighborhood(
     YLeftZMatch requires:
     - Center node is X-basis with degree 3 and phase 0
     - All 3 neighbors are Z-basis with degree 2
-    - Sum of neighbor phases = 0.5
+    - Sum of neighbor phases mod 2 = 0.5
     """
+    from alphazx.diagram.zx_diagram import _phase_eq, _y_left_sort_key
+
     for center in neighborhood:
         if not zx_diagram.has_node(center):
             continue
@@ -353,12 +359,12 @@ def detect_y_left_z_matches_in_neighborhood(
         if not all(zx_diagram.is_z_basis(n) and zx_diagram.degree(n) == 2 for n in neighbors):
             continue
 
-        phase_sum = sum(zx_diagram.phase(n) for n in neighbors)
-        if phase_sum != 0.5:
+        phase_sum = sum(zx_diagram.phase(n) for n in neighbors) % 2
+        if not _phase_eq(phase_sum, 0.5):
             continue
 
-        # Sort by phase (ascending) to match expected order
-        sorted_neighbors = sorted(neighbors, key=lambda n: zx_diagram.phase(n))
+        # Sort: 1.5 node first (= -0.5 before normalization), then the two 0.5 nodes
+        sorted_neighbors = sorted(neighbors, key=lambda n: _y_left_sort_key(zx_diagram.phase(n)))
         yield YLeftZMatch(sorted_neighbors[0], center, sorted_neighbors[1], sorted_neighbors[2])
 
 
@@ -372,8 +378,10 @@ def detect_y_left_x_matches_in_neighborhood(
     YLeftXMatch requires:
     - Center node is Z-basis with degree 3 and phase 0
     - All 3 neighbors are X-basis with degree 2
-    - Sum of neighbor phases = 0.5
+    - Sum of neighbor phases mod 2 = 0.5
     """
+    from alphazx.diagram.zx_diagram import _phase_eq, _y_left_sort_key
+
     for center in neighborhood:
         if not zx_diagram.has_node(center):
             continue
@@ -391,11 +399,11 @@ def detect_y_left_x_matches_in_neighborhood(
         if not all(zx_diagram.is_x_basis(n) and zx_diagram.degree(n) == 2 for n in neighbors):
             continue
 
-        phase_sum = sum(zx_diagram.phase(n) for n in neighbors)
-        if phase_sum != 0.5:
+        phase_sum = sum(zx_diagram.phase(n) for n in neighbors) % 2
+        if not _phase_eq(phase_sum, 0.5):
             continue
 
-        sorted_neighbors = sorted(neighbors, key=lambda n: zx_diagram.phase(n))
+        sorted_neighbors = sorted(neighbors, key=lambda n: _y_left_sort_key(zx_diagram.phase(n)))
         yield YLeftXMatch(sorted_neighbors[0], center, sorted_neighbors[1], sorted_neighbors[2])
 
 

@@ -107,16 +107,13 @@ class SelfPlayWorker:
 
         initial_t_gates = state.num_non_clifford
 
-        # Collect examples: (state_data, mcts_policy, step_reward)
+        # Collect examples: (state_data, mcts_policy, value_target=TBD)
         # Value targets are filled in retroactively after the episode ends,
-        # using discounted cumulative future reward from each step.
+        # using the simple outcome: (initial_t - final_t) / initial_t.
         pending_examples: list[TrainingExample] = []
-        step_rewards: list[float] = []
         total_reward = 0.0
         num_steps = 0
         max_increase = self.config.max_t_gate_increase
-
-        early_terminated_degenerate = False
 
         # Per-step timing accumulators for profiling
         _t_mcts = 0.0
@@ -142,7 +139,6 @@ class SelfPlayWorker:
                         f"Early termination (pre-action): T-gates {current_t} >= "
                         f"initial {initial_t_gates} + {max_increase}"
                     )
-                    early_terminated_degenerate = True
                     break
 
             # Run MCTS from current state
@@ -177,12 +173,10 @@ class SelfPlayWorker:
                 reward, done = state.apply_action(action)
             except (ValueError, KeyError, IndexError, AssertionError) as e:
                 logger.warning(f"Action application failed at step {num_steps}: {e}")
-                step_rewards.append(0.0)
                 _t_apply += time.time() - _t0
                 break
             _t_apply += time.time() - _t0
 
-            step_rewards.append(reward)
             total_reward += reward
             num_steps += 1
 
@@ -210,7 +204,6 @@ class SelfPlayWorker:
                         f"Early termination (post-action): T-gates {current_t} >= "
                         f"initial {initial_t_gates} + {max_increase}"
                     )
-                    early_terminated_degenerate = True
                     break
 
         # Compute the episode outcome and fill value targets into all examples.
@@ -218,56 +211,28 @@ class SelfPlayWorker:
         t_gates_reduced = initial_t_gates - final_t_gates
         simplified = state.is_terminal()
 
-        # --- Value targets: discounted cumulative future reward ---
-        # Instead of a uniform episode outcome for every step, we use the
-        # discounted sum of future step rewards from each position:
-        #   v_t = r_t + γ * r_{t+1} + γ^2 * r_{t+2} + ...
+        # --- Value targets: simple outcome-based ---
+        # We use the T-gate reduction ratio as the value target:
+        #   z = (initial_t - final_t) / initial_t
+        # This is in [-inf, 1] and we clamp to [-1, 1].
         #
-        # This gives more informative targets than uniform assignment:
-        # - Steps that immediately precede simplification get high values
-        # - Steps early in a degenerate episode get less negative signal
-        # - The per-step shaped reward (from calculate_reward) provides
-        #   gradient even when the episode outcome is neutral
+        # This is much cleaner than the previous discounted-return approach:
+        # - No normalizer tuning needed
+        # - Directly measures what we care about (T-gate reduction)
+        # - Compatible with tanh-bounded value head
+        # - All steps in an episode share the same target (standard AlphaZero)
         #
-        # We normalize by max(initial_t_gates, 1) * 10 to keep values in
-        # a reasonable range (calculate_reward uses 10x multiplier for T-gates).
-        gamma = self.config.gamma
-        # The primary reward multiplier is 10x per T-gate (from calculate_reward).
-        # Add ~20% headroom for secondary rewards (node/edge/match reductions).
-        normalizer = max(initial_t_gates, 1) * 12.0
-
-        if pending_examples and step_rewards:
-            # If the episode was cut short because T-gates increased beyond
-            # the allowed threshold, add a terminal penalty.  This gives the
-            # value network a clear negative signal for states that lead to
-            # degenerate behavior, bootstrapping the concept of "this path is
-            # bad" into the value estimates much faster than relying solely on
-            # the step-level shaped rewards.
-            if early_terminated_degenerate:
-                terminal_penalty = -max_increase * 10.0  # Same scale as T-gate reward
-                step_rewards.append(terminal_penalty)
-
-            # Compute discounted returns from the end backward
-            T = len(step_rewards)
-            discounted_returns = [0.0] * T
-            running_return = 0.0
-            for t in reversed(range(T)):
-                running_return = step_rewards[t] + gamma * running_return
-                discounted_returns[t] = running_return
-
-            # Assign normalized value targets
-            for i, example in enumerate(pending_examples):
-                if i < T:
-                    example.value_target = max(-1.0, min(1.0,
-                        discounted_returns[i] / normalizer
-                    ))
-                else:
-                    # Edge case: more examples than rewards (break after snapshot)
-                    example.value_target = 0.0
+        # For early-terminated episodes (T-gates increased beyond threshold),
+        # the target is naturally negative since final_t > initial_t.
+        if initial_t_gates > 0:
+            outcome = (initial_t_gates - final_t_gates) / initial_t_gates
+            outcome = max(-1.0, min(1.0, outcome))
         else:
-            # No steps taken — trivial episode
-            for example in pending_examples:
-                example.value_target = 0.0
+            # Edge case: no T-gates to reduce. 0 if still 0, -1 if increased.
+            outcome = -1.0 if final_t_gates > 0 else 0.0
+
+        for example in pending_examples:
+            example.value_target = outcome
 
         wall_time = time.time() - start_time
 

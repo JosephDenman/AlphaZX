@@ -43,6 +43,7 @@ from alphazx.mcts.curriculum import CurriculumScheduler, CurriculumConfig
 from alphazx.mcts.evaluate import evaluate_state, compute_action_prior
 from alphazx.mcts.replay_buffer import ReplayBuffer, TrainingExample
 from alphazx.mcts.self_play import SelfPlayManager, EpisodeResult, ACTION_TYPE_NAMES
+from alphazx.mcts.parallel_self_play import ParallelSelfPlayManager
 from alphazx.mcts.tb_logger import TBLogger, SelfPlayStats, TrainStepDiagnostics
 from alphazx.models.pre_process import pre_process_single
 
@@ -58,8 +59,11 @@ class TrainerConfig:
     """Number of self-play games per training iteration."""
 
     # --- Training ---
-    training_steps: int = 1000
-    """Number of gradient steps per training iteration."""
+    training_steps: int = 100
+    """Number of gradient steps per training iteration.
+    Reduced from 1000 to prevent overfitting on small replay buffers.
+    With 50 games/iter and ~20 examples each, 100 steps × 32 batch = ~3200
+    sample draws ≈ 3 passes through new data, which is reasonable."""
 
     batch_size: int = 32
     """Number of examples per training minibatch."""
@@ -93,6 +97,13 @@ class TrainerConfig:
 
     checkpoint_dir: str = 'checkpoints'
     """Directory to save model checkpoints."""
+
+    # --- Parallelism ---
+    num_self_play_workers: int = 1
+    """Number of parallel worker processes for self-play game generation.
+    1 = serial (no multiprocessing overhead, uses SelfPlayManager).
+    >1 = spawns worker processes via ParallelSelfPlayManager.
+    Recommended: os.cpu_count() - 1 to leave one core for the main process."""
 
     # --- Misc ---
     num_iterations: int = 100
@@ -163,13 +174,22 @@ class Trainer:
         self.tb_logger = tb_logger
         self.curriculum = curriculum
 
-        # Self-play manager
-        self.self_play_manager = SelfPlayManager(
-            model=model,
-            config=mcts_config,
-            replay_buffer=replay_buffer,
-            device=device,
-        )
+        # Self-play manager: parallel if num_self_play_workers > 1
+        if trainer_config.num_self_play_workers > 1:
+            self.self_play_manager = ParallelSelfPlayManager(
+                model=model,
+                config=mcts_config,
+                replay_buffer=replay_buffer,
+                device=device,
+                num_workers=trainer_config.num_self_play_workers,
+            )
+        else:
+            self.self_play_manager = SelfPlayManager(
+                model=model,
+                config=mcts_config,
+                replay_buffer=replay_buffer,
+                device=device,
+            )
 
         # If curriculum is enabled, apply the initial difficulty level
         if self.curriculum and self.curriculum.config.enabled:
@@ -590,12 +610,23 @@ class Trainer:
 
         Most games use the current curriculum level.  A fraction use easier
         or harder levels to smooth transitions and prevent forgetting.
+
+        When using ParallelSelfPlayManager, difficulty overrides are passed
+        as a batch so workers can apply them per-game without serial dispatch.
+        When using serial SelfPlayManager, falls back to the original loop.
         """
         difficulty_levels = self.curriculum.get_mixed_difficulty_levels(num_games)
-        results = []
 
+        # Parallel path: pass all difficulty overrides in one call
+        if isinstance(self.self_play_manager, ParallelSelfPlayManager):
+            return self.self_play_manager.generate_games(
+                num_games,
+                difficulty_overrides=difficulty_levels,
+            )
+
+        # Serial path: original per-game loop
+        results = []
         for i, (nq, depth) in enumerate(difficulty_levels):
-            # Temporarily override config for this game
             saved_q = self.mcts_config.num_qubits
             saved_d = self.mcts_config.depth
             self.mcts_config.num_qubits = nq
@@ -605,7 +636,6 @@ class Trainer:
                 game_results = self.self_play_manager.generate_games(1)
                 results.extend(game_results)
             finally:
-                # Restore (update() will set the current level's values)
                 self.mcts_config.num_qubits = saved_q
                 self.mcts_config.depth = saved_d
 

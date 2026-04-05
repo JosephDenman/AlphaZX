@@ -14,7 +14,7 @@ class MCTSConfig:
     """Configuration for Sampled MCTS search."""
 
     # --- Search budget ---
-    num_simulations: int = 100
+    num_simulations: int = 800
     """Number of MCTS simulations per move."""
 
     # --- PUCT exploration ---
@@ -50,9 +50,10 @@ class MCTSConfig:
     1.0 for training (proportional to visits), 0.1 for evaluation (near-greedy)."""
 
     # --- Value discount ---
-    gamma: float = 1.0
-    """Discount factor for backpropagated values. 1.0 for episodic tasks
-    (standard in AlphaZero). < 1.0 if you want to prefer shorter solutions."""
+    gamma: float = 0.99
+    """Discount factor for backpropagated values. 0.99 slightly prefers shorter
+    solution paths. Standard AlphaZero uses 1.0, but with shaped rewards and
+    long episodes, slight discounting stabilizes value targets."""
 
     # --- Positional encoding ---
     pe_dim: int = 20

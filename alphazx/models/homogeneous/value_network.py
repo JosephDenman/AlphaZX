@@ -76,4 +76,5 @@ class ValueNetwork(nn.Module):
         x = self.gps(x, edge_index, edge_attr, batch)
         x = self.global_attention(x, batch)
         x = self.ff(x)
+        x = torch.tanh(x)
         return x

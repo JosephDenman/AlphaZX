@@ -314,51 +314,59 @@ class TestRewardCalculation:
         assert calculate_reward_simple(old, new) == 0
 
     def test_shaped_reward_t_gate_reduction_component(self):
+        """Reward is now purely T-gate reduction: +1 per T-gate removed."""
         old = self._make_stats(num_non_clifford_gates=5)
         new = self._make_stats(num_non_clifford_gates=3)
         total, breakdown = calculate_reward(old, new)
-        assert breakdown.t_gate_reward == 20.0  # 2 * 10.0
+        assert breakdown.t_gate_reward == 2.0  # 2 T-gates removed
 
-    def test_shaped_reward_node_reduction_positive(self):
+    def test_reward_no_secondary_node_reward(self):
+        """Node reduction no longer produces reward (secondary rewards removed)."""
         old = self._make_stats(num_nodes=20)
         new = self._make_stats(num_nodes=15)
         _, breakdown = calculate_reward(old, new)
-        assert breakdown.node_reward == 5 * 0.1
+        assert breakdown.node_reward == 0.0
 
-    def test_shaped_reward_node_increase_penalty(self):
+    def test_reward_no_secondary_node_penalty(self):
+        """Node increase no longer produces penalty (secondary rewards removed)."""
         old = self._make_stats(num_nodes=20)
         new = self._make_stats(num_nodes=23)
         _, breakdown = calculate_reward(old, new)
-        assert breakdown.node_reward == -3 * 0.2
+        assert breakdown.node_reward == 0.0
 
-    def test_shaped_reward_edge_reduction_positive(self):
+    def test_reward_no_secondary_edge_reward(self):
+        """Edge reduction no longer produces reward (secondary rewards removed)."""
         old = self._make_stats(num_edges=30)
         new = self._make_stats(num_edges=25)
         _, breakdown = calculate_reward(old, new)
-        assert breakdown.edge_reward == 5 * 0.05
+        assert breakdown.edge_reward == 0.0
 
-    def test_shaped_reward_total_is_sum_of_components(self):
+    def test_reward_total_equals_t_gate_reward(self):
+        """Total reward should equal T-gate reward only (no secondary components)."""
         old = self._make_stats(num_non_clifford_gates=5, num_nodes=20, num_edges=30, br_nodes=4)
         new = self._make_stats(num_non_clifford_gates=3, num_nodes=18, num_edges=28, br_nodes=2)
         total, breakdown = calculate_reward(old, new)
-        expected = breakdown.t_gate_reward + breakdown.node_reward + breakdown.edge_reward + breakdown.match_reward
-        assert abs(total - expected) < 1e-9
+        assert breakdown.node_reward == 0.0
+        assert breakdown.edge_reward == 0.0
+        assert breakdown.match_reward == 0.0
+        assert abs(total - breakdown.t_gate_reward) < 1e-9
+        assert abs(total - 2.0) < 1e-9  # 2 T-gates removed
 
     def test_reward_breakdown_to_dict(self):
         rb = RewardBreakdown()
         rb.t_gate_reward = 10.0
-        rb.node_reward = 0.5
-        rb.total = 10.5
+        rb.node_reward = 0.0
+        rb.total = 10.0
         d = rb.to_dict()
         assert d['t_gate_reward'] == 10.0
-        assert d['total_reward'] == 10.5
+        assert d['total_reward'] == 10.0
 
-    def test_shaped_reward_match_reduction(self):
+    def test_reward_no_secondary_match_reward(self):
+        """Match reduction no longer produces reward (secondary rewards removed)."""
         old = self._make_stats(br_nodes=5, bl_nodes=3)
         new = self._make_stats(br_nodes=3, bl_nodes=1)
         _, breakdown = calculate_reward(old, new)
-        # br: 2 * 0.2 + bl: 2 * 0.2 = 0.8
-        assert abs(breakdown.match_reward - 0.8) < 1e-9
+        assert breakdown.match_reward == 0.0
 
 
 # ===========================================================================

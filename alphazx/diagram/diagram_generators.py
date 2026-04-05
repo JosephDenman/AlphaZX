@@ -87,8 +87,38 @@ def clifford_nx_graph(num_qubits: int, depth: int, t_gates: bool = True) -> nx.M
     return nx_graph
 
 
+def clifford_zx_diagram_with_pyzx(
+    num_qubits: int, depth: int, t_gates: bool = True,
+) -> tuple[ZXDiagram, 'pyzx.Graph']:
+    """Generate a clifford ZX diagram AND keep the original PyZX graph."""
+    pyzx_graph = pyzx.generate.cliffords(num_qubits, depth, True, t_gates)
+    nx_graph = graph_to_nx_graph(pyzx_graph)
+    post_process(nx_graph)
+    zx_diag = ZXDiagram(phase_denominator(t_gates), nx_graph)
+    return zx_diag, pyzx_graph
+
+
 def clifford_zx_diagram(num_qubits: int, depth: int, t_gates: bool = True) -> ZXDiagram:
     return ZXDiagram(phase_denominator(t_gates), clifford_nx_graph(num_qubits, depth, t_gates))
+
+
+def cnot_had_phase_zx_diagram_with_pyzx(
+    num_qubits: int,
+    depth: int,
+    p_had: float = 0.2,
+    p_t: float = 0.2,
+) -> tuple[ZXDiagram, 'pyzx.Graph']:
+    """Generate a ZX diagram AND keep the original PyZX graph for baseline comparison.
+
+    Returns (zx_diagram, pyzx_graph) where pyzx_graph is the PyZX circuit's
+    graph representation before any simplification.
+    """
+    circuit = pyzx.generate.CNOT_HAD_PHASE_circuit(num_qubits, depth, p_had, p_t, clifford=False)
+    pyzx_graph = circuit.to_graph()
+    nx_graph = graph_to_nx_graph(pyzx_graph)
+    post_process(nx_graph)
+    zx_diag = ZXDiagram(phase_denominator(True), nx_graph)
+    return zx_diag, pyzx_graph
 
 
 def cnot_had_phase_zx_diagram(

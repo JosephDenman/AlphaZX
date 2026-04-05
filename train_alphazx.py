@@ -75,8 +75,8 @@ def parse_args() -> argparse.Namespace:
 
     # --- MCTS parameters ---
     mcts = parser.add_argument_group('MCTS')
-    mcts.add_argument('--num-simulations', type=int, default=50,
-                      help='MCTS simulations per move (default: 50)')
+    mcts.add_argument('--num-simulations', type=int, default=800,
+                      help='MCTS simulations per move (default: 800)')
     mcts.add_argument('--c-puct', type=float, default=1.5,
                       help='PUCT exploration constant (default: 1.5)')
     mcts.add_argument('--pw-alpha', type=float, default=0.5,
@@ -94,8 +94,8 @@ def parse_args() -> argparse.Namespace:
                        help='Number of training iterations (default: 100)')
     train.add_argument('--self-play-games', type=int, default=50,
                        help='Self-play games per iteration (default: 50)')
-    train.add_argument('--training-steps', type=int, default=200,
-                       help='Gradient steps per iteration (default: 200)')
+    train.add_argument('--training-steps', type=int, default=100,
+                       help='Gradient steps per iteration (default: 100)')
     train.add_argument('--batch-size', type=int, default=32,
                        help='Training batch size (default: 32)')
     train.add_argument('--lr', type=float, default=1e-3,
@@ -106,11 +106,15 @@ def parse_args() -> argparse.Namespace:
                        help='Value loss weight (default: 1.0)')
     train.add_argument('--lr-schedule', choices=['cosine', 'constant', 'step'],
                        default='constant', help='LR schedule (default: constant)')
+    train.add_argument('--self-play-workers', type=int, default=1,
+                       help='Number of parallel worker processes for self-play '
+                            '(default: 1 = serial). Set to N for N-way parallelism.')
 
     # --- Replay buffer ---
     buf = parser.add_argument_group('Replay buffer')
-    buf.add_argument('--buffer-capacity', type=int, default=100000,
-                     help='Replay buffer capacity (default: 100000)')
+    buf.add_argument('--buffer-capacity', type=int, default=20000,
+                     help='Replay buffer capacity (default: 20000). Smaller buffers '
+                          'ensure training focuses on recent, higher-quality data.')
     buf.add_argument('--min-buffer-size', type=int, default=256,
                      help='Min buffer size before training starts (default: 256)')
 
@@ -231,6 +235,7 @@ def build_trainer_config(args: argparse.Namespace) -> TrainerConfig:
         checkpoint_dir=args.checkpoint_dir,
         tensorboard=not args.no_tensorboard,
         tensorboard_dir=args.tensorboard_dir,
+        num_self_play_workers=args.self_play_workers,
     )
 
 
@@ -347,6 +352,7 @@ def main():
     logger.info(f"Training: {args.num_iterations} iterations, "
                 f"{args.self_play_games} games/iter, "
                 f"{args.training_steps} steps/iter, "
+                f"{args.num_simulations} simulations, "
                 f"batch_size={args.batch_size}, lr={args.lr}")
     logger.info(f"Buffer: capacity={args.buffer_capacity}")
 
