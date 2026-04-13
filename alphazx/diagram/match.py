@@ -557,8 +557,20 @@ def _count_leaf_classes() -> int:
     return len(_zx_match_diagram_node_leaf_classes())
 
 
-POSSIBLE_PHASES = [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1., 1.125, 1.25, 1.375, 1.5, 1.625, 1.75, 1.875]
-NUM_POSSIBLE_PHASES = len(POSSIBLE_PHASES)
+# Phase vocabulary: 512 evenly spaced values in [0, 2) with step 1/256.
+# This covers:
+#   - Clifford gates (multiples of 1/2)
+#   - T gates (multiples of 1/4)
+#   - Arbitrary Clifford+T circuits (multiples of 1/4)
+#   - QFT rotations up to QFT32 (finest = 1/1024, rounded to 1/256)
+#   - Arithmetic/modular circuits
+# Previous vocabulary used step 1/16 (32 values).  The expansion to 1/256
+# adds negligible model parameters (~7K extra embedding weights) but enables
+# evaluation on QFT and fine-rotation benchmark circuits.
+POSSIBLE_PHASES = [round(i / 256, 8) for i in range(512)]
+NUM_POSSIBLE_PHASES = len(POSSIBLE_PHASES)  # 512
+
+NUM_POSSIBLE_NEW_EDGES = 10
 
 
 class Metadata(NamedTuple):

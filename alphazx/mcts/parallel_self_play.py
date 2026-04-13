@@ -17,8 +17,10 @@ Usage:
 from __future__ import annotations
 
 import logging
+import multiprocessing as mp
 import os
 import random
+import sys
 import time
 from concurrent.futures import ProcessPoolExecutor, Future
 from typing import Optional
@@ -29,56 +31,106 @@ import torch.nn as nn
 
 from alphazx.mcts.config import MCTSConfig
 from alphazx.mcts.replay_buffer import ReplayBuffer, TrainingExample
-from alphazx.mcts.self_play import SelfPlayWorker, EpisodeResult, ACTION_TYPE_NAMES
+from alphazx.mcts.self_play import SelfPlayWorker, MultiGameSelfPlayWorker, EpisodeResult, ACTION_TYPE_NAMES
 
 logger = logging.getLogger(__name__)
 
 
 def _build_model_from_hparams(hparams: dict) -> nn.Module:
-    """Reconstruct an AlphaZXModel from hyperparameters dict.
+    """Reconstruct a model from hyperparameters dict.
+
+    Supports both AlphaZXModel (homogeneous) and AlphaZXHeteroModel
+    (heterogeneous). The 'model_type' key determines which to build.
 
     This import is deferred to avoid circular imports and to keep the
     worker function self-contained.
     """
-    from alphazx.models.homogeneous.alphazx_model import AlphaZXModel
-    return AlphaZXModel(
-        num_node_types=hparams['num_node_types'],
-        num_possible_phases=hparams['num_possible_phases'],
-        num_possible_new_edges=hparams['num_possible_new_edges'],
-        node_embedding_channels=hparams['node_embedding_channels'],
-        num_edge_embeddings=hparams['num_edge_embeddings'],
-        edge_embedding_channels=hparams['edge_embedding_channels'],
-        pe_in_channels=hparams['pe_in_channels'],
-        pe_out_channels=hparams['pe_out_channels'],
-    )
+    model_type = hparams.get('model_type', 'homogeneous')
+
+    if model_type == 'heterogeneous':
+        from alphazx.models.heterogeneous.alphazx_hetero_model import AlphaZXHeteroModel
+        # Pass through HGT-specific hyperparameters when available; fall
+        # back to AlphaZXHeteroModel defaults for older hparams dicts.
+        hgt_kwargs = {}
+        for key in (
+            'hgt_num_shared_layers', 'hgt_num_policy_layers',
+            'hgt_num_value_layers', 'hgt_heads', 'hgt_dropout',
+        ):
+            if key in hparams:
+                hgt_kwargs[key] = hparams[key]
+        return AlphaZXHeteroModel(
+            num_node_types=hparams['num_node_types'],
+            num_possible_phases=hparams['num_possible_phases'],
+            num_possible_new_edges=hparams['num_possible_new_edges'],
+            node_embedding_channels=hparams['node_embedding_channels'],
+            num_edge_embeddings=hparams['num_edge_embeddings'],
+            edge_embedding_channels=hparams['edge_embedding_channels'],
+            pe_in_channels=hparams['pe_in_channels'],
+            pe_out_channels=hparams['pe_out_channels'],
+            **hgt_kwargs,
+        )
+    else:
+        from alphazx.models.homogeneous.alphazx_model import AlphaZXModel
+        return AlphaZXModel(
+            num_node_types=hparams['num_node_types'],
+            num_possible_phases=hparams['num_possible_phases'],
+            num_possible_new_edges=hparams['num_possible_new_edges'],
+            node_embedding_channels=hparams['node_embedding_channels'],
+            num_edge_embeddings=hparams['num_edge_embeddings'],
+            edge_embedding_channels=hparams['edge_embedding_channels'],
+            pe_in_channels=hparams['pe_in_channels'],
+            pe_out_channels=hparams['pe_out_channels'],
+        )
+
+
+def _unwrap_compiled(model: nn.Module) -> nn.Module:
+    """Unwrap a torch.compile'd model to the original nn.Module.
+
+    torch.compile wraps the model in an OptimizedModule.  Most attribute
+    access is delegated, but isinstance() checks fail.  This helper
+    returns the underlying module so introspection works correctly.
+    """
+    orig = getattr(model, '_orig_mod', None)
+    return orig if orig is not None else model
 
 
 def _extract_model_hparams(model: nn.Module) -> dict:
     """Extract the hyperparameters needed to reconstruct a model.
 
     Introspects the model's submodules to recover constructor arguments
-    without requiring them to be stored explicitly.
-    """
-    rep = model.representation_network
-    pred = model.prediction_network
-    policy = pred.policy_network
+    without requiring them to be stored explicitly. Supports both
+    AlphaZXModel (homogeneous) and AlphaZXHeteroModel (heterogeneous).
 
-    # From the FeatureEmbeddingLayer (rep.emb)
-    emb_layer = rep.emb
+    Handles torch.compile'd models by unwrapping to the original module.
+    """
+    from alphazx.models.heterogeneous.alphazx_hetero_model import AlphaZXHeteroModel
+
+    model = _unwrap_compiled(model)
+    is_hetero = isinstance(model, AlphaZXHeteroModel)
+
+    # Both model types have a FeatureEmbeddingLayer named 'emb'
+    if is_hetero:
+        emb_layer = model.emb
+        # Hetero model stores these directly
+        num_node_types = model.num_node_types
+        num_possible_phases = model.num_possible_phases
+        num_possible_new_edges = model.num_possible_new_edges
+    else:
+        rep = model.representation_network
+        emb_layer = rep.emb
+        pred = model.prediction_network
+        policy = pred.policy_network
+        num_node_types = policy.num_node_types
+        num_possible_phases = policy.num_possible_phases
+        num_possible_new_edges = policy.num_possible_new_edges
+
     node_emb_channels = emb_layer.node_emb.embedding_dim
     edge_emb_channels = emb_layer.edge_emb.embedding_dim
     num_edge_embeddings = emb_layer.edge_emb.num_embeddings
-
-    # PE dimensions from the Linear layer in FeatureEmbeddingLayer
     pe_in = emb_layer.pe_lin.in_features
     pe_out = emb_layer.pe_lin.out_features
 
-    # From PolicyNetwork (stores these directly)
-    num_node_types = policy.num_node_types
-    num_possible_phases = policy.num_possible_phases
-    num_possible_new_edges = policy.num_possible_new_edges
-
-    return {
+    hparams = {
         'num_node_types': num_node_types,
         'num_possible_phases': num_possible_phases,
         'num_possible_new_edges': num_possible_new_edges,
@@ -87,7 +139,21 @@ def _extract_model_hparams(model: nn.Module) -> dict:
         'edge_embedding_channels': edge_emb_channels,
         'pe_in_channels': pe_in,
         'pe_out_channels': pe_out,
+        'model_type': 'heterogeneous' if is_hetero else 'homogeneous',
     }
+
+    # HGT-specific hyperparameters (layer counts, heads, dropout) — needed
+    # so the worker reconstructs the model with the correct architecture.
+    if is_hetero:
+        hparams['hgt_num_shared_layers'] = len(model.shared_hgt)
+        hparams['hgt_num_policy_layers'] = len(model.policy_hgt)
+        hparams['hgt_num_value_layers'] = len(model.value_hgt)
+        # heads and dropout live on individual HGTBlocks; read from the first
+        first_block = model.shared_hgt[0]
+        hparams['hgt_heads'] = first_block.conv.heads
+        hparams['hgt_dropout'] = first_block.dropout.p
+
+    return hparams
 
 
 def _worker_play_games(
@@ -97,6 +163,7 @@ def _worker_play_games(
     num_games: int,
     worker_seed: int,
     difficulty_overrides: list[tuple[int, int]] | None = None,
+    concurrent_games: int = 1,
 ) -> list[EpisodeResult]:
     """Play self-play games in a worker process.
 
@@ -104,7 +171,7 @@ def _worker_play_games(
     ProcessPoolExecutor). Each invocation:
     1. Seeds RNGs for reproducibility/diversity.
     2. Reconstructs the model and loads the state_dict.
-    3. Creates a SelfPlayWorker and plays games sequentially.
+    3. Creates a SelfPlayWorker (or MultiGameSelfPlayWorker) and plays games.
     4. Returns the list of EpisodeResults.
 
     :param model_state_dict: Serialized model weights (dict of CPU tensors).
@@ -115,6 +182,9 @@ def _worker_play_games(
     :param worker_seed: Seed for this worker's RNGs.
     :param difficulty_overrides: Optional list of (num_qubits, depth) tuples,
                                  one per game, for curriculum support.
+    :param concurrent_games: Number of games to interleave within this worker.
+                             When > 1, uses MultiGameSelfPlayWorker for cross-game
+                             batched MCTS. Default 1 = sequential (original behavior).
     :return: List of EpisodeResult objects.
     """
     # --- Prevent thread oversubscription ---
@@ -134,18 +204,73 @@ def _worker_play_games(
     random.seed(worker_seed)
     np.random.seed(worker_seed % (2**32))
 
-    # Suppress per-game INFO logging in workers to avoid interleaved output
+    # Keep most worker logging at WARNING but allow progress messages
+    # from the worker logger and MultiGameSelfPlayWorker to stderr.
     logging.getLogger('alphazx').setLevel(logging.WARNING)
+
+    _stderr_fmt = logging.Formatter(
+        '%(asctime)s [worker-%(process)d] %(message)s', datefmt='%H:%M:%S',
+    )
+
+    _wlog = logging.getLogger(f'{__name__}.worker')
+    _wlog.setLevel(logging.INFO)
+    if not _wlog.handlers:
+        _h = logging.StreamHandler(sys.stderr)
+        _h.setFormatter(_stderr_fmt)
+        _wlog.addHandler(_h)
+
+    # Allow MultiGameSelfPlayWorker's per-game progress logs through
+    _sp_log = logging.getLogger('alphazx.mcts.self_play')
+    _sp_log.setLevel(logging.INFO)
+    if not _sp_log.handlers:
+        _h2 = logging.StreamHandler(sys.stderr)
+        _h2.setFormatter(_stderr_fmt)
+        _sp_log.addHandler(_h2)
+
+    t_worker_start = time.time()
 
     # Reconstruct model and load weights
     model = _build_model_from_hparams(model_hparams)
     model.load_state_dict(model_state_dict)
     model.eval()
 
+    # Optional torch.compile for faster inference
+    if mcts_config.torch_compile:
+        try:
+            model = torch.compile(model, dynamic=True)
+            _wlog.info("torch.compile applied (compilation on first forward pass)")
+        except Exception as e:
+            _wlog.warning(f"torch.compile failed, using eager mode: {e}")
+
+    # --- Cross-game batched path ---
+    if concurrent_games > 1:
+        _wlog.info(
+            f"Starting: PID={os.getpid()}, {num_games} games, "
+            f"concurrent_games={concurrent_games}"
+        )
+        multi_worker = MultiGameSelfPlayWorker(
+            model, mcts_config, device=torch.device('cpu'),
+            concurrent_games=concurrent_games,
+        )
+        try:
+            results = multi_worker.play_episodes(num_games, difficulty_overrides)
+        except Exception as e:
+            _wlog.error(f"MultiGameSelfPlayWorker failed: {e}")
+            results = []
+
+        _wlog.info(
+            f"Worker finished: {len(results)}/{num_games} games in "
+            f"{time.time() - t_worker_start:.1f}s (concurrent_games={concurrent_games})"
+        )
+        return results
+
+    # --- Sequential path (original behavior) ---
     worker = SelfPlayWorker(model, mcts_config, device=torch.device('cpu'))
     results: list[EpisodeResult] = []
 
     for i in range(num_games):
+        t_game = time.time()
+
         # Apply curriculum difficulty override if provided
         if difficulty_overrides and i < len(difficulty_overrides):
             saved_q = mcts_config.num_qubits
@@ -157,8 +282,8 @@ def _worker_play_games(
             results.append(result)
         except Exception as e:
             # Log but don't crash the worker — skip this game
-            logging.getLogger(__name__).warning(
-                f"Worker (seed={worker_seed}) game {i} failed: {e}"
+            _wlog.warning(
+                f"Game {i+1}/{num_games} failed ({time.time() - t_game:.1f}s): {e}"
             )
         finally:
             # Restore config if we overrode it
@@ -166,7 +291,77 @@ def _worker_play_games(
                 mcts_config.num_qubits = saved_q
                 mcts_config.depth = saved_d
 
+    _wlog.info(
+        f"Worker finished: {len(results)}/{num_games} games in "
+        f"{time.time() - t_worker_start:.1f}s"
+    )
     return results
+
+
+class PendingSelfPlay:
+    """Handle for an in-flight batch of self-play games.
+
+    Returned by ``ParallelSelfPlayManager.dispatch_games()`` so the caller
+    can do other work (e.g. training) while workers are still playing.
+
+    Call :meth:`collect` to block until all workers finish and return the
+    aggregated results.  Results are **not** automatically inserted into
+    the replay buffer — the caller must do that (the Trainer handles it).
+    """
+
+    def __init__(
+        self,
+        futures: list[Future],
+        num_games: int,
+        num_workers: int,
+        t_start: float,
+    ):
+        self._futures = futures
+        self.num_games = num_games
+        self.num_workers = num_workers
+        self._t_start = t_start
+        self._collected = False
+
+    @property
+    def done(self) -> bool:
+        """True if all worker futures have completed (non-blocking check)."""
+        return all(f.done() for f in self._futures)
+
+    def collect(self) -> list[EpisodeResult]:
+        """Block until all workers finish and return results.
+
+        Can only be called once.  Subsequent calls raise RuntimeError.
+        """
+        if self._collected:
+            raise RuntimeError("PendingSelfPlay.collect() already called")
+        self._collected = True
+
+        all_results: list[EpisodeResult] = []
+        for idx, future in enumerate(self._futures):
+            try:
+                worker_results = future.result()
+                all_results.extend(worker_results)
+                logger.info(
+                    f"  Worker {idx + 1}/{len(self._futures)} finished: "
+                    f"{len(worker_results)} games"
+                )
+            except Exception as e:
+                logger.error(
+                    f"Worker {idx + 1}/{len(self._futures)} failed: {e}. "
+                    f"Skipping its games for this iteration."
+                )
+
+        t_elapsed = time.time() - self._t_start
+        n = max(1, len(all_results))
+        games_per_sec = len(all_results) / max(t_elapsed, 0.001)
+        logger.info(
+            f"Parallel self-play: {len(all_results)} games in {t_elapsed:.1f}s "
+            f"across {self.num_workers} workers ({games_per_sec:.1f} games/s), "
+            f"avg_steps={sum(r.num_steps for r in all_results) / n:.1f}, "
+            f"avg_t_reduced={sum(r.t_gates_reduced for r in all_results) / n:.1f}"
+        )
+
+        return all_results
 
 
 class ParallelSelfPlayManager:
@@ -179,6 +374,19 @@ class ParallelSelfPlayManager:
 
     The ProcessPoolExecutor is created once at construction time and
     reused across iterations to avoid repeated process startup costs.
+
+    Supports two modes of operation:
+
+    **Blocking** (original interface)::
+
+        results = manager.generate_games(100)
+
+    **Pipelined** (for overlapping self-play with training)::
+
+        pending = manager.dispatch_games(100)
+        # ... do other work while workers play ...
+        results = pending.collect()
+        manager.ingest_results(results)
     """
 
     def __init__(
@@ -206,14 +414,16 @@ class ParallelSelfPlayManager:
             os.environ['OPENBLAS_NUM_THREADS'] = '1'
             os.environ['VECLIB_MAXIMUM_THREADS'] = '1'
 
-        # Create the process pool using the platform default start method.
-        # - Linux: defaults to 'fork' (fast, copy-on-write)
-        # - macOS: defaults to 'spawn' (required — 'fork' deadlocks with
-        #   the Obj-C runtime and macOS system libraries since Python 3.8)
-        # We do NOT override the start method; the platform default is the
-        # only safe choice on each OS.
+        # Explicitly use 'spawn' context for the process pool.
+        # - 'fork' deadlocks on macOS (Obj-C runtime, system libraries,
+        #   and PyTorch's threading are all incompatible with fork).
+        # - macOS *should* default to 'spawn' since Python 3.8, but some
+        #   environments (conda, certain Python builds) can revert to 'fork'.
+        # - 'spawn' also works correctly on Linux (just slower startup).
+        # By being explicit we avoid environment-dependent hangs.
         self._executor = ProcessPoolExecutor(
             max_workers=num_workers,
+            mp_context=mp.get_context('spawn'),
         )
 
         # Lifetime statistics (mirrors SelfPlayManager interface)
@@ -222,29 +432,22 @@ class ParallelSelfPlayManager:
         self.total_t_gates_reduced: int = 0
         self.total_simplified: int = 0
 
-    def generate_games(
+    def dispatch_games(
         self,
         num_games: int,
-        start_diagrams: Optional[list] = None,
         difficulty_overrides: list[tuple[int, int]] | None = None,
-    ) -> list[EpisodeResult]:
-        """Generate self-play games across multiple worker processes.
+    ) -> PendingSelfPlay:
+        """Dispatch self-play games to workers (non-blocking).
+
+        Returns a :class:`PendingSelfPlay` handle.  The caller can do other
+        work while the workers play, then call ``handle.collect()`` to
+        block until all results are ready.
 
         :param num_games: Total number of games to play.
-        :param start_diagrams: Not supported in parallel mode (ignored with warning).
-                               Use difficulty_overrides for curriculum support.
         :param difficulty_overrides: Optional list of (num_qubits, depth) tuples,
                                      one per game. Partitioned across workers.
-        :return: List of EpisodeResult summaries from all workers.
+        :return: A PendingSelfPlay handle for later collection.
         """
-        if start_diagrams is not None:
-            logger.warning(
-                "ParallelSelfPlayManager does not support start_diagrams "
-                "(ZXDiagram objects may not be safely picklable across all "
-                "configurations). Ignoring start_diagrams; workers will "
-                "generate random circuits."
-            )
-
         # Serialize model weights once for this iteration
         state_dict = {k: v.cpu() for k, v in self.model.state_dict().items()}
 
@@ -278,30 +481,27 @@ class ParallelSelfPlayManager:
                 num_games=n_games,
                 worker_seed=worker_seeds[i],
                 difficulty_overrides=override_partitions[i] if override_partitions else None,
+                concurrent_games=self.config.concurrent_games,
             )
             futures.append(future)
 
-        # Collect results from all workers
-        logger.info(f"All {len(futures)} workers dispatched. Waiting for results...")
-        all_results: list[EpisodeResult] = []
-        for idx, future in enumerate(futures):
-            try:
-                worker_results = future.result()
-                all_results.extend(worker_results)
-                logger.info(
-                    f"  Worker {idx + 1}/{len(futures)} finished: "
-                    f"{len(worker_results)} games"
-                )
-            except Exception as e:
-                logger.error(
-                    f"Worker {idx + 1}/{len(futures)} failed: {e}. "
-                    f"Skipping its games for this iteration."
-                )
+        logger.info(f"All {len(futures)} workers dispatched.")
 
-        t_elapsed = time.time() - t_start
+        return PendingSelfPlay(
+            futures=futures,
+            num_games=num_games,
+            num_workers=self.num_workers,
+            t_start=t_start,
+        )
 
-        # Insert examples into replay buffer (sequential — buffer is not thread-safe)
-        for result in all_results:
+    def ingest_results(self, results: list[EpisodeResult]) -> None:
+        """Insert self-play results into the replay buffer and update stats.
+
+        Called by the Trainer after ``pending.collect()`` returns.
+        Separated from dispatch/collect so the Trainer controls exactly
+        when buffer insertion happens.
+        """
+        for result in results:
             self.replay_buffer.add_game(result.examples)
 
             # Update lifetime statistics
@@ -311,17 +511,36 @@ class ParallelSelfPlayManager:
             if result.simplified:
                 self.total_simplified += 1
 
-        # Log aggregate summary
-        n = max(1, len(all_results))
-        games_per_sec = len(all_results) / max(t_elapsed, 0.001)
-        logger.info(
-            f"Parallel self-play: {len(all_results)} games in {t_elapsed:.1f}s "
-            f"across {self.num_workers} workers ({games_per_sec:.1f} games/s), "
-            f"avg_steps={sum(r.num_steps for r in all_results) / n:.1f}, "
-            f"avg_t_reduced={sum(r.t_gates_reduced for r in all_results) / n:.1f}"
-        )
+    def generate_games(
+        self,
+        num_games: int,
+        start_diagrams: Optional[list] = None,
+        difficulty_overrides: list[tuple[int, int]] | None = None,
+    ) -> list[EpisodeResult]:
+        """Generate self-play games across multiple worker processes (blocking).
 
-        return all_results
+        This is the original blocking interface.  Equivalent to calling
+        ``dispatch_games()`` followed by ``collect()`` and ``ingest_results()``.
+
+        :param num_games: Total number of games to play.
+        :param start_diagrams: Not supported in parallel mode (ignored with warning).
+                               Use difficulty_overrides for curriculum support.
+        :param difficulty_overrides: Optional list of (num_qubits, depth) tuples,
+                                     one per game. Partitioned across workers.
+        :return: List of EpisodeResult summaries from all workers.
+        """
+        if start_diagrams is not None:
+            logger.warning(
+                "ParallelSelfPlayManager does not support start_diagrams "
+                "(ZXDiagram objects may not be safely picklable across all "
+                "configurations). Ignoring start_diagrams; workers will "
+                "generate random circuits."
+            )
+
+        pending = self.dispatch_games(num_games, difficulty_overrides)
+        results = pending.collect()
+        self.ingest_results(results)
+        return results
 
     def _partition_games(self, num_games: int) -> list[int]:
         """Partition num_games roughly equally across workers.

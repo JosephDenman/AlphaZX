@@ -198,11 +198,15 @@ def check_basis_node_counts(zx_diagram: ZXDiagram, zx_match_diagram: ZXMatchDiag
 def to_zx_match_diagram(zx_diagram: ZXDiagram) -> ZXMatchDiagram:
     zx_match_diagram = ZXMatchDiagram(zx_diagram)
     matches = set(zx_diagram.compute_matches())
-    # for match in matches:
-    #     for sub_match in match.sub_matches:
-    #         assert sub_match in matches, f'Submatch {sub_match} of match {match} not in input diagram'
-    for match in matches:
-        # assert not isinstance(match, BoundaryMatch), 'Boundary match in input diagram'
+    # Sort matches for deterministic node ordering.  Without sorting,
+    # set iteration order varies across Python processes (due to hash
+    # randomization), causing match diagram node indices to differ for
+    # the same underlying ZX diagram — this breaks cross-process replay
+    # in parallel training.
+    sorted_matches = sorted(matches,
+                            key=lambda m: (type(m).__name__,
+                                           m.nodes if hasattr(m, 'nodes') else []))
+    for match in sorted_matches:
         add_match(zx_match_diagram, zx_diagram, match)
     # for match in matches:
     #     assert match in zx_match_diagram, f'Node {match} not in match diagram'

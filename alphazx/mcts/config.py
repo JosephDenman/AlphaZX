@@ -1,17 +1,22 @@
 """
 Configuration for Sampled MCTS.
 
-Unlike standard AlphaZero MCTS which enumerates all legal actions at expansion time,
-Sampled MCTS progressively widens the tree by sampling actions from the policy network.
-This avoids the combinatorial explosion of the F-right action space (16 phases × 5 edges × 2^degree).
+MCTSConfig extends the shared CircuitConfig with MCTS-specific parameters
+(PUCT constants, progressive widening, Dirichlet noise, batching, etc.).
 """
 
 from dataclasses import dataclass
 
+from alphazx.shared.config import CircuitConfig
+
 
 @dataclass
-class MCTSConfig:
-    """Configuration for Sampled MCTS search."""
+class MCTSConfig(CircuitConfig):
+    """Configuration for Sampled MCTS search.
+
+    Inherits all circuit/episode/reward parameters from CircuitConfig.
+    Adds MCTS-specific parameters below.
+    """
 
     # --- Search budget ---
     num_simulations: int = 800
@@ -49,16 +54,6 @@ class MCTSConfig:
     pi(a) = N(a)^(1/tau) / sum(N(a')^(1/tau))
     1.0 for training (proportional to visits), 0.1 for evaluation (near-greedy)."""
 
-    # --- Value discount ---
-    gamma: float = 0.99
-    """Discount factor for backpropagated values. 0.99 slightly prefers shorter
-    solution paths. Standard AlphaZero uses 1.0, but with shaped rewards and
-    long episodes, slight discounting stabilizes value targets."""
-
-    # --- Positional encoding ---
-    pe_dim: int = 20
-    """Dimension of random-walk positional encoding used in preprocessing."""
-
     # --- Batched leaf evaluation ---
     leaf_batch_size: int = 8
     """Number of leaf nodes to collect before batch-evaluating with the neural
@@ -67,40 +62,20 @@ class MCTSConfig:
     Virtual loss is applied during each wave to encourage path diversity.
     Set to 1 to disable batching (sequential evaluation, original behavior)."""
 
-    # --- Game parameters (used when creating fresh games for self-play) ---
-    num_qubits: int = 5
-    depth: int = 5
-    max_episode_length: int = 100
-    step_penalty: float = 1.0
-    simplified_reward: float = 1000.0
+    # --- Cross-game batching ---
+    concurrent_games: int = 1
+    """Number of games to play concurrently within each worker process.
+    When > 1, MCTS searches for K games are interleaved so that leaf
+    evaluations from all K trees are combined into a single forward pass.
+    This increases batch utilisation and typically gives 2-3x throughput
+    on CPU for small graphs.  Set to 1 to disable (sequential games)."""
 
-    # --- Episode termination ---
-    max_t_gate_increase: int = 5
-    """Terminate episode early if T-gates exceed initial count by this amount.
-    Prevents runaway degeneration where the agent spends 100 steps making
-    the diagram progressively worse. Set to 0 to disable."""
-
-    min_initial_t_gates: int = 2
-    """Minimum T-gates required to start an episode. Circuits with fewer
-    T-gates provide negligible learning signal and waste compute. The
-    generator will re-roll until it finds a circuit meeting this threshold."""
-
-    max_circuit_retries: int = 20
-    """Maximum attempts to generate a circuit meeting min_initial_t_gates
-    before falling back to whatever was generated."""
-
-    # --- Circuit generation ---
-    circuit_type: str = 'cnot_had_phase'
-    """Which circuit generator to use for self-play:
-    - 'cnot_had_phase': Generate from CNOT+Hadamard+Phase circuits (recommended).
-      These are real quantum circuits converted to ZX diagrams, with realistic
-      structure and plenty of T-gates available for optimization.
-    - 'clifford': Generate random ZX graphs directly via pyzx.generate.cliffords.
-      These are random graph-level ZX diagrams, not derived from circuits.
-      May have fewer T-gates and less realistic structure for optimization."""
-
-    p_had: float = 0.2
-    """Probability of Hadamard gates in CNOT_HAD_PHASE circuits."""
-
-    p_t: float = 0.2
-    """Probability of T-gates (vs other phase gates) in CNOT_HAD_PHASE circuits."""
+    # --- Torch compilation ---
+    torch_compile: bool = False
+    """Enable torch.compile() for the neural network forward pass.
+    Fuses operations and optimises memory-access patterns, giving
+    roughly 1.5-3x inference speedup on CPU after a one-time warmup
+    compilation cost (~10-30 s per worker on first forward pass).
+    Requires PyTorch >= 2.0.  Disabled by default because PyG's
+    heterogeneous message-passing may not compile cleanly on all
+    platforms."""

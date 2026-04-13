@@ -155,11 +155,13 @@ class MCTS:
                     eval_node._cached_distribution = dist
                     eval_node._cached_value = value
                     eval_node.is_expanded = True
-                    # Create an initial child so PUCT has something to work with
+                    # Seed diverse children so MCTS explores all action types
                     _t0 = time.time()
-                    self._try_add_child(eval_node)
+                    seeded = self._seed_diverse_children(eval_node)
+                    if seeded == 0:
+                        self._try_add_child(eval_node)
                     _t_clone += time.time() - _t0
-                    _n_clone += 1
+                    _n_clone += max(seeded, 1)
 
             # ================================================================
             # Phase 3: Remove virtual loss, then real backpropagation
@@ -215,9 +217,12 @@ class MCTS:
         node._cached_value = value
         node.is_expanded = True
 
-        # Sample an initial set of children to get the tree started.
-        # Without at least one child, PUCT selection has nothing to work with.
-        self._try_add_child(node)
+        # Seed one child per available action type so MCTS explores the
+        # full action-type space from the start, not just the majority
+        # type (F-Right).  Falls back to a single sample if seeding fails.
+        seeded = self._seed_diverse_children(node)
+        if seeded == 0:
+            self._try_add_child(node)
 
         return value
 
@@ -263,6 +268,112 @@ class MCTS:
 
         return None  # All attempts produced duplicates or invalid actions
 
+    def _seed_diverse_children(self, node: MCTSNode) -> int:
+        """Seed a node with one child per available action type.
+
+        In ZX-calculus simplification the action distribution is heavily
+        skewed toward F-Right (which has far more match nodes than F-Left
+        or B-rules).  Standard progressive widening samples children
+        proportional to the policy, so the first ~5 children are almost
+        always F-Right variants.  This prevents MCTS from ever evaluating
+        F-Left or B-Right subtrees when the simulation budget is small.
+
+        This method creates one child for each action type that has
+        non-zero probability in the distribution, ensuring MCTS gets a
+        diverse initial set to explore.  Subsequent widening still samples
+        proportionally, so the long-tail bias is only corrected at the
+        start.
+
+        Returns the number of children successfully added.
+        """
+        if node._cached_distribution is None:
+            return 0
+
+        dist = node._cached_distribution
+        mixture_probs = dist.mixture_dist_params  # (B, T)
+        num_types = mixture_probs.shape[-1]
+        added = 0
+
+        # Track which action types already have a child
+        existing_types = set()
+        for action_tuple in node.children:
+            if len(action_tuple) > 1:
+                existing_types.add(int(action_tuple[1]))
+
+        for action_type in range(num_types):
+            if action_type in existing_types:
+                continue
+            # Skip action types with negligible probability
+            prob = mixture_probs[0, action_type].item() if mixture_probs.dim() > 1 else mixture_probs[action_type].item()
+            if prob < 1e-6:
+                continue
+
+            # Sample an action of this specific type
+            import torch as _torch
+            for _attempt in range(5):
+                action_type_tensor = _torch.tensor([[action_type]])  # (1, B)
+                try:
+                    nodes = dist.sample_nodes(action_type_tensor)[0]
+                    phases = dist.sample_phases(action_type_tensor, nodes)[0]
+                    new_edges = dist.sample_new_edges(action_type_tensor, nodes)[0]
+                    transfer_edges = dist.sample_transfer_edges(action_type_tensor, nodes)[0]
+
+                    # Build action tuple: (graph_id, action_type, node, phase, new_edge, *transfer)
+                    gid = dist.graph_ids[0].item() if dist.graph_ids is not None else 0
+                    action_tuple = (
+                        gid,
+                        action_type,
+                        nodes.squeeze().item(),
+                        phases.squeeze().item(),
+                        new_edges.squeeze().item(),
+                        *transfer_edges.squeeze().tolist(),
+                    )
+                    action_tuple = tuple(int(x) for x in action_tuple)
+
+                    if action_tuple in node.children:
+                        continue
+
+                    prior = compute_action_prior(dist, action_tuple)
+                    child_state = node.state.clone()
+                    reward, done = child_state.apply_action(action_tuple)
+
+                    child = MCTSNode(
+                        state=child_state,
+                        parent=node,
+                        action_from_parent=action_tuple,
+                        prior=max(prior, 1e-8),
+                        reward=reward,
+                    )
+                    node.children[action_tuple] = child
+                    added += 1
+                    break
+                except (ValueError, KeyError, IndexError, AssertionError):
+                    continue
+
+        return added
+
+    def _apply_root_noise_ext(self, root: MCTSNode, noise_applied_count: int) -> int:
+        """Apply Dirichlet noise to root children (external count version).
+
+        Like :meth:`_apply_root_noise_if_needed`, but takes and returns the
+        noise-applied count as a parameter instead of using instance state.
+        Used by :meth:`search_batch` which manages K independent searches.
+        """
+        num_children = len(root.children)
+        if num_children == 0 or num_children == noise_applied_count:
+            return noise_applied_count
+
+        epsilon = self.config.dirichlet_epsilon
+        alpha = self.config.dirichlet_alpha
+        noise = np.random.dirichlet([alpha] * num_children)
+
+        for i, child in enumerate(root.children.values()):
+            if child._original_prior is None:
+                child._original_prior = child.prior
+            child.prior = (1 - epsilon) * child._original_prior + epsilon * noise[i]
+
+        return num_children
+
     def _apply_root_noise_if_needed(self, root: MCTSNode) -> None:
         """
         Re-apply Dirichlet noise to ALL root children if new children were added.
@@ -292,6 +403,171 @@ class MCTS:
             child.prior = (1 - epsilon) * child._original_prior + epsilon * noise[i]
 
         self._root_noise_applied_count = num_children
+
+    # ------------------------------------------------------------------
+    # Cross-game batched search
+    # ------------------------------------------------------------------
+
+    def search_batch(
+        self,
+        root_states: list[GameState],
+        device: torch.device = torch.device('cpu'),
+    ) -> list[dict[tuple, float]]:
+        """Run MCTS search for multiple game states simultaneously.
+
+        This is the cross-game batched variant of :meth:`search`.  Instead
+        of evaluating leaf nodes from a single search tree, it collects
+        leaves across *all* K active trees each wave and evaluates them in
+        a single combined forward pass.  This increases batch utilisation
+        and typically gives 2–3× throughput on CPU for small graphs.
+
+        The per-tree search logic (selection, progressive widening, virtual
+        loss, backpropagation) is identical to :meth:`search`.
+
+        :param root_states: List of K GameStates to search from.
+        :param device: Device for neural network inference.
+        :return: List of K policy dicts (same format as :meth:`search`).
+        """
+        K = len(root_states)
+        if K == 0:
+            return []
+        if K == 1:
+            return [self.search(root_states[0], device)]
+
+        # --- Initialise K root nodes ---
+        roots: list[MCTSNode] = [MCTSNode(state=s) for s in root_states]
+        noise_counts = [0] * K
+
+        # Batch-expand non-terminal roots in one forward pass
+        non_terminal = [(i, r) for i, r in enumerate(roots) if not r.is_terminal]
+        for r in roots:
+            if r.is_terminal:
+                r.is_expanded = True
+                r._cached_value = 0.0
+
+        if non_terminal:
+            nt_states = [r.state for _, r in non_terminal]
+            nt_results = evaluate_states_batch(
+                self.model, nt_states, self.config.pe_dim, device,
+            )
+            for (_, root), (dist, value) in zip(non_terminal, nt_results):
+                root._cached_distribution = dist
+                root._cached_value = value
+                root.is_expanded = True
+                seeded = self._seed_diverse_children(root)
+                if seeded == 0:
+                    self._try_add_child(root)
+
+        for g in range(K):
+            noise_counts[g] = self._apply_root_noise_ext(roots[g], noise_counts[g])
+
+        # --- Per-game search state ---
+        sims_done = [0] * K
+        leaf_batch_size = self.config.leaf_batch_size
+        num_sims = self.config.num_simulations
+
+        # --- Main search loop (waves in lockstep across all games) ---
+        while any(sd < num_sims for sd in sims_done):
+
+            # Phase 1: Selection across all active games
+            all_eval_nodes: list[MCTSNode] = []
+            # (game_idx, wave, eval_offset, eval_count)
+            game_waves: list[tuple[int, list, int, int]] = []
+
+            for g in range(K):
+                if sims_done[g] >= num_sims:
+                    continue
+
+                root = roots[g]
+                wave_size = min(leaf_batch_size, num_sims - sims_done[g])
+                wave: list[tuple] = []
+                unique_eval_nodes: dict[int, MCTSNode] = {}
+
+                for _ in range(wave_size):
+                    node = root
+                    search_path = [node]
+
+                    # === SELECT ===
+                    while node.is_expanded and not node.is_terminal:
+                        if node.should_widen(self.config):
+                            new_child = self._try_add_child(node)
+                            if new_child is not None:
+                                if node is root:
+                                    noise_counts[g] = self._apply_root_noise_ext(
+                                        root, noise_counts[g],
+                                    )
+                                search_path.append(new_child)
+                                node = new_child
+                                break
+
+                        if not node.children:
+                            break
+
+                        node = node.select_child(self.config)
+                        search_path.append(node)
+
+                    needs_eval = not node.is_expanded and not node.is_terminal
+                    if needs_eval:
+                        unique_eval_nodes[id(node)] = node
+
+                    wave.append((node, search_path, needs_eval))
+
+                    # Virtual loss
+                    if needs_eval:
+                        for n in search_path:
+                            n.visit_count += 1
+
+                    sims_done[g] += 1
+
+                eval_nodes_list = list(unique_eval_nodes.values())
+                eval_offset = len(all_eval_nodes)
+                all_eval_nodes.extend(eval_nodes_list)
+                game_waves.append((g, wave, eval_offset, len(eval_nodes_list)))
+
+            # Phase 2: Combined batch evaluation across all games
+            if all_eval_nodes:
+                eval_states = [n.state for n in all_eval_nodes]
+                all_results = evaluate_states_batch(
+                    self.model, eval_states, self.config.pe_dim, device,
+                )
+            else:
+                all_results = []
+
+            # Phase 3: Expansion, virtual-loss removal, and backpropagation
+            for g, wave, eval_offset, eval_count in game_waves:
+                # Apply NN results to evaluated nodes
+                for j in range(eval_count):
+                    eval_node = all_eval_nodes[eval_offset + j]
+                    dist, value = all_results[eval_offset + j]
+                    eval_node._cached_distribution = dist
+                    eval_node._cached_value = value
+                    eval_node.is_expanded = True
+                    seeded = self._seed_diverse_children(eval_node)
+                    if seeded == 0:
+                        self._try_add_child(eval_node)
+
+                # Remove virtual loss
+                for leaf, search_path, needs_eval in wave:
+                    if needs_eval:
+                        for n in search_path:
+                            n.visit_count -= 1
+
+                # Backpropagate
+                for leaf, search_path, needs_eval in wave:
+                    if leaf.is_terminal:
+                        value = 0.0
+                    elif leaf._cached_value is not None:
+                        value = leaf._cached_value
+                    else:
+                        value = 0.0
+                    leaf.backpropagate(value, self.config.gamma)
+
+                # Re-apply root noise if new children were added
+                noise_counts[g] = self._apply_root_noise_ext(
+                    roots[g], noise_counts[g],
+                )
+
+        return [self._compute_policy(root) for root in roots]
 
     def _compute_policy(self, root: MCTSNode) -> dict[tuple, float]:
         """

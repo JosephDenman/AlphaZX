@@ -37,3 +37,5 @@ Thumbs.db
 /checkpoints/
 /tests/checkpoints/
 /runs/
+/tb_export/
+/checkpoints_gfn/

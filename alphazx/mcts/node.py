@@ -132,19 +132,23 @@ class MCTSNode:
         """
         Backpropagate a value estimate from a leaf up to the root.
 
-        The value is discounted by gamma at each step moving upward,
-        and the immediate reward at each node is added.
+        Standard AlphaZero backpropagation: the leaf's value estimate is
+        propagated unchanged (with optional discounting) up the tree.
+        Step rewards are NOT added during backpropagation — the value
+        network is trained to predict cumulative discounted return from
+        each state, so adding step rewards would double-count them.
 
-        For AlphaZero with gamma=1.0 on episodic tasks, this simplifies
-        to propagating the raw value estimate unchanged.
+        This is critical for ZX-calculus simplification where F-Right
+        rewrites temporarily increase T-gates (negative step reward) but
+        enable future F-Left merges.  Adding step rewards to backprop
+        would permanently depress Q-values for F-Right children, making
+        the necessary "worsen before improving" strategy undiscoverable.
         """
         node = self
         while node is not None:
             node.visit_count += 1
             node.total_value += value
-            # When moving to parent, the value seen from the parent's perspective
-            # includes the immediate reward of transitioning to this node
-            value = node.reward + gamma * value
+            value = gamma * value
             node = node.parent
 
     @property

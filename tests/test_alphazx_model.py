@@ -11,7 +11,7 @@ import pytest
 import torch
 import torch_geometric as pyg
 
-from alphazx.diagram import METADATA, POSSIBLE_PHASES
+from alphazx.diagram import METADATA, POSSIBLE_PHASES, NUM_POSSIBLE_NEW_EDGES
 from alphazx.diagram.diagram_generators import clifford_zx_diagram
 from alphazx.diagram.zx_match_diagram import to_zx_match_diagram
 from alphazx.distributions import AlphaZXDistribution, AlphaZXDistributionParams
@@ -26,7 +26,7 @@ from alphazx.models.homogeneous.alphazx_model import AlphaZXModel
 
 NUM_NODE_TYPES = len(METADATA.node_type_abbrevs)
 NUM_POSSIBLE_PHASES = len(POSSIBLE_PHASES)
-NUM_POSSIBLE_NEW_EDGES = 5
+# NUM_POSSIBLE_NEW_EDGES imported from alphazx.diagram
 NODE_EMB_CHANNELS = 64
 NUM_EDGE_EMBEDDINGS = len(METADATA.edge_feat_to_index_dict)
 EDGE_EMB_CHANNELS = 64

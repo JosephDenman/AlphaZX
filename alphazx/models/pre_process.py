@@ -2,7 +2,36 @@ import torch
 import torch_geometric as pyg
 from torch_geometric.utils import to_dense_adj, degree
 
-from alphazx.diagram.match import METADATA
+from alphazx.diagram.match import METADATA, POSSIBLE_PHASES
+
+# Set of supported phases for O(1) lookup.  Rounded to avoid float drift.
+_PHASE_SET = {round(p, 8) for p in POSSIBLE_PHASES}
+_PHASE_STEP = POSSIBLE_PHASES[1] - POSSIBLE_PHASES[0] if len(POSSIBLE_PHASES) > 1 else 1.0
+
+
+def _resolve_phase(phase: float) -> float:
+    """Resolve a phase to the exact POSSIBLE_PHASES entry.
+
+    Allows for minor floating-point imprecision (< half a step) but
+    raises an error if the phase is genuinely outside the vocabulary.
+    """
+    phase = phase % 2.0
+    # Try exact match first (covers the common case)
+    rounded = round(phase, 8)
+    if rounded in _PHASE_SET:
+        return rounded
+    # Allow rounding within floating-point tolerance (< half a step)
+    idx = round(phase / _PHASE_STEP)
+    idx = max(0, min(idx, len(POSSIBLE_PHASES) - 1))
+    candidate = POSSIBLE_PHASES[idx]
+    if abs(phase - candidate) < _PHASE_STEP * 0.01:  # ~1% of step
+        return candidate
+    raise ValueError(
+        f"Phase {phase} is not in the model's phase vocabulary "
+        f"(POSSIBLE_PHASES: {len(POSSIBLE_PHASES)} entries, step={_PHASE_STEP}). "
+        f"This circuit contains rotations finer than the model supports. "
+        f"Either expand POSSIBLE_PHASES or switch to continuous phase encoding."
+    )
 
 
 def with_laplacian_pe(data: pyg.data.Data, pe_dimension: int) -> pyg.data.Data:
@@ -84,7 +113,7 @@ def with_embeddable_feats(data: pyg.data.Batch) -> pyg.data.Batch:
     node_feature_idxs = []
     for node_feature in data.x:
         match_idx = int(node_feature[0].item())
-        phase = node_feature[1].item()
+        phase = _resolve_phase(node_feature[1].item())
         node_feature_idxs.append(METADATA.node_feat_to_index_dict[(match_idx, phase)])
     data.x = torch.tensor(node_feature_idxs)
     edge_feature_idxs = []
@@ -108,7 +137,7 @@ def with_embeddable_feats_single(data: pyg.data.Data) -> pyg.data.Data:
     node_feature_idxs = []
     for node_feature in data.x:
         match_idx = int(node_feature[0].item())
-        phase = node_feature[1].item()
+        phase = _resolve_phase(node_feature[1].item())
         node_feature_idxs.append(METADATA.node_feat_to_index_dict[(match_idx, phase)])
     data.x = torch.tensor(node_feature_idxs)
     edge_feature_idxs = []

@@ -15,7 +15,7 @@ import pytest
 import torch
 import networkx as nx
 
-from alphazx.diagram import METADATA, POSSIBLE_PHASES
+from alphazx.diagram import METADATA, POSSIBLE_PHASES, NUM_POSSIBLE_NEW_EDGES
 from alphazx.diagram.diagram_generators import clifford_zx_diagram
 from alphazx.diagram.match import (
     FRightZMatch, FRightXMatch, FLeftZMatch, FLeftXMatch,
@@ -191,7 +191,7 @@ class TestZXGameStep:
 
         num_node_types = len(METADATA.node_type_abbrevs)
         num_possible_phases = len(POSSIBLE_PHASES)
-        num_possible_new_edges = 5
+        num_possible_new_edges = NUM_POSSIBLE_NEW_EDGES
         pe_dim = zx_game.pe_dim
 
         model = AlphaZXModel(

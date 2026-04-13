@@ -16,9 +16,10 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -49,6 +50,68 @@ ACTION_TYPE_NAMES = {
     8: "y-right-x",
     9: "y-left-x",
 }
+
+
+def _assign_value_targets(
+    examples: list[TrainingExample],
+    step_rewards: list[float],
+    initial_t_gates: int,
+    final_t_gates: int,
+    config: MCTSConfig,
+) -> None:
+    """Assign value targets to training examples after an episode ends.
+
+    Supports two modes (controlled by ``config.value_target_mode``):
+
+    **discounted_return** (default, recommended):
+        Compute per-step discounted returns from step rewards, then normalize
+        by ``initial_t_gates`` and clamp to [-1, 1].
+
+        G_t = r_t + gamma * r_{t+1} + gamma^2 * r_{t+2} + ...
+        target_t = clamp(G_t / initial_t_gates, -1, 1)
+
+        This gives the value head a per-position learning signal.  Early
+        "sacrificial" moves (e.g. F-Right that increases T-gates) get
+        near-zero or slightly negative targets when they enable later
+        reductions, instead of the strongly negative uniform target they
+        would receive under the outcome-based scheme.  This is critical
+        for learning multi-step F-Right→F-Left strategies.
+
+    **uniform_outcome** (original AlphaZero approach):
+        All steps share the same target:
+            z = clamp((initial_t - final_t) / initial_t, -1, 1)
+    """
+    if not examples:
+        return
+
+    if config.value_target_mode == 'discounted_return' and step_rewards:
+        gamma = config.gamma
+        T = len(step_rewards)
+        returns = [0.0] * T
+
+        # Backward pass to compute discounted returns
+        G = 0.0
+        for t in reversed(range(T)):
+            G = step_rewards[t] + gamma * G
+            returns[t] = G
+
+        # Normalize by initial T-gates (same scale as uniform outcome)
+        # and clamp to [-1, 1] for tanh value head.
+        for t, example in enumerate(examples):
+            if initial_t_gates > 0:
+                example.value_target = max(-1.0, min(1.0, returns[t] / initial_t_gates))
+            else:
+                example.value_target = 0.0
+    else:
+        # Uniform outcome (standard AlphaZero)
+        if initial_t_gates > 0:
+            outcome = (initial_t_gates - final_t_gates) / initial_t_gates
+            outcome = max(-1.0, min(1.0, outcome))
+        else:
+            outcome = -1.0 if final_t_gates > 0 else 0.0
+
+        for example in examples:
+            example.value_target = outcome
 
 
 @dataclass
@@ -108,12 +171,13 @@ class SelfPlayWorker:
         initial_t_gates = state.num_non_clifford
 
         # Collect examples: (state_data, mcts_policy, value_target=TBD)
-        # Value targets are filled in retroactively after the episode ends,
-        # using the simple outcome: (initial_t - final_t) / initial_t.
+        # Value targets are filled in retroactively after the episode ends.
         pending_examples: list[TrainingExample] = []
+        step_rewards: list[float] = []  # per-step rewards for discounted returns
         total_reward = 0.0
         num_steps = 0
         max_increase = self.config.max_t_gate_increase
+        effective_max_length = self.config.effective_max_episode_length
 
         # Per-step timing accumulators for profiling
         _t_mcts = 0.0
@@ -123,7 +187,7 @@ class SelfPlayWorker:
         # Track action types used during this episode
         _action_type_counts = Counter()
 
-        while num_steps < self.config.max_episode_length:
+        while num_steps < effective_max_length:
             if state.is_terminal() or not state.has_legal_actions():
                 break
 
@@ -178,6 +242,7 @@ class SelfPlayWorker:
             _t_apply += time.time() - _t0
 
             total_reward += reward
+            step_rewards.append(reward)
             num_steps += 1
 
             # Log per-step action detail
@@ -211,28 +276,11 @@ class SelfPlayWorker:
         t_gates_reduced = initial_t_gates - final_t_gates
         simplified = state.is_terminal()
 
-        # --- Value targets: simple outcome-based ---
-        # We use the T-gate reduction ratio as the value target:
-        #   z = (initial_t - final_t) / initial_t
-        # This is in [-inf, 1] and we clamp to [-1, 1].
-        #
-        # This is much cleaner than the previous discounted-return approach:
-        # - No normalizer tuning needed
-        # - Directly measures what we care about (T-gate reduction)
-        # - Compatible with tanh-bounded value head
-        # - All steps in an episode share the same target (standard AlphaZero)
-        #
-        # For early-terminated episodes (T-gates increased beyond threshold),
-        # the target is naturally negative since final_t > initial_t.
-        if initial_t_gates > 0:
-            outcome = (initial_t_gates - final_t_gates) / initial_t_gates
-            outcome = max(-1.0, min(1.0, outcome))
-        else:
-            # Edge case: no T-gates to reduce. 0 if still 0, -1 if increased.
-            outcome = -1.0 if final_t_gates > 0 else 0.0
-
-        for example in pending_examples:
-            example.value_target = outcome
+        # --- Value targets ---
+        _assign_value_targets(
+            pending_examples, step_rewards, initial_t_gates,
+            final_t_gates, self.config,
+        )
 
         wall_time = time.time() - start_time
 
@@ -338,13 +386,293 @@ class SelfPlayWorker:
         return data
 
 
-class SelfPlayManager:
-    """Orchestrates self-play game generation and feeds examples into the replay buffer.
+@dataclass
+class _ActiveGame:
+    """Mutable state for one game slot in MultiGameSelfPlayWorker."""
+    state: GameState
+    game_id: int
+    initial_t_gates: int
+    num_steps: int = 0
+    total_reward: float = 0.0
+    done: bool = False
+    examples: list[TrainingExample] = field(default_factory=list)
+    step_rewards: list[float] = field(default_factory=list)
+    start_time: float = 0.0
+    action_type_counts: Counter = field(default_factory=Counter)
 
-    Currently runs games sequentially. The main optimization opportunity is batching
-    neural network evaluations across multiple concurrent MCTS searches, but that
-    requires virtual loss support and async evaluation — defer to Phase 6.
+
+class MultiGameSelfPlayWorker:
+    """Plays multiple self-play episodes concurrently with cross-game batched MCTS.
+
+    Instead of playing one game at a time (where each MCTS search batches
+    leaf evaluations from a single tree), this worker maintains K active
+    game slots.  At each step, all K games' MCTS searches are interleaved
+    via :meth:`MCTS.search_batch`, collecting leaf nodes across all K trees
+    into combined forward passes.  This typically gives 2–3× throughput
+    improvement by increasing batch utilisation for CPU inference.
+
+    Games that finish their episodes are replaced with fresh games until
+    the requested total has been played.
     """
+
+    def __init__(
+        self,
+        model: nn.Module,
+        config: MCTSConfig,
+        device: torch.device = torch.device('cpu'),
+        concurrent_games: int = 4,
+    ):
+        self.mcts = MCTS(model, config)
+        self.config = config
+        self.device = device
+        self.concurrent_games = concurrent_games
+        self._game_counter = 0
+
+    def play_episodes(
+        self,
+        num_games: int,
+        difficulty_overrides: list[tuple[int, int]] | None = None,
+    ) -> list[EpisodeResult]:
+        """Play *num_games* episodes, K at a time with batched MCTS.
+
+        :param num_games: Total number of episodes to play.
+        :param difficulty_overrides: Optional per-game (num_qubits, depth) list.
+                                     Games are assigned overrides in order.
+        :return: List of EpisodeResult objects (one per completed game).
+        """
+        all_results: list[EpisodeResult] = []
+        K = min(self.concurrent_games, num_games)
+        t_total_start = time.time()
+
+        # Initialise first batch of K game slots
+        slots: list[_ActiveGame | None] = [
+            self._new_game(
+                difficulty_overrides[i] if difficulty_overrides and i < len(difficulty_overrides) else None
+            )
+            for i in range(K)
+        ]
+        games_started = K
+        step_count = 0  # total search_batch calls (for logging)
+
+        logger.info(
+            f"MultiGameSelfPlayWorker: {num_games} games, "
+            f"K={K} concurrent, {self.config.num_simulations} sims/step"
+        )
+
+        while any(s is not None for s in slots):
+            # Collect active (non-done) game indices
+            active_indices = [
+                i for i, s in enumerate(slots)
+                if s is not None and not s.done
+            ]
+            if not active_indices:
+                # All remaining slots are done — finalize below
+                pass
+            else:
+                active_games = [slots[i] for i in active_indices]
+
+                # --- Pre-action termination checks ---
+                for game in active_games:
+                    if game.state.is_terminal() or not game.state.has_legal_actions():
+                        game.done = True
+                    elif (self.config.max_t_gate_increase > 0
+                          and game.state.num_non_clifford
+                              >= game.initial_t_gates + self.config.max_t_gate_increase):
+                        game.done = True
+
+                # Re-filter after termination checks
+                active_indices = [
+                    i for i, s in enumerate(slots)
+                    if s is not None and not s.done
+                ]
+
+                if active_indices:
+                    active_games = [slots[i] for i in active_indices]
+                    states = [g.state for g in active_games]
+
+                    # --- Batched MCTS search across all active games ---
+                    t_search = time.time()
+                    policies = self.mcts.search_batch(states, self.device)
+                    t_search = time.time() - t_search
+                    step_count += 1
+
+                    if step_count <= 3 or step_count % 10 == 0:
+                        logger.debug(
+                            f"  search_batch: {len(states)} games, "
+                            f"{t_search:.2f}s (step {step_count})"
+                        )
+
+                    for game, policy in zip(active_games, policies):
+                        if not policy:
+                            game.done = True
+                            continue
+
+                        # Snapshot state before applying the action
+                        state_data = self._preprocess_state(game.state)
+                        example = TrainingExample(
+                            state_data=state_data,
+                            mcts_policy=policy,
+                            value_target=None,
+                            game_id=game.game_id,
+                        )
+                        game.examples.append(example)
+
+                        # Sample action from MCTS policy
+                        actions = list(policy.keys())
+                        probs = list(policy.values())
+                        idx = np.random.choice(len(actions), p=probs)
+                        action = actions[idx]
+
+                        # Apply action
+                        try:
+                            reward, done = game.state.apply_action(action)
+                        except (ValueError, KeyError, IndexError, AssertionError) as e:
+                            logger.warning(
+                                f"Action failed at step {game.num_steps}: {e}"
+                            )
+                            game.done = True
+                            continue
+
+                        game.total_reward += reward
+                        game.step_rewards.append(reward)
+                        game.num_steps += 1
+
+                        # Track action type
+                        action_type_idx = action[1] if len(action) > 1 else -1
+                        action_name = ACTION_TYPE_NAMES.get(
+                            action_type_idx, f"unknown({action_type_idx})"
+                        )
+                        game.action_type_counts[action_name] += 1
+
+                        if done or game.num_steps >= self.config.effective_max_episode_length:
+                            game.done = True
+
+                        # Post-action T-gate increase check
+                        if (not game.done
+                                and self.config.max_t_gate_increase > 0
+                                and game.state.num_non_clifford
+                                    >= game.initial_t_gates + self.config.max_t_gate_increase):
+                            game.done = True
+
+            # --- Finalise done games, start new ones ---
+            for i in range(len(slots)):
+                if slots[i] is not None and slots[i].done:
+                    result = self._finalize_episode(slots[i])
+                    all_results.append(result)
+
+                    logger.info(
+                        f"Game {len(all_results)}/{num_games}: "
+                        f"steps={result.num_steps}, "
+                        f"t_gates={result.initial_t_gates}"
+                        f"→{result.final_t_gates} "
+                        f"(-{result.t_gates_reduced}), "
+                        f"time={result.wall_time:.1f}s"
+                    )
+
+                    if games_started < num_games:
+                        diff = (
+                            difficulty_overrides[games_started]
+                            if difficulty_overrides and games_started < len(difficulty_overrides)
+                            else None
+                        )
+                        slots[i] = self._new_game(diff)
+                        games_started += 1
+                    else:
+                        slots[i] = None
+
+        t_total = time.time() - t_total_start
+        logger.info(
+            f"MultiGameSelfPlayWorker done: {len(all_results)}/{num_games} "
+            f"games in {t_total:.1f}s "
+            f"({len(all_results) / max(t_total, 0.001):.1f} games/s)"
+        )
+        return all_results
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _new_game(
+        self, difficulty: tuple[int, int] | None = None,
+    ) -> _ActiveGame:
+        """Create a fresh game, optionally overriding difficulty."""
+        self._game_counter += 1
+        cfg = self.config
+
+        if difficulty:
+            saved_q, saved_d = cfg.num_qubits, cfg.depth
+            cfg.num_qubits, cfg.depth = difficulty
+
+        try:
+            diagram = self._generate_circuit()
+            state = GameState.from_diagram(diagram)
+        finally:
+            if difficulty:
+                cfg.num_qubits, cfg.depth = saved_q, saved_d
+
+        return _ActiveGame(
+            state=state,
+            game_id=self._game_counter,
+            initial_t_gates=state.num_non_clifford,
+            start_time=time.time(),
+        )
+
+    def _generate_circuit(self):
+        """Generate a random ZX circuit (same logic as SelfPlayWorker)."""
+        cfg = self.config
+        for attempt in range(cfg.max_circuit_retries):
+            if cfg.circuit_type == 'cnot_had_phase':
+                diagram = cnot_had_phase_zx_diagram(
+                    cfg.num_qubits, cfg.depth, cfg.p_had, cfg.p_t,
+                )
+            elif cfg.circuit_type == 'clifford':
+                diagram = clifford_zx_diagram(
+                    cfg.num_qubits, cfg.depth, t_gates=True,
+                )
+            else:
+                raise ValueError(f"Unknown circuit_type '{cfg.circuit_type}'")
+            if num_non_clifford_gates_diagram(diagram) >= cfg.min_initial_t_gates:
+                return diagram
+        return diagram  # fallback
+
+    def _preprocess_state(self, state: GameState) -> Data:
+        """Preprocess a GameState for replay buffer storage."""
+        cached = getattr(state, '_cached_preprocessed_data', None)
+        if cached is not None:
+            state._cached_preprocessed_data = None
+            return cached
+        from alphazx.mcts.evaluate import _preprocess_data_for_model
+        data = state.data.clone()
+        return _preprocess_data_for_model(data, self.config.pe_dim)
+
+    def _finalize_episode(self, game: _ActiveGame) -> EpisodeResult:
+        """Compute value targets and build EpisodeResult."""
+        final_t = game.state.num_non_clifford
+        t_reduced = game.initial_t_gates - final_t
+        simplified = game.state.is_terminal()
+
+        # Value targets: uses shared helper (supports discounted returns)
+        _assign_value_targets(
+            game.examples, game.step_rewards, game.initial_t_gates,
+            final_t, self.config,
+        )
+
+        wall_time = time.time() - game.start_time
+
+        return EpisodeResult(
+            num_steps=game.num_steps,
+            total_reward=game.total_reward,
+            initial_t_gates=game.initial_t_gates,
+            final_t_gates=final_t,
+            t_gates_reduced=t_reduced,
+            simplified=simplified,
+            wall_time=wall_time,
+            examples=game.examples,
+        )
+
+
+class SelfPlayManager:
+    """Orchestrates self-play game generation and feeds examples into the replay buffer."""
 
     def __init__(
         self,

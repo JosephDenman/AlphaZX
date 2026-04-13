@@ -11,7 +11,7 @@ import pytest
 import torch
 import torch_geometric as pyg
 
-from alphazx.diagram import METADATA, POSSIBLE_PHASES
+from alphazx.diagram import METADATA, POSSIBLE_PHASES, NUM_POSSIBLE_NEW_EDGES
 from alphazx.diagram.diagram_generators import clifford_zx_diagram
 from alphazx.diagram.match import FRightZMatch, FRightXMatch
 from alphazx.diagram.zx_match_diagram import to_zx_match_diagram
@@ -32,7 +32,7 @@ from alphazx.models.homogeneous.transfer_edge_selector import TransferEdgeSelect
 
 NUM_NODE_TYPES = 10  # match types 1-10, action types 0-9
 NUM_POSSIBLE_PHASES = len(POSSIBLE_PHASES)
-NUM_POSSIBLE_NEW_EDGES = 5
+# NUM_POSSIBLE_NEW_EDGES imported from alphazx.diagram
 NODE_CHANNELS = 64
 EDGE_CHANNELS = 64
 PE_DIM = 20

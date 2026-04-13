@@ -31,7 +31,7 @@ os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 import torch
 
-from alphazx.diagram import METADATA, POSSIBLE_PHASES
+from alphazx.diagram import METADATA, POSSIBLE_PHASES, NUM_POSSIBLE_NEW_EDGES
 from alphazx.models.homogeneous.alphazx_model import AlphaZXModel
 from alphazx.mcts.config import MCTSConfig
 from alphazx.mcts.trainer import Trainer, TrainerConfig
@@ -52,9 +52,9 @@ def parse_args():
                         help="Training batch size (default: 16)")
     parser.add_argument("--num-simulations", type=int, default=50,
                         help="MCTS sims per move (default: 50)")
-    parser.add_argument("--num-qubits", type=int, default=5,
+    parser.add_argument("--num-qubits", type=int, default=10,
                         help="Qubits in generated circuits (default: 5)")
-    parser.add_argument("--depth", type=int, default=5,
+    parser.add_argument("--depth", type=int, default=10,
                         help="Circuit depth (default: 5)")
     parser.add_argument("--lr", type=float, default=1e-3,
                         help="Learning rate (default: 1e-3)")
@@ -86,10 +86,10 @@ def main():
     model = AlphaZXModel(
         num_node_types=len(METADATA.node_type_abbrevs),
         num_possible_phases=len(POSSIBLE_PHASES),
-        num_possible_new_edges=5,
+        num_possible_new_edges=NUM_POSSIBLE_NEW_EDGES,
         node_embedding_channels=4,
         num_edge_embeddings=len(METADATA.edge_feat_to_index_dict),
-        edge_embedding_channels=4,
+        edge_embedding_channels=1,
         pe_in_channels=4,
         pe_out_channels=4,
     ).to(device)

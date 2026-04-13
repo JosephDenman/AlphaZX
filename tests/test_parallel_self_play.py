@@ -17,7 +17,7 @@ import unittest
 
 import torch
 
-from alphazx.diagram import METADATA, POSSIBLE_PHASES
+from alphazx.diagram import METADATA, POSSIBLE_PHASES, NUM_POSSIBLE_NEW_EDGES
 from alphazx.models.homogeneous.alphazx_model import AlphaZXModel
 from alphazx.mcts.config import MCTSConfig
 from alphazx.mcts.replay_buffer import ReplayBuffer
@@ -32,7 +32,7 @@ from alphazx.mcts.parallel_self_play import (
 PE_DIM = 20
 NUM_NODE_TYPES = len(METADATA.node_type_abbrevs)
 NUM_POSSIBLE_PHASES = len(POSSIBLE_PHASES)
-NUM_POSSIBLE_NEW_EDGES = 5
+# NUM_POSSIBLE_NEW_EDGES imported from alphazx.diagram
 
 
 def make_model():

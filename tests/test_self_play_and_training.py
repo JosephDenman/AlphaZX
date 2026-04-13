@@ -18,7 +18,7 @@ import unittest
 
 import torch
 
-from alphazx.diagram import METADATA, POSSIBLE_PHASES
+from alphazx.diagram import METADATA, POSSIBLE_PHASES, NUM_POSSIBLE_NEW_EDGES
 from alphazx.diagram.diagram_generators import clifford_zx_diagram
 from alphazx.game import ZXGame
 from alphazx.models.homogeneous.alphazx_model import AlphaZXModel
@@ -33,7 +33,7 @@ from alphazx.mcts.evaluator import Evaluator
 PE_DIM = 20
 NUM_NODE_TYPES = len(METADATA.node_type_abbrevs)
 NUM_POSSIBLE_PHASES = len(POSSIBLE_PHASES)
-NUM_POSSIBLE_NEW_EDGES = 5
+# NUM_POSSIBLE_NEW_EDGES imported from alphazx.diagram
 
 # Tiny config for fast tests
 TINY_QUBITS = 3
@@ -48,7 +48,7 @@ def make_model():
         NUM_POSSIBLE_NEW_EDGES,
         node_embedding_channels=64,
         num_edge_embeddings=len(METADATA.edge_feat_to_index_dict),
-        edge_embedding_channels=64,
+        edge_embedding_channels=2,
         pe_in_channels=PE_DIM,
         pe_out_channels=PE_DIM,
     )

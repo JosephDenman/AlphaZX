@@ -14,7 +14,7 @@ import unittest
 
 import torch
 
-from alphazx.diagram import METADATA, POSSIBLE_PHASES
+from alphazx.diagram import METADATA, POSSIBLE_PHASES, NUM_POSSIBLE_NEW_EDGES
 from alphazx.diagram.diagram_generators import clifford_zx_diagram
 from alphazx.distributions import AlphaZXDistribution
 from alphazx.game import ZXGame
@@ -34,7 +34,7 @@ from alphazx.mcts.evaluate import evaluate_state, compute_action_prior
 PE_DIM = 20
 NUM_NODE_TYPES = len(METADATA.node_type_abbrevs)
 NUM_POSSIBLE_PHASES = len(POSSIBLE_PHASES)
-NUM_POSSIBLE_NEW_EDGES = 5
+# NUM_POSSIBLE_NEW_EDGES imported from alphazx.diagram
 
 
 def make_model():
@@ -253,20 +253,23 @@ class TestMCTSNode(unittest.TestCase):
         grandchild = MCTSNode(state=root.state, parent=child, reward=0.5)
         child.children[('action2',)] = grandchild
 
-        # Backpropagate value=2.0 from grandchild
+        # Backpropagate value=2.0 from grandchild.
+        # Standard AlphaZero backpropagation: value is discounted by gamma at
+        # each level.  Step rewards are NOT added (the value network is trained
+        # to predict cumulative return, so adding rewards would double-count).
         grandchild.backpropagate(2.0, gamma=1.0)
 
         # Grandchild: N=1, W=2.0
         self.assertEqual(grandchild.visit_count, 1)
         self.assertAlmostEqual(grandchild.total_value, 2.0)
 
-        # Child: N=1, W = reward(grandchild) + gamma * value = 0.5 + 1.0 * 2.0 = 2.5
+        # Child: N=1, W = gamma * 2.0 = 2.0 (no step reward added)
         self.assertEqual(child.visit_count, 1)
-        self.assertAlmostEqual(child.total_value, 2.5)
+        self.assertAlmostEqual(child.total_value, 2.0)
 
-        # Root: N=6 (5+1), W = 3.0 + reward(child) + gamma * child_value = 3.0 + 1.0 + 2.5 = 6.5
+        # Root: N=6 (5+1), W = 3.0 + gamma * 2.0 = 5.0
         self.assertEqual(root.visit_count, 6)
-        self.assertAlmostEqual(root.total_value, 6.5)
+        self.assertAlmostEqual(root.total_value, 5.0)
 
 
 class TestEvaluateState(unittest.TestCase):

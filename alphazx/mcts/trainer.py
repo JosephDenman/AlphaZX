@@ -272,48 +272,85 @@ class Trainer:
 
         return all_metrics
 
+    # ------------------------------------------------------------------
+    # Pipeline helpers
+    # ------------------------------------------------------------------
+
+    @property
+    def _is_parallel(self) -> bool:
+        """True when self-play uses multi-process workers."""
+        return isinstance(self.self_play_manager, ParallelSelfPlayManager)
+
+    def _dispatch_self_play(self, num_games: int):
+        """Dispatch self-play games (non-blocking for parallel manager).
+
+        Returns either a ``PendingSelfPlay`` handle (parallel) or the
+        finished ``list[EpisodeResult]`` directly (serial).
+        """
+        from alphazx.mcts.parallel_self_play import PendingSelfPlay
+
+        if self.curriculum and self.curriculum.config.enabled:
+            difficulty_levels = self.curriculum.get_mixed_difficulty_levels(num_games)
+        else:
+            difficulty_levels = None
+
+        if self._is_parallel:
+            return self.self_play_manager.dispatch_games(
+                num_games, difficulty_overrides=difficulty_levels,
+            )
+        else:
+            # Serial path — execute immediately (blocking)
+            if difficulty_levels:
+                return self._generate_curriculum_games_serial(
+                    num_games, difficulty_levels,
+                )
+            return self.self_play_manager.generate_games(num_games)
+
+    def _collect_self_play(self, pending) -> list:
+        """Collect self-play results (blocks if workers are still running).
+
+        *pending* is either a ``PendingSelfPlay`` handle or already a
+        ``list[EpisodeResult]`` when using the serial manager.
+        """
+        from alphazx.mcts.parallel_self_play import PendingSelfPlay
+
+        if isinstance(pending, PendingSelfPlay):
+            results = pending.collect()
+            self.self_play_manager.ingest_results(results)
+            return results
+        # Serial path — results already available
+        return pending
+
+    # ------------------------------------------------------------------
+
     def _run_iteration(self) -> IterationMetrics:
-        """Run one iteration: self-play followed by training steps."""
+        """Run one iteration of self-play + training.
+
+        When using the parallel self-play manager, self-play and training
+        are **pipelined**: workers start generating games, and the main
+        process runs gradient steps on existing buffer data concurrently.
+        The new games are collected and ingested after training finishes
+        (or immediately, if workers finish first).
+
+        With the serial manager the behaviour is unchanged: self-play
+        blocks, then training runs.
+        """
         cfg = self.trainer_config
 
-        # --- Self-play phase ---
-        # If curriculum is active with mixed-difficulty sampling, generate
-        # games at different difficulty levels within the same iteration.
+        # --- Dispatch self-play (non-blocking if parallel) ---
         self.model.eval()
         sp_start = time.time()
 
-        if self.curriculum and self.curriculum.config.enabled:
-            results = self._generate_curriculum_games(cfg.num_self_play_games)
-        else:
-            results = self.self_play_manager.generate_games(cfg.num_self_play_games)
+        pending = self._dispatch_self_play(cfg.num_self_play_games)
 
-        sp_time = time.time() - sp_start
+        # For parallel manager: model snapshot is already serialized and
+        # sent to workers at this point.  We can switch to train mode
+        # and start gradient steps immediately.
+        #
+        # For serial manager: ``pending`` already contains the finished
+        # results, so the "training phase" below starts after self-play.
 
-        # Compute self-play statistics
-        n_games = max(1, len(results))
-        avg_steps = sum(r.num_steps for r in results) / n_games
-        avg_t_reduced = sum(r.t_gates_reduced for r in results) / n_games
-        simplification_rate = sum(1 for r in results if r.simplified) / n_games
-
-        # --- Curriculum update ---
-        if self.curriculum:
-            avg_initial_t = sum(r.initial_t_gates for r in results) / n_games
-            advanced = self.curriculum.update(
-                self.mcts_config,
-                self.current_iteration,
-                avg_t_reduced,
-                avg_initial_t,
-                simplification_rate,
-            )
-            if self.tb_logger:
-                self._log_curriculum(advanced)
-
-        # Collect extended self-play stats for TensorBoard
-        if self.tb_logger:
-            sp_stats = self._collect_self_play_stats(results, sp_time)
-            self.tb_logger.log_self_play(self.current_iteration, sp_stats)
-
-        # --- Training phase ---
+        # --- Training phase (runs concurrently with self-play workers) ---
         self.model.train()
         train_start = time.time()
 
@@ -340,6 +377,41 @@ class Trainer:
             )
 
         train_time = time.time() - train_start
+
+        # --- Collect self-play results (blocks if workers still running) ---
+        results = self._collect_self_play(pending)
+        sp_time = time.time() - sp_start
+
+        # Compute self-play statistics
+        n_games = max(1, len(results))
+        avg_steps = sum(r.num_steps for r in results) / n_games
+        avg_t_reduced = sum(r.t_gates_reduced for r in results) / n_games
+        simplification_rate = sum(1 for r in results if r.simplified) / n_games
+
+        if self._is_parallel:
+            overlap_time = max(0.0, train_time - max(0.0, sp_time - train_time))
+            logger.info(
+                f"Pipeline: self_play={sp_time:.1f}s, training={train_time:.1f}s, "
+                f"overlap={overlap_time:.1f}s saved"
+            )
+
+        # --- Curriculum update ---
+        if self.curriculum:
+            avg_initial_t = sum(r.initial_t_gates for r in results) / n_games
+            advanced = self.curriculum.update(
+                self.mcts_config,
+                self.current_iteration,
+                avg_t_reduced,
+                avg_initial_t,
+                simplification_rate,
+            )
+            if self.tb_logger:
+                self._log_curriculum(advanced)
+
+        # Collect extended self-play stats for TensorBoard
+        if self.tb_logger:
+            sp_stats = self._collect_self_play_stats(results, sp_time)
+            self.tb_logger.log_self_play(self.current_iteration, sp_stats)
 
         # Log iteration-level training aggregates
         if self.tb_logger:
@@ -400,6 +472,7 @@ class Trainer:
             batch.batch,
             batch.pe,
             graph_ids,
+            edge_type=getattr(batch, 'edge_type', None),
         )
 
         # --- Value loss (fully batched) ---
@@ -494,6 +567,36 @@ class Trainer:
             num_valid_examples=num_examples,
         )
 
+    # Per-head loss normalisation (AlphaStar-style).
+    #
+    # Without normalisation, F-Right actions with their 5-component
+    # hierarchical distribution (type → node → phase → new_edge →
+    # transfer_edges) produce total log-probs of ~-10, while F-Left /
+    # B-Right produce ~-2.  In the cross-entropy loss L = -Σ π(a) log p(a),
+    # a single F-Right action with π=0.18 contributes 1.8 to the loss
+    # versus 0.36 for F-Left — making the gradient ~5× more about matching
+    # F-Right's random parameter choices than learning which action TYPE
+    # to pick.
+    #
+    # Fix: divide the joint log-prob by the number of *active* components
+    # for that action type.  F-Right's ~-10 / 5 = ~-2, matching F-Left's
+    # ~-2 / 2 = ~-1.  All components still receive gradients (scaled by
+    # 1/N), so phase/edge/transfer heads still learn.  This is the same
+    # principle AlphaStar uses: each argument head contributes O(1) loss
+    # regardless of how many heads are active for a given action type.
+    _N_COMPONENTS_BY_TYPE = {
+        0: 5,  # f-right-z:  action_type + node + phase + new_edge + transfer
+        1: 5,  # f-right-x:  action_type + node + phase + new_edge + transfer
+        2: 2,  # f-left-z:   action_type + node  (phase/edge/transfer deterministic)
+        3: 2,  # f-left-x:   action_type + node
+        4: 2,  # b-right:    action_type + node
+        5: 2,  # b-left:     action_type + node
+        6: 2,  # y-right-z:  action_type + node
+        7: 2,  # y-left-z:   action_type + node
+        8: 2,  # y-right-x:  action_type + node
+        9: 2,  # y-left-x:   action_type + node
+    }
+
     def _compute_log_prob(
         self,
         distribution: AlphaZXDistribution,
@@ -503,6 +606,15 @@ class Trainer:
 
         This mirrors compute_action_prior() from evaluate.py but keeps tensors
         on the computation graph so gradients flow through the model.
+
+        The joint log-prob is **averaged over active components** rather
+        than summed raw.  For F-Right (5 active components, raw sum ≈ -10)
+        this yields ≈ -2, matching F-Left / B-rules (2 active components,
+        raw sum ≈ -2, averaged ≈ -1).  This prevents high-dimensional
+        actions from dominating the policy gradient.
+
+        All components still receive gradients proportional to 1/N, so
+        the phase, edge, and transfer heads continue to learn.
         """
         action_type = torch.tensor([action[1]], dtype=torch.long, device=self.device)
         node = torch.tensor([action[2]], dtype=torch.long, device=self.device)
@@ -512,8 +624,6 @@ class Trainer:
             [list(action[5:])], dtype=torch.float32, device=self.device
         )
 
-        # Sum log probabilities of each component.
-        # Phase, edge, and transfer selectors are conditioned on action_type.
         log_prob = (
             distribution.action_type_log_probs(action_type)
             + distribution.node_log_probs(action_type, node)
@@ -522,7 +632,10 @@ class Trainer:
             + distribution.transfer_edge_log_probs(action_type, node, transfer_edges)
         )
 
-        return log_prob
+        # Average over active components: equalises loss scale across
+        # action types with different numbers of sub-decisions.
+        n_components = self._N_COMPONENTS_BY_TYPE.get(action[1], 2)
+        return log_prob / n_components
 
     def _collect_self_play_stats(
         self,
@@ -603,28 +716,19 @@ class Trainer:
             action_type_counts=action_type_counts,
         )
 
-    def _generate_curriculum_games(
-        self, num_games: int,
+    def _generate_curriculum_games_serial(
+        self,
+        num_games: int,
+        difficulty_levels: list[tuple[int, int]],
     ) -> list[EpisodeResult]:
-        """Generate self-play games with mixed-difficulty sampling.
+        """Generate curriculum games using the serial SelfPlayManager.
 
-        Most games use the current curriculum level.  A fraction use easier
-        or harder levels to smooth transitions and prevent forgetting.
+        Plays one game at a time, temporarily overriding the MCTS config's
+        num_qubits/depth for each game according to *difficulty_levels*.
 
-        When using ParallelSelfPlayManager, difficulty overrides are passed
-        as a batch so workers can apply them per-game without serial dispatch.
-        When using serial SelfPlayManager, falls back to the original loop.
+        The parallel path does not use this method — it passes
+        ``difficulty_overrides`` directly to ``dispatch_games()``.
         """
-        difficulty_levels = self.curriculum.get_mixed_difficulty_levels(num_games)
-
-        # Parallel path: pass all difficulty overrides in one call
-        if isinstance(self.self_play_manager, ParallelSelfPlayManager):
-            return self.self_play_manager.generate_games(
-                num_games,
-                difficulty_overrides=difficulty_levels,
-            )
-
-        # Serial path: original per-game loop
         results = []
         for i, (nq, depth) in enumerate(difficulty_levels):
             saved_q = self.mcts_config.num_qubits
@@ -652,6 +756,19 @@ class Trainer:
         w.add_scalar('curriculum/num_qubits', c.current_num_qubits, iteration)
         w.add_scalar('curriculum/depth', c.current_depth, iteration)
         w.add_scalar('curriculum/at_target', int(c.at_target), iteration)
+        w.add_scalar('curriculum/advanced', int(advanced), iteration)
+        # Log the most recent reduction ratio for diagnosing advancement
+        if c._performance_history:
+            w.add_scalar(
+                'curriculum/reduction_ratio',
+                c._performance_history[-1],
+                iteration,
+            )
+            w.add_scalar(
+                'curriculum/advance_threshold',
+                c.config.advance_threshold,
+                iteration,
+            )
         if advanced:
             w.add_scalar('curriculum/advanced_at_iteration', iteration, iteration)
 

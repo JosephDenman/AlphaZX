@@ -39,7 +39,10 @@ class AlphaZXModel(nn.Module):
         self.prediction_network.reset_parameters()
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor, edge_attr: torch.Tensor, node_type: torch.Tensor,
-                batch: torch.Tensor, pe: torch.Tensor, graph_ids: torch.Tensor) -> tuple[AlphaZXDistributionParams, torch.Tensor]:
+                batch: torch.Tensor, pe: torch.Tensor, graph_ids: torch.Tensor,
+                edge_type: torch.Tensor | None = None) -> tuple[AlphaZXDistributionParams, torch.Tensor]:
+        # edge_type is accepted for interface compatibility with AlphaZXHeteroModel
+        # but is unused by the homogeneous model (GPS does not use edge types).
         x, edge_attr = self.representation_network(x, edge_index, edge_attr, batch, pe)
         policy, value = self.prediction_network(x, edge_index, edge_attr, node_type, batch, graph_ids)
         return policy, value
